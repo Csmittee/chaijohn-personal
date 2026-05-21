@@ -102,18 +102,30 @@
         }
       }
 
-      if (pinInput) {
-        pinInput.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') doLogin();
-        });
-        pinInput.focus();
-      }
-      if (submitBtn) {
-        submitBtn.addEventListener('click', function (e) {
+      // Handle both Enter key and button click via the form's submit event,
+      // which prevents the browser's default page-reload behaviour.
+      const form = document.getElementById('pin-form');
+      if (form) {
+        form.addEventListener('submit', function (e) {
           e.preventDefault();
           doLogin();
         });
+      } else {
+        // Fallback if no wrapping form element
+        if (pinInput) {
+          pinInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); doLogin(); }
+          });
+        }
+        if (submitBtn) {
+          submitBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            doLogin();
+          });
+        }
       }
+
+      if (pinInput) pinInput.focus();
     });
   }
 })();
