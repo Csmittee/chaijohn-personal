@@ -1,4 +1,4 @@
-import { createRecord, jsonResponse, errorResponse } from '../../_airtable.js';
+import { createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const AI_CHATS_TABLE = 'AI_Chats';

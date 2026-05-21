@@ -1,4 +1,4 @@
-import { jsonResponse, errorResponse } from '../../_airtable.js';
+import { jsonResponse, errorResponse } from '../_airtable.js';
 
 const CLOUDINARY_CLOUD_NAME = 'dfiomi0lb';
 

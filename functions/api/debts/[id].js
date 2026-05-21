@@ -1,4 +1,4 @@
-import { getRecord, updateRecord, createRecord, jsonResponse, errorResponse } from '../../../_airtable.js';
+import { getRecord, updateRecord, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Debts';

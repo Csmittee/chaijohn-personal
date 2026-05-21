@@ -1,4 +1,4 @@
-import { listRecords, jsonResponse, errorResponse } from '../../../_airtable.js';
+import { listRecords, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 

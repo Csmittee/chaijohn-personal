@@ -1,4 +1,4 @@
-import { createRecord, jsonResponse, errorResponse } from '../../../_airtable.js';
+import { createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const META_BASE_URL = 'https://api.airtable.com/v0/meta/bases';
 

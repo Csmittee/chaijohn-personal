@@ -1,4 +1,4 @@
-import { createRecord, updateRecord, jsonResponse, errorResponse } from '../../../_airtable.js';
+import { createRecord, updateRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const QUEUE_TABLE = 'Drop_Zone_Queue';
