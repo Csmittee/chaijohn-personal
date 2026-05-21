@@ -1,9 +1,10 @@
 /**
  * dropzone.js — Floating Drop Zone panel injected on every protected page.
  * Handles drag-and-drop of receipts/photos → Cloudinary upload → AI extraction → review cards.
+ * Does NOT handle auth — auth.js handles that separately.
  */
 (function () {
-  /* ─── Utility helpers (self-contained) ─── */
+  /* ─── Utility helpers (self-contained, no dependency on other scripts) ─── */
   function formatThb(amount) {
     if (amount === null || amount === undefined || isNaN(amount)) return '฿—';
     const n = Math.round(Number(amount));
@@ -22,7 +23,7 @@
     el.style.cssText =
       'position:fixed;top:1rem;right:1rem;padding:0.75rem 1.25rem;border-radius:8px;' +
       'background:' + (type === 'success' ? '#22c55e' : '#ef4444') + ';color:white;font-weight:500;z-index:99999;' +
-      'box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:fadeIn 0.2s ease';
+      'box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:dzFadeIn 0.2s ease';
     document.body.appendChild(el);
     setTimeout(function () { if (el.parentNode) el.remove(); }, 3000);
   }
@@ -41,8 +42,191 @@
     }
   }
 
-  /* ─── HTML injection ─── */
+  /* ─── Inject keyframe CSS ─── */
+  function addKeyframes() {
+    if (!document.getElementById('dz-keyframes')) {
+      const style = document.createElement('style');
+      style.id = 'dz-keyframes';
+      style.textContent = `
+@keyframes dzSpin { to { transform: rotate(360deg); } }
+@keyframes dzFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+`;
+      document.head.appendChild(style);
+    }
+  }
+
+  /* ─── Inject panel styles ─── */
+  function injectStyles() {
+    if (document.getElementById('dz-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'dz-styles';
+    style.textContent = `
+#dropzone-toggle-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 1.4rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+#dropzone-toggle-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+#dropzone-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 1.25rem;
+  height: 1.25rem;
+  background: #ef4444;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  display: none;
+  pointer-events: none;
+}
+#dropzone-panel {
+  position: fixed;
+  bottom: 5.5rem;
+  right: 1.5rem;
+  width: 370px;
+  max-height: 80vh;
+  background: var(--bg-card, #1e2433);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  z-index: 999;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+#dropzone-panel.open { display: flex; }
+.dz-header {
+  padding: 0.85rem 1rem 0.7rem;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: var(--bg-surface, #252d3d);
+  flex-shrink: 0;
+}
+.dz-date {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.dz-body {
+  padding: 0.75rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.dz-drop-area {
+  border: 2px dashed var(--border, rgba(255,255,255,0.18));
+  border-radius: 10px;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+  user-select: none;
+}
+.dz-drop-area:hover,
+.dz-drop-area.drag-over {
+  border-color: var(--color-primary, #3b82f6);
+  background: rgba(59,130,246,0.07);
+  color: var(--text-primary, #f1f5f9);
+}
+.dz-review-card {
+  background: var(--bg-surface, #252d3d);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.6rem;
+  animation: dzFadeIn 0.2s ease;
+  transition: border-color 0.3s, opacity 0.3s;
+}
+.dz-review-card.approved {
+  border-color: #22c55e;
+  opacity: 0.55;
+}
+.dz-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--bg-card, #1e2433);
+}
+.dz-spinner-card {
+  background: var(--bg-surface, #252d3d);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+  text-align: center;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.8rem;
+}
+.dz-field-row { margin-bottom: 0.4rem; }
+.dz-field-row label {
+  display: block;
+  font-size: 0.71rem;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+.dz-field-row input,
+.dz-field-row select,
+.dz-field-row textarea {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  background: var(--bg-card, #1e2433);
+  color: var(--text-primary, #f1f5f9);
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+.dz-field-row input:focus,
+.dz-field-row select:focus,
+.dz-field-row textarea:focus {
+  border-color: var(--color-primary, #3b82f6);
+}
+.dz-btn { border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.15s; padding: 0.3rem 0.75rem; font-size: 0.78rem; }
+.dz-btn:hover { opacity: 0.85; }
+.dz-btn:disabled { opacity: 0.5; cursor: default; }
+.dz-btn-success { background: #22c55e; color: white; }
+.dz-btn-outline { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: var(--text-primary, #f1f5f9); }
+.dz-btn-danger { background: #ef4444; color: white; }
+.dz-w-full { width: 100%; }
+#dz-approve-all { display: none; }
+`;
+    document.head.appendChild(style);
+  }
+
+  /* ─── Build the panel HTML and inject into body ─── */
   function injectHtml() {
+    if (document.getElementById('dz-wrapper')) return; // already injected
+
     const today = new Date();
     const dateStr = today.toLocaleDateString('en-US', {
       weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'
@@ -50,174 +234,23 @@
 
     const wrapper = document.createElement('div');
     wrapper.id = 'dz-wrapper';
-    wrapper.innerHTML = `
-<style>
-  #dropzone-toggle-btn {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    width: 3.5rem;
-    height: 3.5rem;
-    border-radius: 50%;
-    background: var(--color-primary, #3b82f6);
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 1.4rem;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.15s;
-  }
-  #dropzone-toggle-btn:hover { transform: scale(1.08); }
-  #dropzone-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    width: 1.2rem;
-    height: 1.2rem;
-    background: #ef4444;
-    border-radius: 50%;
-    font-size: 0.65rem;
-    font-weight: 700;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    display: none;
-  }
-  #dropzone-panel {
-    position: fixed;
-    bottom: 5.5rem;
-    right: 1.5rem;
-    width: 360px;
-    max-height: 80vh;
-    background: var(--bg-card, #1e2433);
-    border: 1px solid var(--border, rgba(255,255,255,0.08));
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    z-index: 999;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  #dropzone-panel.open { display: flex; }
-  .dz-header {
-    padding: 0.85rem 1rem 0.7rem;
-    border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
-    font-size: 0.9rem;
-    background: var(--bg-surface, #252d3d);
-    flex-shrink: 0;
-  }
-  .dz-date {
-    font-size: 0.72rem;
-    color: var(--text-secondary, #94a3b8);
-    font-weight: 400;
-  }
-  .dz-body {
-    padding: 0.75rem;
-    overflow-y: auto;
-    flex: 1;
-  }
-  .dz-drop-area {
-    border: 2px dashed var(--border, rgba(255,255,255,0.15));
-    border-radius: 10px;
-    padding: 1.5rem 1rem;
-    text-align: center;
-    color: var(--text-secondary, #94a3b8);
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-    font-size: 0.85rem;
-    margin-bottom: 0.75rem;
-  }
-  .dz-drop-area:hover, .dz-drop-area.drag-over {
-    border-color: var(--color-primary, #3b82f6);
-    background: rgba(59,130,246,0.06);
-    color: var(--text-primary, #f1f5f9);
-  }
-  .dz-review-card {
-    background: var(--bg-surface, #252d3d);
-    border: 1px solid var(--border, rgba(255,255,255,0.08));
-    border-radius: 10px;
-    padding: 0.75rem;
-    margin-bottom: 0.6rem;
-    animation: fadeIn 0.2s ease;
-  }
-  .dz-review-card.approved {
-    border-color: #22c55e;
-    opacity: 0.6;
-  }
-  .dz-thumb {
-    width: 64px;
-    height: 64px;
-    object-fit: cover;
-    border-radius: 6px;
-    flex-shrink: 0;
-    background: var(--bg-card, #1e2433);
-  }
-  .dz-spinner-card {
-    background: var(--bg-surface, #252d3d);
-    border: 1px solid var(--border, rgba(255,255,255,0.08));
-    border-radius: 10px;
-    padding: 1rem;
-    margin-bottom: 0.6rem;
-    text-align: center;
-    color: var(--text-secondary, #94a3b8);
-    font-size: 0.8rem;
-  }
-  .dz-field-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    margin-bottom: 0.4rem;
-  }
-  .dz-field-group label {
-    font-size: 0.72rem;
-    color: var(--text-secondary, #94a3b8);
-    font-weight: 500;
-  }
-  .dz-field-group input,
-  .dz-field-group select,
-  .dz-field-group textarea {
-    font-size: 0.8rem;
-    padding: 0.3rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid var(--border, rgba(255,255,255,0.12));
-    background: var(--bg-card, #1e2433);
-    color: var(--text-primary, #f1f5f9);
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
-  .btn { border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-success { background: #22c55e; color: white; }
-  .btn-outline { background: transparent; border: 1px solid var(--border, rgba(255,255,255,0.2)); color: var(--text-primary, #f1f5f9); }
-  .btn-danger { background: #ef4444; color: white; }
-  .w-full { width: 100%; }
-  #dz-approve-all { display: none; }
-</style>
 
+    wrapper.innerHTML = `
 <button id="dropzone-toggle-btn" title="Drop Zone" aria-label="Open Drop Zone">
   📥
   <span id="dropzone-badge" style="display:none">0</span>
 </button>
 
-<div id="dropzone-panel">
+<div id="dropzone-panel" role="dialog" aria-label="Drop Zone Panel">
   <div class="dz-header">
     <span>📥 What's for today?</span>
     <span class="dz-date" id="dz-date">${dateStr}</span>
   </div>
   <div class="dz-body" id="dz-body">
-    <button id="dz-approve-all" class="btn btn-success w-full" style="margin-bottom:0.5rem">✅ Approve All</button>
-    <div id="dz-drop-area" class="dz-drop-area" role="button" tabindex="0" aria-label="Drop files here">
+    <button id="dz-approve-all" class="dz-btn dz-btn-success dz-w-full" style="margin-bottom:0.5rem">✅ Approve All</button>
+    <div id="dz-drop-area" class="dz-drop-area" role="button" tabindex="0" aria-label="Drop files here or click to select">
       <div>📎 Drag slips, photos, notes, quotes — anything</div>
-      <div style="font-size:0.75rem;margin-top:0.5rem">or click to select files</div>
+      <div style="font-size:0.75rem;margin-top:0.5rem;opacity:0.7">or click to select files</div>
       <input type="file" id="dz-file-input" accept="image/*,application/pdf" multiple style="display:none">
     </div>
     <div id="dz-cards-container"></div>
@@ -227,128 +260,89 @@
     document.body.appendChild(wrapper);
   }
 
-  /* ─── Build form fields per suggested type ─── */
+  /* ─── Build form fields per AI-suggested type ─── */
   function buildFieldsForType(suggestedType, prefilled) {
     prefilled = prefilled || {};
-    switch ((suggestedType || '').toLowerCase()) {
-      case 'transaction':
-      case 'income':
-      case 'expense':
-        return `
-<div class="dz-field-group">
-  <label>Date</label>
-  <input type="date" name="date" value="${prefilled.date || todayIso()}">
-</div>
-<div class="dz-field-group">
-  <label>Type</label>
-  <select name="type">
-    <option value="Expense" ${prefilled.type === 'Expense' ? 'selected' : ''}>Expense</option>
-    <option value="Income" ${prefilled.type === 'Income' ? 'selected' : ''}>Income</option>
-  </select>
-</div>
-<div class="dz-field-group">
-  <label>Amount (฿)</label>
-  <input type="number" name="amount" value="${prefilled.amount || ''}" placeholder="0" step="0.01" min="0">
-</div>
-<div class="dz-field-group">
-  <label>Description</label>
-  <input type="text" name="description" value="${prefilled.description || ''}" placeholder="What was this for?">
-</div>
-<div class="dz-field-group">
-  <label>Entity / Merchant</label>
-  <input type="text" name="entity" value="${prefilled.entity || ''}" placeholder="Who paid / who received">
-</div>`;
+    const type = (suggestedType || '').toLowerCase();
 
-      case 'asset':
-        return `
-<div class="dz-field-group">
-  <label>Name</label>
-  <input type="text" name="name" value="${prefilled.name || ''}" placeholder="Asset name">
-</div>
-<div class="dz-field-group">
-  <label>Category</label>
-  <select name="category">
-    <option value="Collection-Knife" ${prefilled.category === 'Collection-Knife' ? 'selected' : ''}>Collection - Knife</option>
-    <option value="Collection-Vice" ${prefilled.category === 'Collection-Vice' ? 'selected' : ''}>Collection - Vice</option>
-    <option value="Collection-Plant" ${prefilled.category === 'Collection-Plant' ? 'selected' : ''}>Collection - Plant</option>
-    <option value="Collection-Doll" ${prefilled.category === 'Collection-Doll' ? 'selected' : ''}>Collection - Doll</option>
-    <option value="Other">Other</option>
-  </select>
-</div>
-<div class="dz-field-group">
-  <label>Estimated Value (฿)</label>
-  <input type="number" name="estimated_value" value="${prefilled.estimated_value || ''}" placeholder="0" min="0">
-</div>
-<div class="dz-field-group">
-  <label>Notes</label>
-  <input type="text" name="notes" value="${prefilled.notes || ''}" placeholder="Any notes...">
-</div>`;
-
-      case 'diary':
-      case 'blog':
-        return `
-<div class="dz-field-group">
-  <label>Title</label>
-  <input type="text" name="title" value="${prefilled.title || ''}" placeholder="Entry title">
-</div>
-<div class="dz-field-group">
-  <label>Type</label>
-  <select name="entry_type">
-    <option value="Note" ${prefilled.entry_type === 'Note' ? 'selected' : ''}>Note</option>
-    <option value="Blog" ${prefilled.entry_type === 'Blog' ? 'selected' : ''}>Blog</option>
-    <option value="Reflection" ${prefilled.entry_type === 'Reflection' ? 'selected' : ''}>Reflection</option>
-    <option value="Idea" ${prefilled.entry_type === 'Idea' ? 'selected' : ''}>Idea</option>
-  </select>
-</div>
-<div class="dz-field-group">
-  <label>Content</label>
-  <textarea name="content" rows="3" placeholder="Entry content...">${prefilled.content || ''}</textarea>
-</div>
-<div class="dz-field-group">
-  <label>Tags</label>
-  <input type="text" name="tags" value="${prefilled.tags || ''}" placeholder="tag1, tag2, tag3">
-</div>`;
-
-      case 'quote':
-        return `
-<div class="dz-field-group">
-  <label>Quote Text</label>
-  <textarea name="text" rows="3" placeholder="The quote...">${prefilled.text || ''}</textarea>
-</div>
-<div class="dz-field-group">
-  <label>Author</label>
-  <input type="text" name="author" value="${prefilled.author || ''}" placeholder="Who said it?">
-</div>
-<div class="dz-field-group">
-  <label>Source</label>
-  <input type="text" name="source" value="${prefilled.source || ''}" placeholder="Book, speech, etc.">
-</div>
-<div class="dz-field-group">
-  <label>Mood Tag</label>
-  <select name="mood_tag">
-    <option value="Motivational" ${prefilled.mood_tag === 'Motivational' ? 'selected' : ''}>Motivational</option>
-    <option value="Wisdom" ${prefilled.mood_tag === 'Wisdom' ? 'selected' : ''}>Wisdom</option>
-    <option value="Funny" ${prefilled.mood_tag === 'Funny' ? 'selected' : ''}>Funny</option>
-    <option value="Sad" ${prefilled.mood_tag === 'Sad' ? 'selected' : ''}>Sad</option>
-    <option value="Other" ${prefilled.mood_tag === 'Other' ? 'selected' : ''}>Other</option>
-  </select>
-</div>`;
-
-      default:
-        return `
-<div class="dz-field-group">
-  <label>Description</label>
-  <input type="text" name="description" value="${prefilled.description || ''}" placeholder="Describe this item...">
-</div>`;
+    function field(label, inputHtml) {
+      return `<div class="dz-field-row"><label>${label}</label>${inputHtml}</div>`;
     }
+
+    if (type === 'transaction' || type === 'income' || type === 'expense') {
+      const txType = prefilled.type || (type === 'income' ? 'Income' : 'Expense');
+      return [
+        field('Date', `<input type="date" name="date" value="${prefilled.date || todayIso()}">`),
+        field('Type', `<select name="type">
+          <option value="Expense"${txType === 'Expense' ? ' selected' : ''}>Expense</option>
+          <option value="Income"${txType === 'Income' ? ' selected' : ''}>Income</option>
+        </select>`),
+        field('Amount (฿)', `<input type="number" name="amount" value="${prefilled.amount || ''}" placeholder="0" step="0.01" min="0">`),
+        field('Description', `<input type="text" name="description" value="${escHtml(prefilled.description || '')}" placeholder="What was this for?">`),
+        field('Entity / Merchant', `<input type="text" name="entity" value="${escHtml(prefilled.entity || '')}" placeholder="Who paid / received">`)
+      ].join('');
+    }
+
+    if (type === 'asset') {
+      const cats = ['Collection-Knife', 'Collection-Vice', 'Collection-Plant', 'Collection-Doll', 'Other'];
+      const catOptions = cats.map(c => `<option value="${c}"${prefilled.category === c ? ' selected' : ''}>${c.replace('-', ' — ')}</option>`).join('');
+      return [
+        field('Name', `<input type="text" name="name" value="${escHtml(prefilled.name || '')}" placeholder="Asset name">`),
+        field('Category', `<select name="category">${catOptions}</select>`),
+        field('Estimated Value (฿)', `<input type="number" name="estimated_value" value="${prefilled.estimated_value || ''}" placeholder="0" min="0">`),
+        field('Notes', `<input type="text" name="notes" value="${escHtml(prefilled.notes || '')}" placeholder="Any notes...">`)
+      ].join('');
+    }
+
+    if (type === 'diary' || type === 'blog' || type === 'note') {
+      const entryTypes = ['Note', 'Blog', 'Reflection', 'Idea'];
+      const etOptions = entryTypes.map(et => `<option value="${et}"${(prefilled.entry_type || 'Note') === et ? ' selected' : ''}>${et}</option>`).join('');
+      return [
+        field('Title', `<input type="text" name="title" value="${escHtml(prefilled.title || '')}" placeholder="Entry title">`),
+        field('Type', `<select name="entry_type">${etOptions}</select>`),
+        field('Content', `<textarea name="content" rows="3" placeholder="Entry content...">${escHtml(prefilled.content || '')}</textarea>`),
+        field('Tags', `<input type="text" name="tags" value="${escHtml(prefilled.tags || '')}" placeholder="tag1, tag2, tag3">`)
+      ].join('');
+    }
+
+    if (type === 'quote') {
+      const moodTags = ['Motivational', 'Wisdom', 'Funny', 'Sad', 'Other'];
+      const mtOptions = moodTags.map(mt => `<option value="${mt}"${(prefilled.mood_tag || 'Motivational') === mt ? ' selected' : ''}>${mt}</option>`).join('');
+      return [
+        field('Quote Text', `<textarea name="text" rows="3" placeholder="The quote...">${escHtml(prefilled.text || '')}</textarea>`),
+        field('Author', `<input type="text" name="author" value="${escHtml(prefilled.author || '')}" placeholder="Who said it?">`),
+        field('Source', `<input type="text" name="source" value="${escHtml(prefilled.source || '')}" placeholder="Book, speech, etc.">`),
+        field('Mood Tag', `<select name="mood_tag">${mtOptions}</select>`)
+      ].join('');
+    }
+
+    // Fallback
+    return field('Description', `<input type="text" name="description" value="${escHtml(prefilled.description || '')}" placeholder="Describe this item...">`);
   }
 
-  /* ─── Build a review card ─── */
+  function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ─── Build spinner placeholder card ─── */
+  function buildSpinnerCard(filename) {
+    const card = document.createElement('div');
+    card.className = 'dz-spinner-card';
+    card.dataset.spinnerFor = filename;
+    card.innerHTML = `
+<div style="display:flex;align-items:center;gap:0.6rem;justify-content:center">
+  <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.15);border-top-color:#3b82f6;border-radius:50%;animation:dzSpin 0.7s linear infinite;flex-shrink:0"></div>
+  <span>Analyzing ${escHtml(filename || 'file')}…</span>
+</div>`;
+    return card;
+  }
+
+  /* ─── Build a full review card ─── */
   function buildReviewCard(queueId, cloudinaryUrl, aiResult) {
     aiResult = aiResult || {};
     const suggestedType = aiResult.suggested_type || 'Unknown';
     const prefilled = aiResult.prefilled || {};
-    const fields = buildFieldsForType(suggestedType, prefilled);
+    const fieldsHtml = buildFieldsForType(suggestedType, prefilled);
 
     const card = document.createElement('div');
     card.className = 'dz-review-card';
@@ -356,66 +350,62 @@
     card.dataset.suggestedType = suggestedType;
 
     const thumbHtml = cloudinaryUrl
-      ? `<img src="${cloudinaryUrl}" class="dz-thumb" onerror="this.style.display='none'" alt="Uploaded file">`
-      : '<div class="dz-thumb" style="background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:1.5rem">📄</div>';
+      ? `<img src="${cloudinaryUrl}" class="dz-thumb" onerror="this.style.display='none'" alt="Uploaded preview" loading="lazy">`
+      : `<div class="dz-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:rgba(255,255,255,0.05);border-radius:6px">📄</div>`;
+
+    const desc = escHtml(aiResult.description || 'AI analysis complete');
+    const typeBadge = `<span style="display:inline-block;background:rgba(59,130,246,0.2);color:#60a5fa;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:600;margin-top:0.2rem">${escHtml(suggestedType)}</span>`;
 
     card.innerHTML = `
-<div style="display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem">
+<div style="display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.6rem">
   ${thumbHtml}
   <div style="flex:1;min-width:0">
-    <div style="font-size:0.73rem;color:var(--text-secondary,#94a3b8);margin-bottom:0.25rem;word-break:break-word">${aiResult.description || 'AI analysis complete'}</div>
-    <span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:0.15rem 0.45rem;border-radius:4px;font-size:0.68rem;font-weight:600">${suggestedType}</span>
+    <div style="font-size:0.72rem;color:var(--text-secondary,#94a3b8);line-height:1.4;word-break:break-word">${desc}</div>
+    ${typeBadge}
   </div>
 </div>
 <div class="dz-fields-container">
-  ${fields}
+  ${fieldsHtml}
 </div>
-<div style="display:flex;gap:0.5rem;margin-top:0.6rem">
-  <button class="btn btn-success btn-sm dz-approve" data-queue-id="${queueId}" style="flex:1">✅ Approve</button>
-  <button class="btn btn-danger btn-sm dz-reject" data-queue-id="${queueId}" style="flex:0 0 auto">✗</button>
-</div>
-`;
-    return card;
-  }
-
-  /* ─── Build spinner placeholder card ─── */
-  function buildSpinnerCard(filename) {
-    const card = document.createElement('div');
-    card.className = 'dz-spinner-card';
-    card.innerHTML = `
-<div style="display:flex;align-items:center;gap:0.5rem;justify-content:center">
-  <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.2);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite"></div>
-  <span>Analyzing ${filename || 'file'}…</span>
+<div style="display:flex;gap:0.4rem;margin-top:0.6rem">
+  <button class="dz-btn dz-btn-success dz-approve" data-queue-id="${queueId}" style="flex:1">✅ Approve</button>
+  <button class="dz-btn dz-btn-danger dz-reject" data-queue-id="${queueId}" style="padding:0.3rem 0.6rem">✗</button>
 </div>
 `;
     return card;
   }
 
-  /* ─── Collect form fields from a review card ─── */
+  /* ─── Collect field values from a review card ─── */
   function collectCardFields(card) {
     const suggestedType = card.dataset.suggestedType || '';
     const fields = {};
     card.querySelectorAll('input, select, textarea').forEach(function (el) {
-      if (el.name) fields[el.name] = el.value;
+      if (el.name) {
+        fields[el.name] = el.type === 'number' ? (parseFloat(el.value) || null) : el.value;
+      }
     });
-    return { suggested_type: suggestedType, fields };
+    return { suggested_type: suggestedType, fields: fields };
   }
 
   /* ─── Approve a single card ─── */
   async function approveCard(card) {
     const queueId = card.dataset.queueId;
-    const { suggested_type, fields } = collectCardFields(card);
+    const payload = collectCardFields(card);
 
     try {
       const res = await fetch('/api/dropzone/approve', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queue_id: queueId, suggested_type, fields })
+        body: JSON.stringify({
+          queue_id: queueId,
+          suggested_type: payload.suggested_type,
+          fields: payload.fields
+        })
       });
       if (!res.ok) {
-        const err = await res.json().catch(function () { return {}; });
-        showFlash(err.error || 'Approve failed', 'error');
+        const errData = await res.json().catch(function () { return {}; });
+        showFlash(errData.error || 'Approve failed', 'error');
         return false;
       }
       card.classList.add('approved');
@@ -424,7 +414,7 @@
       setTimeout(function () { if (card.parentNode) card.remove(); }, 1500);
       return true;
     } catch (e) {
-      showFlash('Connection error', 'error');
+      showFlash('Connection error: ' + e.message, 'error');
       return false;
     }
   }
@@ -439,15 +429,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Rejected' })
       });
-    } catch (e) { /* ignore, still remove */ }
+    } catch (e) { /* ignore — remove card anyway */ }
     pendingCount = Math.max(0, pendingCount - 1);
     updateBadge();
-    if (card.parentNode) card.remove();
+    if (card.parentNode) {
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(20px)';
+      card.style.transition = 'opacity 0.2s, transform 0.2s';
+      setTimeout(function () { if (card.parentNode) card.remove(); }, 220);
+    }
   }
 
-  /* ─── Process a single file ─── */
+  /* ─── Process one uploaded file ─── */
   async function processFile(file) {
     const container = document.getElementById('dz-cards-container');
+    if (!container) return;
+
     const spinner = buildSpinnerCard(file.name);
     container.insertBefore(spinner, container.firstChild);
 
@@ -456,7 +453,7 @@
     let aiResult = {};
 
     try {
-      // 1. Upload to Cloudinary
+      // Step 1: Upload image to Cloudinary via server
       const yyyymm = new Date().toISOString().slice(0, 7).replace('-', '');
       const formData = new FormData();
       formData.append('file', file);
@@ -466,12 +463,18 @@
         method: 'POST',
         credentials: 'same-origin',
         body: formData
+        // No Content-Type header — let browser set multipart boundary
       });
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      const uploadData = await uploadRes.json();
-      cloudinaryUrl = uploadData.url || '';
 
-      // 2. Send to dropzone queue for AI analysis
+      if (!uploadRes.ok) {
+        const errMsg = await uploadRes.text().catch(function () { return 'Upload failed'; });
+        throw new Error('Upload failed: ' + errMsg);
+      }
+
+      const uploadData = await uploadRes.json();
+      cloudinaryUrl = uploadData.url || uploadData.secure_url || '';
+
+      // Step 2: AI extraction via dropzone endpoint
       const dzRes = await fetch('/api/dropzone', {
         method: 'POST',
         credentials: 'same-origin',
@@ -482,12 +485,15 @@
           mime_type: file.type
         })
       });
+
       if (dzRes.ok) {
         const dzData = await dzRes.json();
         queueId = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
         aiResult = dzData.ai_result || {};
       } else {
+        // AI failed — create a local queue ID and show blank form
         queueId = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        aiResult = { suggested_type: 'Transaction', description: 'Could not analyze — please fill manually', prefilled: {} };
       }
     } catch (e) {
       if (spinner.parentNode) spinner.remove();
@@ -497,13 +503,14 @@
 
     // Replace spinner with review card
     if (spinner.parentNode) spinner.remove();
+
     const card = buildReviewCard(queueId, cloudinaryUrl, aiResult);
     container.insertBefore(card, container.firstChild);
     pendingCount++;
     updateBadge();
   }
 
-  /* ─── Wire up events ─── */
+  /* ─── Wire up all event listeners ─── */
   function wireEvents() {
     const toggleBtn = document.getElementById('dropzone-toggle-btn');
     const panel = document.getElementById('dropzone-panel');
@@ -514,109 +521,117 @@
 
     if (!toggleBtn || !panel) return;
 
-    // Toggle open/close
+    // Toggle panel open / close
     toggleBtn.addEventListener('click', function () {
       panel.classList.toggle('open');
     });
 
-    // Drop area click → file input
-    dropArea.addEventListener('click', function () {
-      fileInput.click();
-    });
-    dropArea.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') fileInput.click();
-    });
+    // Drop area: click → trigger file input
+    if (dropArea) {
+      dropArea.addEventListener('click', function (e) {
+        if (e.target !== fileInput) fileInput.click();
+      });
+      dropArea.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+      });
+
+      // Drag events
+      dropArea.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropArea.classList.add('drag-over');
+      });
+      dropArea.addEventListener('dragleave', function (e) {
+        if (!dropArea.contains(e.relatedTarget)) {
+          dropArea.classList.remove('drag-over');
+        }
+      });
+      dropArea.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropArea.classList.remove('drag-over');
+        if (e.dataTransfer && e.dataTransfer.files) {
+          Array.from(e.dataTransfer.files).forEach(processFile);
+        }
+      });
+    }
+
+    // Also accept drops on the whole panel
+    if (panel) {
+      panel.addEventListener('dragover', function (e) { e.preventDefault(); });
+      panel.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (e.dataTransfer && e.dataTransfer.files) {
+          Array.from(e.dataTransfer.files).forEach(processFile);
+        }
+      });
+    }
 
     // File input change
-    fileInput.addEventListener('change', function () {
-      if (!this.files || !this.files.length) return;
-      Array.from(this.files).forEach(processFile);
-      this.value = '';
-    });
+    if (fileInput) {
+      fileInput.addEventListener('change', function () {
+        if (!this.files || !this.files.length) return;
+        Array.from(this.files).forEach(processFile);
+        this.value = ''; // reset so same file can be re-selected
+      });
+    }
 
-    // Drag events
-    dropArea.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      dropArea.classList.add('drag-over');
-    });
-    dropArea.addEventListener('dragleave', function () {
-      dropArea.classList.remove('drag-over');
-    });
-    dropArea.addEventListener('drop', function (e) {
-      e.preventDefault();
-      dropArea.classList.remove('drag-over');
-      if (!e.dataTransfer || !e.dataTransfer.files) return;
-      Array.from(e.dataTransfer.files).forEach(processFile);
-    });
+    // Approve / Reject buttons — event delegation
+    if (container) {
+      container.addEventListener('click', async function (e) {
+        const approveBtn = e.target.closest('.dz-approve');
+        const rejectBtn = e.target.closest('.dz-reject');
 
-    // Drag on panel body
-    panel.addEventListener('dragover', function (e) { e.preventDefault(); });
-    panel.addEventListener('drop', function (e) {
-      e.preventDefault();
-      if (!e.dataTransfer || !e.dataTransfer.files) return;
-      Array.from(e.dataTransfer.files).forEach(processFile);
-    });
-
-    // Event delegation for approve/reject buttons
-    container.addEventListener('click', async function (e) {
-      const approveBtn = e.target.closest('.dz-approve');
-      const rejectBtn = e.target.closest('.dz-reject');
-
-      if (approveBtn) {
-        const card = approveBtn.closest('.dz-review-card');
-        if (card) {
+        if (approveBtn && !approveBtn.disabled) {
+          const card = approveBtn.closest('.dz-review-card');
+          if (!card) return;
           approveBtn.disabled = true;
           const ok = await approveCard(card);
-          if (!ok) approveBtn.disabled = false;
-          else showFlash('Approved!');
+          if (!ok) {
+            approveBtn.disabled = false;
+          } else {
+            showFlash('Approved!');
+          }
         }
-      }
 
-      if (rejectBtn) {
-        const card = rejectBtn.closest('.dz-review-card');
-        if (card) {
-          await rejectCard(card);
+        if (rejectBtn) {
+          const card = rejectBtn.closest('.dz-review-card');
+          if (card) {
+            await rejectCard(card);
+          }
         }
-      }
-    });
+      });
+    }
 
-    // Approve All
+    // Approve All button
     if (approveAllBtn) {
       approveAllBtn.addEventListener('click', async function () {
         approveAllBtn.disabled = true;
+        approveAllBtn.textContent = 'Approving…';
         const cards = Array.from(container.querySelectorAll('.dz-review-card:not(.approved)'));
+        let successCount = 0;
         for (const card of cards) {
-          await approveCard(card);
-          await new Promise(function (r) { setTimeout(r, 200); });
+          const ok = await approveCard(card);
+          if (ok) successCount++;
+          await new Promise(function (r) { setTimeout(r, 250); });
         }
-        showFlash('All approved!');
+        if (successCount > 0) showFlash('All ' + successCount + ' items approved!');
+        approveAllBtn.textContent = '✅ Approve All';
         approveAllBtn.disabled = false;
       });
     }
   }
 
-  /* ─── Add spin keyframe if not already present ─── */
-  function addKeyframes() {
-    if (!document.getElementById('dz-keyframes')) {
-      const style = document.createElement('style');
-      style.id = 'dz-keyframes';
-      style.textContent = `
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-`;
-      document.head.appendChild(style);
-    }
-  }
-
-  /* ─── Init ─── */
+  /* ─── Initialize ─── */
   document.addEventListener('DOMContentLoaded', function () {
-    // Skip on login/setup pages
+    // Only inject on protected pages (not login or setup)
     const path = window.location.pathname;
     const isLoginPage = path === '/' || path === '/index.html' || path.endsWith('/index.html');
     const isSetupPage = path === '/setup.html' || path.endsWith('/setup.html');
     if (isLoginPage || isSetupPage) return;
 
     addKeyframes();
+    injectStyles();
     injectHtml();
     wireEvents();
   });
