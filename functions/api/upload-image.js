@@ -26,11 +26,13 @@ export async function onRequestPost(context) {
 
   const folder = formData.get('folder') || 'general';
   const timestamp = Math.floor(Date.now() / 1000);
+  // Always convert to JPEG 1000×1000 max — handles HEIC, WEBP, PNG, anything
+  const eager = 'w_1000,h_1000,c_limit,f_jpg,q_auto';
 
   let sig;
   try {
     sig = await cloudinarySignature(
-      { folder, timestamp },
+      { eager, folder, timestamp },
       env.CLOUDINARY_API_SECRET
     );
   } catch (err) {
@@ -43,6 +45,7 @@ export async function onRequestPost(context) {
   uploadForm.append('api_key', env.CLOUDINARY_API_KEY);
   uploadForm.append('timestamp', timestamp.toString());
   uploadForm.append('folder', folder);
+  uploadForm.append('eager', eager);
   uploadForm.append('signature', sig);
 
   let uploadRes;
@@ -61,5 +64,7 @@ export async function onRequestPost(context) {
   }
 
   const result = await uploadRes.json();
-  return jsonResponse({ url: result.secure_url, public_id: result.public_id });
+  // Use the eager-transformed JPEG URL so HEIC/WEBP/PNG are all normalised to JPEG
+  const url = result.eager?.[0]?.secure_url ?? result.secure_url;
+  return jsonResponse({ url, public_id: result.public_id });
 }

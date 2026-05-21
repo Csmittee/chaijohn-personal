@@ -13,7 +13,13 @@ async function createTable(apiKey, baseId, tableDefinition) {
   });
 
   if (res.status === 422 || res.status === 409) {
-    return { status: 'already_exists', table: tableDefinition.name };
+    // Distinguish "table already exists" from "invalid field definition"
+    const body = await res.json().catch(() => ({}));
+    const msg = (body?.error?.message || body?.message || JSON.stringify(body)).toLowerCase();
+    if (msg.includes('already exist') || msg.includes('duplicate') || res.status === 409) {
+      return { status: 'already_exists', table: tableDefinition.name };
+    }
+    return { status: 'error', table: tableDefinition.name, error: JSON.stringify(body) };
   }
   if (!res.ok) {
     const errText = await res.text();
@@ -37,7 +43,7 @@ export async function onRequestPost(context) {
         { name: 'fixed_variable', type: 'singleSelect', options: { choices: [{ name: 'Fixed' }, { name: 'Variable' }] } },
         { name: 'budget_limit_monthly', type: 'currency', options: { precision: 0, symbol: '฿' } },
         { name: 'period', type: 'singleSelect', options: { choices: [{ name: 'Daily' }, { name: 'Weekly' }, { name: 'Monthly' }, { name: 'Annual' }] } },
-        { name: 'active', type: 'checkbox', options: { color: 'green', icon: 'check' } }
+        { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } }
       ]
     },
     {
@@ -66,7 +72,7 @@ export async function onRequestPost(context) {
         { name: 'due_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
         { name: 'last_payment_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
         { name: 'notes', type: 'multilineText' },
-        { name: 'active', type: 'checkbox', options: { color: 'green', icon: 'check' } }
+        { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } }
       ]
     },
     {
@@ -102,7 +108,7 @@ export async function onRequestPost(context) {
         { name: 'content', type: 'multilineText' },
         { name: 'entry_type', type: 'singleSelect', options: { choices: [{ name: 'Story' }, { name: 'Idea' }, { name: 'Blog' }, { name: 'Finance note' }] } },
         { name: 'tags', type: 'singleLineText' },
-        { name: 'publish_to_web', type: 'checkbox', options: { color: 'blue', icon: 'check' } },
+        { name: 'publish_to_web', type: 'checkbox', options: { color: 'blueBright', icon: 'check' } },
         { name: 'published_url', type: 'url' },
         { name: 'connected_concept', type: 'singleLineText' },
         { name: 'cloudinary_image_url', type: 'url' }
@@ -137,7 +143,7 @@ export async function onRequestPost(context) {
         { name: 'source', type: 'singleLineText' },
         { name: 'date_added', type: 'date', options: { dateFormat: { name: 'iso' } } },
         { name: 'mood_tag', type: 'singleSelect', options: { choices: [{ name: 'Motivation' }, { name: 'Wisdom' }, { name: 'Funny' }, { name: 'Business' }, { name: 'Life' }] } },
-        { name: 'active', type: 'checkbox', options: { color: 'green', icon: 'check' } },
+        { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
         { name: 'cloudinary_image_url', type: 'url' }
       ]
     },
@@ -163,17 +169,18 @@ export async function onRequestPost(context) {
         { name: 'period', type: 'singleSelect', options: { choices: [{ name: 'Monthly' }, { name: 'Annual' }, { name: 'One-time' }] } },
         { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
         { name: 'end_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-        { name: 'active', type: 'checkbox', options: { color: 'green', icon: 'check' } }
+        { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } }
       ]
     }
   ];
 
   const results = [];
 
-  // Create tables sequentially (Categories first since others may depend on it)
+  // Create tables sequentially with delay to stay under Airtable Meta API rate limit
   for (const tableDef of tables) {
     const result = await createTable(apiKey, BASE_ID, tableDef);
     results.push(result);
+    await new Promise(r => setTimeout(r, 300));
   }
 
   // Seed Categories
