@@ -14,5 +14,5 @@ CLOUDINARY_CLOUD_NAME = "dfiomi0lb"
 
 [[kv_namespaces]]
 binding = "CHAIJOHN_KV"
-id = "placeholder"
-preview_id = "placeholder"
+id = "7e2dcb214e17435c9ec808cb6e3b7e74"
+preview_id = "7e2dcb214e17435c9ec808cb6e3b7e74"
