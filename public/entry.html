@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn — Entry</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-link" href="/dashboard.html">Dashboard</a>
+      <a class="nav-link active" href="/entry.html">Entry</a>
+      <a class="nav-link" href="/diary.html">Diary</a>
+      <a class="nav-link" href="/collection.html">Collection</a>
+      <a class="nav-link" href="/ai-advisor.html">AI Advisor</a>
+      <button class="nav-link nav-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page-content">
+
+    <!-- Top-level tabs -->
+    <div class="tabs" id="entry-tabs">
+      <button class="tab-btn active" data-tab="transactions">Transactions</button>
+      <button class="tab-btn" data-tab="utilities">Utilities</button>
+      <button class="tab-btn" data-tab="debts">Debts</button>
+      <button class="tab-btn" data-tab="budgets">Budgets</button>
+    </div>
+
+    <!-- ── Transactions Tab ── -->
+    <div class="tab-panel active" id="transactions-tab">
+
+      <!-- Quick-add form (sticky) -->
+      <div class="card" style="margin-bottom:1rem;position:sticky;top:calc(var(--nav-height) + 0.5rem);z-index:100">
+        <div class="flex items-center gap-1" style="margin-bottom:1rem">
+          <button class="btn btn-lg btn-success" id="type-income" data-type="Income">EARN</button>
+          <button class="btn btn-lg btn-outline" id="type-expense" data-type="Expense">EXPENSE</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tx-amount">Amount (฿)</label>
+            <input type="number" id="tx-amount" placeholder="0" step="1" inputmode="numeric">
+          </div>
+          <div class="form-group">
+            <label for="tx-category">Category</label>
+            <select id="tx-category"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tx-description">Description</label>
+            <input type="text" id="tx-description" placeholder="What was this for?">
+          </div>
+          <div class="form-group">
+            <label for="tx-entity">Entity / Person / Platform</label>
+            <input type="text" id="tx-entity" placeholder="Who or where">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tx-date">Date</label>
+            <input type="date" id="tx-date">
+          </div>
+          <div class="form-group">
+            <label for="tx-note">Note (optional)</label>
+            <input type="text" id="tx-note" placeholder="Extra note">
+          </div>
+        </div>
+        <button class="btn btn-primary w-full btn-lg" id="save-tx">Save Transaction</button>
+      </div>
+
+      <!-- Transaction list with sub-period tabs -->
+      <div class="tabs" id="tx-period-tabs">
+        <button class="tab-btn active" data-txperiod="daily">Daily</button>
+        <button class="tab-btn" data-txperiod="weekly">Weekly</button>
+        <button class="tab-btn" data-txperiod="monthly">Monthly</button>
+      </div>
+      <div id="tx-list"></div>
+    </div>
+
+    <!-- ── Utilities Tab ── -->
+    <div class="tab-panel" id="utilities-tab">
+      <div class="card" style="margin-bottom:1rem">
+        <div class="section-header">
+          <span class="section-title">Utilities Entry</span>
+          <input type="month" id="util-month" style="width:auto">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="util-elec-units">Electricity Units Used</label>
+            <input type="number" id="util-elec-units" placeholder="kWh" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="util-elec-charge">Electricity Charge (฿)</label>
+            <input type="number" id="util-elec-charge" placeholder="฿" step="0.01">
+          </div>
+        </div>
+        <div id="elec-rate-display" style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem"></div>
+        <div id="elec-vs-prev" style="font-size:0.82rem;margin-bottom:1rem"></div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="util-water-units">Water Units Used</label>
+            <input type="number" id="util-water-units" placeholder="units" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="util-water-charge">Water Charge (฿)</label>
+            <input type="number" id="util-water-charge" placeholder="฿" step="0.01">
+          </div>
+        </div>
+        <div id="water-rate-display" style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem"></div>
+        <div id="water-vs-prev" style="font-size:0.82rem;margin-bottom:1rem"></div>
+
+        <div class="form-group">
+          <label for="util-notes">Notes</label>
+          <textarea id="util-notes" rows="2"></textarea>
+        </div>
+        <button class="btn btn-primary w-full" id="save-util">Save Utilities</button>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">Last 12 Months</span>
+        </div>
+        <div id="util-history-table"></div>
+        <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="chart-container" style="height:140px">
+            <canvas id="elec-chart"></canvas>
+          </div>
+          <div class="chart-container" style="height:140px">
+            <canvas id="water-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Debts Tab ── -->
+    <div class="tab-panel" id="debts-tab">
+
+      <!-- Log a payment -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="section-header">
+          <span class="section-title">Log a Payment</span>
+        </div>
+        <div class="form-group">
+          <label for="payment-debt-select">Debt</label>
+          <select id="payment-debt-select"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="payment-amount">Payment Amount (฿)</label>
+            <input type="number" id="payment-amount" placeholder="฿">
+          </div>
+          <div class="form-group">
+            <label for="payment-date">Payment Date</label>
+            <input type="date" id="payment-date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="payment-note">Note</label>
+          <input type="text" id="payment-note" placeholder="Optional note">
+        </div>
+        <button class="btn btn-success w-full" id="save-payment">Log Payment</button>
+      </div>
+
+      <!-- Add new debt -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="section-header">
+          <span class="section-title">Add New Debt</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="debt-creditor">Creditor Name</label>
+            <input type="text" id="debt-creditor" placeholder="Bank / Person">
+          </div>
+          <div class="form-group">
+            <label for="debt-type">Creditor Type</label>
+            <select id="debt-type">
+              <option value="Bank">Bank</option>
+              <option value="Family">Family</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="debt-original">Original Amount (฿)</label>
+            <input type="number" id="debt-original">
+          </div>
+          <div class="form-group">
+            <label for="debt-balance">Current Balance (฿)</label>
+            <input type="number" id="debt-balance">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="debt-rate">Interest Rate (%)</label>
+            <input type="number" id="debt-rate" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="debt-monthly">Monthly Payment (฿)</label>
+            <input type="number" id="debt-monthly">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="debt-due">Due Date</label>
+            <input type="date" id="debt-due">
+          </div>
+          <div class="form-group">
+            <label for="debt-notes">Notes</label>
+            <input type="text" id="debt-notes">
+          </div>
+        </div>
+        <button class="btn btn-primary w-full" id="save-debt">Add Debt</button>
+      </div>
+
+      <!-- Active debts list -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">Active Debts</span>
+        </div>
+        <div id="active-debts-table"></div>
+      </div>
+    </div>
+
+    <!-- ── Budgets Tab ── -->
+    <div class="tab-panel" id="budgets-tab">
+
+      <!-- Create budget form -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="section-header">
+          <span class="section-title">Create Budget</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="budget-label">Label</label>
+            <input type="text" id="budget-label" placeholder="Budget name">
+          </div>
+          <div class="form-group">
+            <label for="budget-category">Category</label>
+            <select id="budget-category"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="budget-amount">Amount (฿)</label>
+            <input type="number" id="budget-amount" placeholder="฿">
+          </div>
+          <div class="form-group">
+            <label for="budget-period">Period</label>
+            <select id="budget-period">
+              <option value="Monthly">Monthly</option>
+              <option value="Annual">Annual</option>
+              <option value="One-time">One-time</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="budget-start">Start Date</label>
+            <input type="date" id="budget-start">
+          </div>
+          <div class="form-group">
+            <label for="budget-end">End Date (optional)</label>
+            <input type="date" id="budget-end">
+          </div>
+        </div>
+        <button class="btn btn-primary w-full" id="save-budget">Create Budget</button>
+      </div>
+
+      <!-- Active budgets list -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">Active Budgets</span>
+        </div>
+        <div id="budgets-list"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/entry.injector.js" defer></script>
+</body>
+</html>

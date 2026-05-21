@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn Dashboard — Login</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <style>
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .login-card {
+      width: min(380px, 100%);
+      padding: 2rem;
+    }
+    .login-logo {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .login-logo h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--color-primary);
+      margin-bottom: 0.4rem;
+    }
+    .login-logo p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    #pin-input {
+      text-align: center;
+      font-size: 1.5rem;
+      letter-spacing: 0.4em;
+      font-weight: 700;
+    }
+    #auth-error {
+      color: var(--color-expense);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 0.5rem;
+      background: rgba(239, 68, 68, 0.08);
+      border-radius: var(--radius);
+      margin-bottom: 0.75rem;
+    }
+    #setup-msg {
+      color: var(--color-warning);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 0.5rem;
+      background: rgba(245, 158, 11, 0.08);
+      border-radius: var(--radius);
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="card login-card">
+      <div class="login-logo">
+        <h1>🏠 Chaijohn Dashboard</h1>
+        <p>Personal Finance &amp; Command Center</p>
+      </div>
+
+      <div id="auth-error" class="hidden"></div>
+      <div id="setup-msg" class="hidden">No PIN set — visit <a href="/setup.html">/setup.html</a> first</div>
+
+      <form id="pin-form" autocomplete="off">
+        <div class="form-group">
+          <label for="pin-input">PIN</label>
+          <input
+            type="password"
+            id="pin-input"
+            maxlength="6"
+            inputmode="numeric"
+            placeholder="Enter PIN"
+            autocomplete="off"
+          >
+        </div>
+        <button type="submit" class="btn btn-primary w-full btn-lg" id="enter-btn">Enter</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/assets/js/auth.js" defer></script>
+</body>
+</html>

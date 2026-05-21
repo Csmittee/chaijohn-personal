@@ -1,0 +1,18 @@
+# Chaijohn Dashboard — Cloudflare Pages config
+# Secrets set in Cloudflare Pages dashboard (NOT here):
+#   AIRTABLE_API_KEY, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, ANTHROPIC_API_KEY
+
+name = "chaijohn-dashboard"
+compatibility_date = "2024-05-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "public"
+
+[vars]
+AIRTABLE_BASE_ID = "apphBGWfSPL45oSFd"
+AIRTABLE_BUSINESS_BASE_ID = "appMBjlfYyVd8I7ML"
+CLOUDINARY_CLOUD_NAME = "dfiomi0lb"
+
+[[kv_namespaces]]
+binding = "CHAIJOHN_KV"
+id = "placeholder"
+preview_id = "placeholder"

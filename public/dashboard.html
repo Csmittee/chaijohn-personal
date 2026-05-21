@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn — Dashboard</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-link active" href="/dashboard.html">Dashboard</a>
+      <a class="nav-link" href="/entry.html">Entry</a>
+      <a class="nav-link" href="/diary.html">Diary</a>
+      <a class="nav-link" href="/collection.html">Collection</a>
+      <a class="nav-link" href="/ai-advisor.html">AI Advisor</a>
+      <button class="nav-link nav-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page-content">
+
+    <!-- Quote banner -->
+    <div id="quote-banner" class="quote-banner hidden">
+      <div class="quote-text" id="quote-text"></div>
+      <div class="quote-author" id="quote-author"></div>
+      <button class="quote-dismiss" id="quote-dismiss" title="Dismiss">×</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="period-toggle">
+        <button class="period-btn active" data-period="monthly">Monthly</button>
+        <button class="period-btn" data-period="weekly">Weekly</button>
+        <button class="period-btn" data-period="daily">Daily</button>
+      </div>
+      <input type="date" id="range-start" class="w-auto">
+      <span style="color:var(--text-secondary);font-size:0.9rem">to</span>
+      <input type="date" id="range-end" class="w-auto">
+      <button class="btn btn-sm btn-outline" id="apply-range">Apply</button>
+    </div>
+
+    <!-- Section A: Speed / Cashflow cards -->
+    <div class="speed-panel" id="cashflow-section">
+      <div class="card speed-card" id="spend-rate-card">
+        <div class="metric-label">Spend Rate</div>
+        <div class="gauge-wrap">
+          <canvas id="gauge-chart" width="160" height="90"></canvas>
+        </div>
+        <div class="metric-value" id="spend-rate-value">฿—</div>
+        <div class="metric-sub">per day</div>
+      </div>
+
+      <div class="card speed-card" id="cash-position-card">
+        <div class="metric-label">Cash Position</div>
+        <div style="margin:1rem 0">
+          <canvas id="cashpos-chart" height="60"></canvas>
+        </div>
+        <div class="metric-value" id="cash-net">฿—</div>
+        <div class="metric-sub" id="cash-sub">income vs expense</div>
+      </div>
+
+      <div class="card speed-card" id="days-critical-card">
+        <div class="metric-label">Days to Critical</div>
+        <div class="metric-value" id="days-value">—</div>
+        <div class="metric-sub" id="critical-date">—</div>
+      </div>
+    </div>
+
+    <!-- Section B: Income vs Expense Trend -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <span class="section-title">Income vs Expense Trend</span>
+      </div>
+      <div class="chart-container" style="height:220px">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Section C: Expense Pareto -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <span class="section-title">Expense Pareto by Category</span>
+      </div>
+      <div class="chart-container" style="height:240px">
+        <canvas id="pareto-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Section D: Paynter Table -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <span class="section-title">Paynter Table — Top Expense Categories</span>
+      </div>
+      <div id="paynter-table-wrap"></div>
+    </div>
+
+    <!-- Section E: Debt Wave -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <span class="section-title">Debt Wave</span>
+      </div>
+      <div class="chart-container" style="height:200px">
+        <canvas id="debt-chart"></canvas>
+      </div>
+      <div id="debt-table-wrap" style="margin-top:1rem"></div>
+    </div>
+
+    <!-- Section F: Net Worth Snapshot -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-header">
+        <span class="section-title">Net Worth Snapshot</span>
+        <span class="metric-value" id="net-worth-value">฿—</span>
+      </div>
+      <div class="chart-container" style="height:80px">
+        <canvas id="networth-chart"></canvas>
+      </div>
+      <div id="networth-breakdown" style="margin-top:1rem"></div>
+    </div>
+
+    <!-- Section G: Alerts -->
+    <div id="alerts-section" class="hidden" style="margin-bottom:1.5rem">
+      <div class="alert-strip" id="alerts-strip"></div>
+    </div>
+
+    <!-- Drill-down slide panel -->
+    <div class="slide-panel-backdrop" id="drilldown-backdrop"></div>
+    <div class="slide-panel" id="drilldown-panel">
+      <div class="slide-panel-header">
+        <span id="drilldown-title" class="section-title"></span>
+        <button class="slide-panel-close" id="drilldown-close">×</button>
+      </div>
+      <div id="drilldown-content"></div>
+    </div>
+
+  </main>
+
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/dashboard.injector.js" defer></script>
+</body>
+</html>
