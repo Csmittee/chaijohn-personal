@@ -460,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function openAiModal() {
     if (!aiModal) return;
-    aiModal.classList.add('open');
+    aiModal.classList.remove('hidden');
     var output = document.getElementById('ai-assist-output');
     if (output) output.textContent = 'Choose a mode above to get AI suggestions…';
     var loading = document.getElementById('ai-loading');
@@ -468,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function closeAiModal() {
-    if (aiModal) aiModal.classList.remove('open');
+    if (aiModal) aiModal.classList.add('hidden');
   }
 
   if (aiAssistBtn) aiAssistBtn.addEventListener('click', openAiModal);

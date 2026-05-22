@@ -15,14 +15,14 @@ export async function onRequestPost(context) {
   const tablesRes = await fetch(`${META}/${BASE_ID}/tables`, {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
-  if (!tablesRes.ok) return errorResponse(`Failed to list tables: ${tablesRes.status}`, 500);
+  if (!tablesRes.ok) return jsonResponse({ ok: false, reason: `list tables: ${tablesRes.status}` });
   const tablesData = await tablesRes.json();
 
   const diaryTable = (tablesData.tables || []).find(t => t.name === 'Diary');
-  if (!diaryTable) return errorResponse('Diary table not found', 404);
+  if (!diaryTable) return jsonResponse({ ok: false, reason: 'Diary table not found' });
 
   const entryTypeField = (diaryTable.fields || []).find(f => f.name === 'entry_type');
-  if (!entryTypeField) return errorResponse('entry_type field not found', 404);
+  if (!entryTypeField) return jsonResponse({ ok: false, reason: 'entry_type field not found' });
 
   const currentChoices = entryTypeField.options?.choices || [];
 
@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
   );
   if (!patchRes.ok) {
     const err = await patchRes.text();
-    return errorResponse(`Failed to update field: ${err}`, 500);
+    return jsonResponse({ ok: false, reason: `patch field: ${err}` });
   }
 
   const result = await patchRes.json();
