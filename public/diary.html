@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chaijohn — Diary</title>
   <link rel="stylesheet" href="/assets/css/global.css">
+  <style>
+    .seg-toggle { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; vertical-align:middle; }
+    .seg-btn { padding:0.28rem 0.7rem; font-size:0.8rem; font-weight:500; border:none; cursor:pointer;
+      transition:background 0.15s,color 0.15s; line-height:1.4; background:transparent; color:var(--text-secondary); }
+    .seg-btn.seg-active { background:var(--color-primary,#3b82f6); color:#fff; }
+    .seg-btn:not(.seg-active):hover { background:rgba(255,255,255,0.06); }
+  </style>
 </head>
 <body>
   <nav class="main-nav">
@@ -20,7 +27,6 @@
   </nav>
 
   <main class="page-content" style="padding-bottom:0">
-
     <div class="diary-layout">
 
       <!-- Left: entry list panel -->
@@ -44,20 +50,26 @@
         <div style="padding:1rem">
 
           <!-- Toolbar -->
-          <div class="flex items-center justify-between" style="margin-bottom:1rem">
-            <button class="btn btn-primary btn-sm" id="new-entry-btn">+ New Entry</button>
-            <div class="flex gap-1">
-              <button class="btn btn-sm btn-primary" id="edit-mode-btn">Edit</button>
-              <button class="btn btn-sm btn-outline" id="preview-mode-btn">Preview</button>
-              <button class="btn btn-sm btn-danger hidden" id="delete-entry-btn">Delete</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem">
+            <!-- Left: new entry + edit/preview toggle -->
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" id="new-entry-btn">+ New Entry</button>
+              <div class="seg-toggle">
+                <button class="seg-btn seg-active" id="edit-mode-btn">✏️ Edit</button>
+                <button class="seg-btn" id="preview-mode-btn">👁 Preview</button>
+              </div>
+            </div>
+            <!-- Right: action buttons -->
+            <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+              <button class="btn btn-sm btn-outline hidden" id="cancel-changes-btn" title="Revert all unsaved changes">↩ Cancel</button>
+              <button class="btn btn-sm btn-outline hidden" id="save-as-btn" title="Save current content as a new entry">Copy As New</button>
+              <button class="btn btn-sm btn-danger hidden" id="delete-entry-btn" title="Permanently delete this entry">🗑</button>
               <button class="btn btn-sm btn-primary" id="save-entry-btn">Save</button>
             </div>
           </div>
 
           <!-- Entry form -->
           <div id="entry-form">
-            <input type="hidden" id="entry-id">
-
             <div class="form-row">
               <div class="form-group">
                 <label for="entry-date">Date</label>
@@ -82,8 +94,7 @@
 
             <div class="form-group">
               <label for="entry-content">Content</label>
-              <textarea id="entry-content" rows="12" placeholder="Write here... (Markdown supported)"></textarea>
-              <!-- Preview panel (shown in Preview mode) -->
+              <textarea id="entry-content" rows="12" placeholder="Write here… (Markdown supported)"></textarea>
               <div id="entry-preview" class="card" style="display:none;min-height:200px;margin-top:0.5rem;white-space:pre-wrap;font-size:0.9rem;line-height:1.7"></div>
             </div>
 
@@ -99,10 +110,18 @@
               </div>
             </div>
 
-            <!-- Image from dropzone -->
-            <div id="entry-image-wrap" class="form-group" style="display:none">
-              <label>Image (from Drop Zone)</label>
-              <img id="entry-image" src="" alt="" style="max-width:100%;border-radius:var(--radius);margin-top:0.3rem">
+            <!-- Image upload -->
+            <div class="form-group">
+              <label>Image</label>
+              <div id="entry-image-wrap" style="display:none;margin-bottom:0.4rem">
+                <img id="entry-image" src="" alt="" style="max-width:100%;border-radius:var(--radius);margin-bottom:0.35rem;display:block">
+                <button class="btn btn-sm btn-outline" id="remove-image-btn">✕ Remove</button>
+              </div>
+              <label class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block;margin:0">
+                📷 Add Image
+                <input type="file" id="entry-image-file" accept="image/*" style="display:none">
+              </label>
+              <span id="upload-image-status" style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem"></span>
             </div>
 
             <!-- Blog publish section (shown when type=Blog) -->
@@ -125,7 +144,6 @@
         </div>
       </div>
     </div>
-
   </main>
 
   <!-- AI Assist Modal -->
@@ -145,10 +163,10 @@
         <button class="btn btn-sm btn-outline ai-assist-type" data-assist="tags">Suggest tags</button>
       </div>
       <div id="ai-loading" style="display:none;text-align:center;padding:0.5rem;color:var(--text-secondary)">⏳ AI is thinking…</div>
-      <div id="ai-assist-output" style="min-height:100px;padding:0.75rem;background:var(--bg-page);border-radius:var(--radius);font-size:0.9rem;margin-bottom:1rem;white-space:pre-wrap;line-height:1.6"></div>
+      <div id="ai-assist-output" style="min-height:80px;padding:0.75rem;background:var(--bg-page);border-radius:var(--radius);font-size:0.9rem;margin-bottom:1rem;white-space:pre-wrap;line-height:1.6"></div>
       <div class="flex justify-between">
         <button class="btn btn-sm btn-outline" id="ai-modal-close2">Cancel</button>
-        <button class="btn btn-sm btn-primary" id="ai-use-result">Use this ↑</button>
+        <button class="btn btn-sm btn-primary" id="ai-use-result">Use in Content ↑</button>
       </div>
     </div>
   </div>

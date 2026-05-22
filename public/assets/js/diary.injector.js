@@ -1,4 +1,4 @@
-/* diary.injector.js — Diary and blog editor page logic */
+/* diary.injector.js — Diary and blog editor */
 
 /* ─── Utility ─── */
 function todayIso() {
@@ -35,23 +35,33 @@ let allEntries = [];
 let currentEntryId = null;
 let activeTypeFilter = '';
 let isPreviewMode = false;
+let originalState = null;   // snapshot when entry loaded — used by Cancel
+let lastAssistType = null;  // last AI type clicked — routes "Use this" to correct field
+let currentImageUrl = '';   // cloudinary URL for current entry
 
-/* ─── Fix 12: Ensure Airtable entry_type choices are current (non-blocking) ─── */
-function ensureDiaryTypes() {
-  fetch('/api/diary/fix-types', { method: 'POST', credentials: 'same-origin' })
-    .catch(function () { /* ignore — background maintenance call */ });
+/* ─── Show/hide context-sensitive buttons ─── */
+function setEditorButtons(hasExisting) {
+  ['cancel-changes-btn', 'save-as-btn', 'delete-entry-btn'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !hasExisting);
+  });
 }
 
-/* ─── Fix 13: Concept datalist ─── */
+/* ─── Ensure Airtable entry_type choices are current (non-blocking) ─── */
+function ensureDiaryTypes() {
+  fetch('/api/diary/fix-types', { method: 'POST', credentials: 'same-origin' }).catch(function () {});
+}
+
+/* ─── Concept datalist ─── */
 const CONCEPT_PRESETS = [
   'obsidian', 'project-memory', 'skill-library',
   'business-idea', 'personal-growth', 'finance-concept'
 ];
 
 function buildConceptDatalist() {
-  const datalist = document.getElementById('concept-datalist');
+  var datalist = document.getElementById('concept-datalist');
   if (!datalist) return;
-  const concepts = new Set(CONCEPT_PRESETS);
+  var concepts = new Set(CONCEPT_PRESETS);
   allEntries.forEach(function (e) {
     if (e.fields.connected_concept) concepts.add(e.fields.connected_concept.trim());
   });
@@ -60,15 +70,71 @@ function buildConceptDatalist() {
   }).join('');
 }
 
+/* ─── Capture / restore editor state ─── */
+function captureState() {
+  return {
+    date:         document.getElementById('entry-date')?.value || '',
+    title:        document.getElementById('entry-title')?.value || '',
+    content:      document.getElementById('entry-content')?.value || '',
+    type:         document.getElementById('entry-type')?.value || 'Story',
+    tags:         document.getElementById('entry-tags')?.value || '',
+    concept:      document.getElementById('entry-concept')?.value || '',
+    publishToWeb: document.getElementById('publish-toggle')?.checked || false,
+    imageUrl:     currentImageUrl
+  };
+}
+
+function restoreState(state) {
+  if (!state) return;
+  var map = {
+    'entry-date': state.date, 'entry-title': state.title,
+    'entry-content': state.content, 'entry-tags': state.tags,
+    'entry-concept': state.concept
+  };
+  Object.keys(map).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = map[id];
+  });
+  var typeSelect = document.getElementById('entry-type');
+  if (typeSelect) { typeSelect.value = state.type; toggleBlogSection(state.type === 'Blog'); }
+  var pub = document.getElementById('publish-toggle');
+  if (pub) pub.checked = state.publishToWeb;
+  currentImageUrl = state.imageUrl || '';
+  updateImageDisplay();
+  if (isPreviewMode) setEditMode();
+}
+
+function updateImageDisplay() {
+  var wrap = document.getElementById('entry-image-wrap');
+  var img  = document.getElementById('entry-image');
+  if (!wrap || !img) return;
+  if (currentImageUrl) {
+    img.src = currentImageUrl;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+/* ─── Cancel: revert to last saved state ─── */
+function cancelChanges() {
+  if (originalState) {
+    restoreState(originalState);
+    showFlash('Changes reverted');
+  } else {
+    clearEditor();
+  }
+}
+
 /* ─── Load entry list ─── */
 async function loadEntryList() {
-  const container = document.getElementById('diary-entry-list');
+  var container = document.getElementById('diary-entry-list');
   if (!container) return;
   container.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.45">Loading…</div>';
   try {
-    const res = await api('/api/diary');
+    var res = await api('/api/diary');
     if (!res.ok) throw new Error('Failed to load entries');
-    const data = await res.json();
+    var data = await res.json();
     allEntries = data.records || [];
     allEntries.sort(function (a, b) {
       return (b.fields.date || '') > (a.fields.date || '') ? 1 : -1;
@@ -81,10 +147,10 @@ async function loadEntryList() {
 }
 
 function renderEntryList(entries) {
-  const container = document.getElementById('diary-entry-list');
+  var container = document.getElementById('diary-entry-list');
   if (!container) return;
-  const search = (document.getElementById('diary-search')?.value || '').toLowerCase().trim();
-  let filtered = entries;
+  var search = (document.getElementById('diary-search')?.value || '').toLowerCase().trim();
+  var filtered = entries;
 
   if (activeTypeFilter) {
     filtered = filtered.filter(function (e) {
@@ -93,7 +159,7 @@ function renderEntryList(entries) {
   }
   if (search) {
     filtered = filtered.filter(function (e) {
-      const f = e.fields;
+      var f = e.fields;
       return (f.title || '').toLowerCase().includes(search) ||
         (f.content || '').toLowerCase().includes(search) ||
         (f.tags || '').toLowerCase().includes(search);
@@ -106,19 +172,13 @@ function renderEntryList(entries) {
     return;
   }
 
-  const typeColors = {
-    Story: '#8b5cf6',
-    Blog: '#22c55e',
-    Idea: '#f59e0b',
-    Project: '#3b82f6',
-    Skill: '#06b6d4'
-  };
+  var typeColors = { Story:'#8b5cf6', Blog:'#22c55e', Idea:'#f59e0b', Project:'#3b82f6', Skill:'#06b6d4' };
 
   container.innerHTML = filtered.map(function (entry) {
-    const f = entry.fields;
-    const color = typeColors[f.entry_type] || '#94a3b8';
-    const isActive = entry.id === currentEntryId;
-    const preview = (f.content || '').replace(/<[^>]*>/g, '').substring(0, 80);
+    var f = entry.fields;
+    var color = typeColors[f.entry_type] || '#94a3b8';
+    var isActive = entry.id === currentEntryId;
+    var preview = (f.content || '').replace(/<[^>]*>/g, '').substring(0, 80);
     return '<div class="diary-entry-item' + (isActive ? ' active' : '') + '" data-id="' + entry.id + '"' +
       ' style="padding:0.7rem 0.85rem;border-radius:8px;cursor:pointer;margin-bottom:0.35rem;' +
       'border:1px solid ' + (isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.04)') + ';' +
@@ -135,7 +195,7 @@ function renderEntryList(entries) {
 
   container.querySelectorAll('.diary-entry-item').forEach(function (item) {
     item.addEventListener('click', function () {
-      const entry = allEntries.find(function (e) { return e.id === item.dataset.id; });
+      var entry = allEntries.find(function (e) { return e.id === item.dataset.id; });
       if (entry) loadEntryInEditor(entry);
     });
   });
@@ -144,51 +204,37 @@ function renderEntryList(entries) {
 /* ─── Load entry in editor ─── */
 function loadEntryInEditor(entry) {
   currentEntryId = entry.id;
-  const f = entry.fields;
+  var f = entry.fields;
+  currentImageUrl = f.cloudinary_image_url || '';
 
-  var fieldMap = {
-    'entry-date': f.date || '',
-    'entry-title': f.title || '',
-    'entry-content': f.content || '',
-    'entry-tags': f.tags || '',
+  var map = {
+    'entry-date': f.date || '', 'entry-title': f.title || '',
+    'entry-content': f.content || '', 'entry-tags': f.tags || '',
     'entry-concept': f.connected_concept || ''
   };
-  Object.keys(fieldMap).forEach(function (id) {
+  Object.keys(map).forEach(function (id) {
     var el = document.getElementById(id);
-    if (el) el.value = fieldMap[id];
+    if (el) el.value = map[id];
   });
 
   var typeSelect = document.getElementById('entry-type');
-  if (typeSelect) {
-    typeSelect.value = f.entry_type || 'Story';
-    toggleBlogSection(f.entry_type === 'Blog');
-  }
+  if (typeSelect) { typeSelect.value = f.entry_type || 'Story'; toggleBlogSection(f.entry_type === 'Blog'); }
 
-  var publishCheck = document.getElementById('publish-toggle');
-  if (publishCheck) publishCheck.checked = !!f.publish_to_web;
+  var pub = document.getElementById('publish-toggle');
+  if (pub) pub.checked = !!f.publish_to_web;
 
-  var imageWrap = document.getElementById('entry-image-wrap');
-  var imageEl = document.getElementById('entry-image');
-  if (imageWrap && imageEl) {
-    if (f.cloudinary_image_url) {
-      imageEl.src = f.cloudinary_image_url;
-      imageWrap.style.display = 'block';
-    } else {
-      imageWrap.style.display = 'none';
-    }
-  }
-
-  var deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) deleteBtn.classList.remove('hidden');
-
+  updateImageDisplay();
+  originalState = captureState();   // snapshot for Cancel
+  setEditorButtons(true);
   if (isPreviewMode) setEditMode();
-
   renderEntryList(allEntries);
 }
 
-/* ─── Clear editor for new entry ─── */
+/* ─── Clear editor (new entry) ─── */
 function clearEditor() {
   currentEntryId = null;
+  originalState = null;
+  currentImageUrl = '';
 
   ['entry-date', 'entry-title', 'entry-content', 'entry-tags', 'entry-concept'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -199,105 +245,90 @@ function clearEditor() {
   if (typeSelect) typeSelect.value = 'Story';
   toggleBlogSection(false);
 
-  var publishCheck = document.getElementById('publish-toggle');
-  if (publishCheck) publishCheck.checked = false;
+  var pub = document.getElementById('publish-toggle');
+  if (pub) pub.checked = false;
 
-  var imageWrap = document.getElementById('entry-image-wrap');
-  if (imageWrap) imageWrap.style.display = 'none';
-
-  var deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) deleteBtn.classList.add('hidden');
-
+  updateImageDisplay();
+  setEditorButtons(false);
   if (isPreviewMode) setEditMode();
-
   renderEntryList(allEntries);
 
   setTimeout(function () {
-    var titleEl = document.getElementById('entry-title');
-    if (titleEl) titleEl.focus();
+    var t = document.getElementById('entry-title');
+    if (t) t.focus();
   }, 50);
 }
 
-/* ─── Blog section visibility ─── */
+/* ─── Blog section toggle ─── */
 function toggleBlogSection(show) {
-  var section = document.getElementById('blog-publish-section');
-  if (section) section.style.display = show ? 'block' : 'none';
+  var s = document.getElementById('blog-publish-section');
+  if (s) s.style.display = show ? 'block' : 'none';
 }
 
-/* ─── Fix 9: Edit / Preview two-button toggle ─── */
+/* ─── Edit / Preview segmented toggle ─── */
 function setEditMode() {
   isPreviewMode = false;
   var contentEl = document.getElementById('entry-content');
   var previewEl = document.getElementById('entry-preview');
-  var editBtn = document.getElementById('edit-mode-btn');
-  var prevBtn = document.getElementById('preview-mode-btn');
-
   if (contentEl) contentEl.style.display = '';
   if (previewEl) previewEl.style.display = 'none';
-  if (editBtn) { editBtn.classList.add('btn-primary'); editBtn.classList.remove('btn-outline'); }
-  if (prevBtn) { prevBtn.classList.remove('btn-primary'); prevBtn.classList.add('btn-outline'); }
+  var eb = document.getElementById('edit-mode-btn');
+  var pb = document.getElementById('preview-mode-btn');
+  if (eb) eb.classList.add('seg-active');
+  if (pb) pb.classList.remove('seg-active');
 }
 
 function setPreviewMode() {
   isPreviewMode = true;
   var contentEl = document.getElementById('entry-content');
   var previewEl = document.getElementById('entry-preview');
-  var editBtn = document.getElementById('edit-mode-btn');
-  var prevBtn = document.getElementById('preview-mode-btn');
-
   if (previewEl && contentEl) {
-    var raw = contentEl.value;
-    previewEl.innerHTML = raw
+    previewEl.innerHTML = contentEl.value
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
     previewEl.style.display = 'block';
   }
   if (contentEl) contentEl.style.display = 'none';
-  if (editBtn) { editBtn.classList.remove('btn-primary'); editBtn.classList.add('btn-outline'); }
-  if (prevBtn) { prevBtn.classList.add('btn-primary'); prevBtn.classList.remove('btn-outline'); }
+  var eb = document.getElementById('edit-mode-btn');
+  var pb = document.getElementById('preview-mode-btn');
+  if (eb) eb.classList.remove('seg-active');
+  if (pb) pb.classList.add('seg-active');
 }
 
 /* ─── Save entry ─── */
 async function saveEntry() {
   var saveBtn = document.getElementById('save-entry-btn');
-  var date = document.getElementById('entry-date')?.value;
-  var title = document.getElementById('entry-title')?.value;
-  var content = document.getElementById('entry-content')?.value;
+  var date      = document.getElementById('entry-date')?.value;
+  var title     = document.getElementById('entry-title')?.value;
+  var content   = document.getElementById('entry-content')?.value;
   var entryType = document.getElementById('entry-type')?.value || 'Story';
-  var tags = document.getElementById('entry-tags')?.value || '';
-  var concept = document.getElementById('entry-concept')?.value || '';
-  var publishToWeb = document.getElementById('publish-toggle')?.checked || false;
+  var tags      = document.getElementById('entry-tags')?.value || '';
+  var concept   = document.getElementById('entry-concept')?.value || '';
+  var pubWeb    = document.getElementById('publish-toggle')?.checked || false;
 
   if (!title) { showFlash('Title is required', 'error'); return; }
-  if (!date) { showFlash('Date is required', 'error'); return; }
-
+  if (!date)  { showFlash('Date is required', 'error'); return; }
   if (saveBtn) saveBtn.disabled = true;
 
   var body = {
-    date,
-    title,
-    content: content || '',
-    entry_type: entryType,
-    tags: tags || undefined,
-    connected_concept: concept || undefined,
-    publish_to_web: entryType === 'Blog' ? publishToWeb : undefined
+    date, title, content: content || '', entry_type: entryType,
+    tags: tags || undefined, connected_concept: concept || undefined,
+    publish_to_web: entryType === 'Blog' ? pubWeb : undefined,
+    cloudinary_image_url: currentImageUrl || undefined
   };
   Object.keys(body).forEach(function (k) { if (body[k] === undefined) delete body[k]; });
 
   try {
-    var res;
-    if (currentEntryId) {
-      res = await api('/api/diary/' + currentEntryId, { method: 'PATCH', body: JSON.stringify(body) });
-    } else {
-      res = await api('/api/diary', { method: 'POST', body: JSON.stringify(body) });
-    }
+    var res = currentEntryId
+      ? await api('/api/diary/' + currentEntryId, { method: 'PATCH', body: JSON.stringify(body) })
+      : await api('/api/diary', { method: 'POST', body: JSON.stringify(body) });
 
     if (res.ok) {
       var data = await res.json();
       showFlash(currentEntryId ? 'Updated!' : 'Saved!');
-      if (!currentEntryId && data.record) {
-        currentEntryId = data.record.id || data.id;
-      }
+      if (!currentEntryId && data.record) currentEntryId = data.record.id || data.id;
+      originalState = captureState();     // refresh snapshot after successful save
+      setEditorButtons(!!currentEntryId);
       await loadEntryList();
     } else {
       var d = await res.json().catch(function () { return {}; });
@@ -310,10 +341,19 @@ async function saveEntry() {
   }
 }
 
+/* ─── Save As: create new entry from current content ─── */
+async function saveAs() {
+  var savedId = currentEntryId;
+  currentEntryId = null;           // force POST
+  await saveEntry();
+  if (!currentEntryId) currentEntryId = savedId;  // restore on failure
+}
+
 /* ─── Delete entry ─── */
 async function deleteEntry() {
   if (!currentEntryId) return;
-  if (!confirm('Delete this entry? This cannot be undone.')) return;
+  var title = document.getElementById('entry-title')?.value || 'this entry';
+  if (!confirm('Permanently delete "' + title + '"?\nThis cannot be undone.')) return;
 
   try {
     var res = await api('/api/diary/' + currentEntryId, { method: 'DELETE' });
@@ -330,53 +370,57 @@ async function deleteEntry() {
   }
 }
 
-/* ─── Fix 10: AI Assist SSE streaming with spinner ─── */
+/* ─── Image upload via Cloudinary ─── */
+async function uploadEntryImage(file) {
+  var status = document.getElementById('upload-image-status');
+  if (status) status.textContent = '⏳ Uploading…';
+
+  var formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', 'diary/' + new Date().getFullYear());
+
+  var res = await fetch('/api/upload-image', { method: 'POST', credentials: 'same-origin', body: formData });
+  if (!res.ok) { if (status) status.textContent = ''; throw new Error('Upload failed ' + res.status); }
+  var data = await res.json();
+  if (status) status.textContent = '';
+  return data.url || data.secure_url || '';
+}
+
+/* ─── AI Assist: SSE streaming ─── */
 async function streamAiAssist(prompt) {
-  var output = document.getElementById('ai-assist-output');
+  var output  = document.getElementById('ai-assist-output');
   var loading = document.getElementById('ai-loading');
   if (!output) return '';
-
   output.textContent = '';
   if (loading) loading.style.display = 'block';
 
   var fullText = '';
-
   try {
     var res = await fetch('/api/ai-chat', {
-      method: 'POST',
-      credentials: 'same-origin',
+      method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        session_id: 'diary-assist-' + Date.now(),
-        context_json: ''
-      })
+      body: JSON.stringify({ messages: [{ role:'user', content: prompt }], session_id: 'diary-' + Date.now(), context_json: '' })
     });
 
     if (!res.ok || !res.body) {
-      output.textContent = 'AI error ' + res.status + '. Check your Anthropic credit balance at anthropic.com.';
+      output.textContent = 'AI error ' + res.status + '. Check your Anthropic credit balance.';
       if (loading) loading.style.display = 'none';
       return '';
     }
 
     var reader = res.body.getReader();
     var decoder = new TextDecoder();
-
     while (true) {
       var chunk = await reader.read();
       if (chunk.done) break;
-      var text = decoder.decode(chunk.value, { stream: true });
-      text.split('\n').forEach(function (line) {
+      decoder.decode(chunk.value, { stream: true }).split('\n').forEach(function (line) {
         if (!line.startsWith('data: ')) return;
-        var data = line.slice(6).trim();
-        if (data === '[DONE]') return;
+        var raw = line.slice(6).trim();
+        if (raw === '[DONE]') return;
         try {
-          var parsed = JSON.parse(data);
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            fullText += parsed.delta.text;
-            output.textContent = fullText;
-          }
-        } catch (e) { /* skip malformed SSE line */ }
+          var p = JSON.parse(raw);
+          if (p.type === 'content_block_delta' && p.delta?.text) { fullText += p.delta.text; output.textContent = fullText; }
+        } catch (e) {}
       });
     }
   } catch (e) {
@@ -387,139 +431,148 @@ async function streamAiAssist(prompt) {
   return fullText;
 }
 
-function getAssistPrompt(assistType, content) {
-  var prompts = {
-    refine: 'Please refine and improve this writing while keeping my voice and tone. Do not add bullet points or headers unless they already exist:\n\n' + content,
-    expand: 'Please expand and develop this idea further with more depth and detail. Keep the same voice:\n\n' + content,
-    summarize: 'Please summarize this in 2-3 concise sentences:\n\n' + content,
-    tags: 'Suggest 5-8 relevant tags for this content. Return only a comma-separated list with no # symbols, no explanation:\n\n' + content
+function getAssistPrompt(type, content) {
+  var p = {
+    refine:    'Refine and improve this writing, keeping my voice. No new headers/bullets unless already present:\n\n' + content,
+    expand:    'Expand this idea with more depth and detail. Keep the same voice:\n\n' + content,
+    summarize: 'Summarize in 2-3 concise sentences:\n\n' + content,
+    tags:      'Suggest 5-8 relevant tags. Return only a comma-separated list, no # symbols, no explanation:\n\n' + content
   };
-  return prompts[assistType] || prompts.refine;
+  return p[type] || p.refine;
 }
 
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
-  // Fix 12: keep Airtable choices in sync (non-blocking)
   ensureDiaryTypes();
-
-  // Load entries on boot
   loadEntryList();
 
-  // New entry button
-  var newEntryBtn = document.getElementById('new-entry-btn');
-  if (newEntryBtn) newEntryBtn.addEventListener('click', clearEditor);
+  /* toolbar buttons */
+  var btnMap = {
+    'new-entry-btn':      clearEditor,
+    'save-entry-btn':     saveEntry,
+    'save-as-btn':        saveAs,
+    'cancel-changes-btn': cancelChanges,
+    'delete-entry-btn':   deleteEntry,
+    'edit-mode-btn':      setEditMode,
+    'preview-mode-btn':   setPreviewMode
+  };
+  Object.keys(btnMap).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', btnMap[id]);
+  });
 
-  // Save / delete buttons
-  var saveBtn = document.getElementById('save-entry-btn');
-  if (saveBtn) saveBtn.addEventListener('click', saveEntry);
-
-  var deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) deleteBtn.addEventListener('click', deleteEntry);
-
-  // Fix 9: Edit / Preview two-button toggle
-  var editModeBtn = document.getElementById('edit-mode-btn');
-  var previewModeBtn = document.getElementById('preview-mode-btn');
-  if (editModeBtn) editModeBtn.addEventListener('click', setEditMode);
-  if (previewModeBtn) previewModeBtn.addEventListener('click', setPreviewMode);
-
-  // Search
+  /* search */
   var searchInput = document.getElementById('diary-search');
-  if (searchInput) {
-    searchInput.addEventListener('input', function () { renderEntryList(allEntries); });
-  }
+  if (searchInput) searchInput.addEventListener('input', function () { renderEntryList(allEntries); });
 
-  // Fix 12: type filter buttons use data-type (not data-type-filter)
-  var typeFilterBtns = document.querySelectorAll('#type-filters [data-type]');
-  typeFilterBtns.forEach(function (btn) {
+  /* type filter chips */
+  var filterBtns = document.querySelectorAll('#type-filters [data-type]');
+  filterBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var filter = btn.dataset.type;
-      // Clicking the already-active non-All filter toggles it off
-      activeTypeFilter = (activeTypeFilter === filter && filter !== '') ? '' : filter;
-      typeFilterBtns.forEach(function (b) {
-        var isActive = b.dataset.type === activeTypeFilter;
-        b.className = 'badge ' + (isActive ? 'badge-primary' : 'badge-gray');
+      var f = btn.dataset.type;
+      activeTypeFilter = (activeTypeFilter === f && f !== '') ? '' : f;
+      filterBtns.forEach(function (b) {
+        b.className = 'badge ' + (b.dataset.type === activeTypeFilter ? 'badge-primary' : 'badge-gray');
       });
       renderEntryList(allEntries);
     });
   });
 
-  // Entry type change → show/hide blog section
+  /* type select → blog section */
   var typeSelect = document.getElementById('entry-type');
-  if (typeSelect) {
-    typeSelect.addEventListener('change', function () {
-      toggleBlogSection(typeSelect.value === 'Blog');
+  if (typeSelect) typeSelect.addEventListener('change', function () { toggleBlogSection(typeSelect.value === 'Blog'); });
+
+  /* image upload */
+  var imageFile = document.getElementById('entry-image-file');
+  if (imageFile) {
+    imageFile.addEventListener('change', async function () {
+      var file = this.files[0];
+      if (!file) return;
+      try {
+        currentImageUrl = await uploadEntryImage(file);
+        updateImageDisplay();
+        showFlash('Image uploaded!');
+      } catch (e) {
+        showFlash('Upload failed: ' + e.message, 'error');
+      }
+      this.value = '';
     });
   }
 
-  /* ─── Fix 10: AI Assist Modal ─── */
-  var aiAssistBtn = document.getElementById('ai-assist-btn');
-  var aiModal = document.getElementById('ai-assist-modal');
-  var aiModalClose = document.getElementById('ai-modal-close');
-  var aiModalClose2 = document.getElementById('ai-modal-close2');
+  var removeImg = document.getElementById('remove-image-btn');
+  if (removeImg) removeImg.addEventListener('click', function () { currentImageUrl = ''; updateImageDisplay(); });
+
+  /* AI Assist modal */
+  var aiModal     = document.getElementById('ai-assist-modal');
   var useResultBtn = document.getElementById('ai-use-result');
+
+  function updateUseLabel() {
+    if (useResultBtn) useResultBtn.textContent = lastAssistType === 'tags' ? 'Use as Tags ↑' : 'Use in Content ↑';
+  }
 
   function openAiModal() {
     if (!aiModal) return;
     aiModal.classList.remove('hidden');
-    var output = document.getElementById('ai-assist-output');
-    if (output) output.textContent = 'Choose a mode above to get AI suggestions…';
-    var loading = document.getElementById('ai-loading');
-    if (loading) loading.style.display = 'none';
+    lastAssistType = null;
+    updateUseLabel();
+    var out = document.getElementById('ai-assist-output');
+    if (out) out.textContent = 'Choose a mode above to get AI suggestions…';
+    var ld = document.getElementById('ai-loading');
+    if (ld) ld.style.display = 'none';
   }
 
-  function closeAiModal() {
-    if (aiModal) aiModal.classList.add('hidden');
-  }
+  function closeAiModal() { if (aiModal) aiModal.classList.add('hidden'); }
 
-  if (aiAssistBtn) aiAssistBtn.addEventListener('click', openAiModal);
-  if (aiModalClose) aiModalClose.addEventListener('click', closeAiModal);
-  if (aiModalClose2) aiModalClose2.addEventListener('click', closeAiModal);
+  var aiBtn = document.getElementById('ai-assist-btn');
+  if (aiBtn) aiBtn.addEventListener('click', openAiModal);
+  ['ai-modal-close', 'ai-modal-close2'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', closeAiModal);
+  });
+  if (aiModal) aiModal.addEventListener('click', function (e) { if (e.target === aiModal) closeAiModal(); });
 
-  // Click outside modal box to close
-  if (aiModal) {
-    aiModal.addEventListener('click', function (e) {
-      if (e.target === aiModal) closeAiModal();
-    });
-  }
-
-  // Fix 10: AI assist type buttons — use data-assist (not data-assist-type)
-  var assistTypeBtns = document.querySelectorAll('.ai-assist-type');
-  assistTypeBtns.forEach(function (btn) {
+  /* AI assist type buttons */
+  var assistBtns = document.querySelectorAll('.ai-assist-type');
+  assistBtns.forEach(function (btn) {
     btn.dataset.originalText = btn.textContent;
     btn.addEventListener('click', async function () {
-      var assistType = btn.dataset.assist;
+      var type    = btn.dataset.assist;
       var content = document.getElementById('entry-content')?.value || '';
       if (!content.trim()) { showFlash('Write some content first', 'error'); return; }
-
-      assistTypeBtns.forEach(function (b) { b.disabled = true; });
+      assistBtns.forEach(function (b) { b.disabled = true; });
       btn.textContent = '⏳ Working…';
-
-      var prompt = getAssistPrompt(assistType, content);
-      await streamAiAssist(prompt);
-
+      lastAssistType = type;
+      updateUseLabel();
+      await streamAiAssist(getAssistPrompt(type, content));
       btn.textContent = btn.dataset.originalText;
-      assistTypeBtns.forEach(function (b) { b.disabled = false; });
+      assistBtns.forEach(function (b) { b.disabled = false; });
     });
   });
 
-  // Fix 10: "Use this" button — correct ID is ai-use-result
+  /* "Use this" — routes to tags field or content field depending on last assist type */
   if (useResultBtn) {
     useResultBtn.addEventListener('click', function () {
-      var output = document.getElementById('ai-assist-output');
-      var contentEl = document.getElementById('entry-content');
+      var out         = document.getElementById('ai-assist-output');
       var placeholder = 'Choose a mode above to get AI suggestions…';
-      if (output && contentEl && output.textContent && output.textContent !== placeholder) {
-        contentEl.value = output.textContent;
-        closeAiModal();
-        if (isPreviewMode) setEditMode();
-        showFlash('Applied to editor!');
-      } else {
+      if (!out || !out.textContent || out.textContent === placeholder) {
         showFlash('No AI output to use yet', 'error');
+        return;
+      }
+      if (lastAssistType === 'tags') {
+        var tagsEl = document.getElementById('entry-tags');
+        if (tagsEl) { tagsEl.value = out.textContent.trim(); closeAiModal(); showFlash('Tags applied!'); }
+      } else {
+        var contentEl = document.getElementById('entry-content');
+        if (contentEl) {
+          contentEl.value = out.textContent;
+          closeAiModal();
+          if (isPreviewMode) setEditMode();
+          showFlash('Applied to content!');
+        }
       }
     });
   }
 
-  // Start in edit mode
   setEditMode();
   clearEditor();
 });
