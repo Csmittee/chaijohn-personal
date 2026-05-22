@@ -83,6 +83,27 @@ export async function onRequestPost(context) {
     return json({ ok: true }, 200, { 'Set-Cookie': setCookie(token) });
   }
 
+  /* ── POST /api/auth/change-pin ── */
+  if (action === 'change-pin') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const { old_pin, new_pin } = body || {};
+    if (!old_pin || !new_pin) return json({ error: 'old_pin and new_pin are required' }, 400);
+    if (!/^\d{4,6}$/.test(String(new_pin))) return json({ error: 'New PIN must be 4-6 digits' }, 400);
+
+    const stored = await env.CHAIJOHN_KV.get('auth_pin');
+    if (!stored) return json({ error: 'No PIN set — use /setup to create one' }, 404);
+
+    const ok = await verifyPin(String(old_pin), stored);
+    if (!ok) return json({ error: 'Current PIN is incorrect' }, 401);
+
+    const hashed = await hashPin(String(new_pin));
+    await env.CHAIJOHN_KV.put('auth_pin', hashed);
+
+    const token = await createSession(env);
+    return json({ ok: true }, 200, { 'Set-Cookie': setCookie(token) });
+  }
+
   /* ── POST /api/auth/logout ── */
   if (action === 'logout') {
     const cookie = request.headers.get('Cookie') || '';

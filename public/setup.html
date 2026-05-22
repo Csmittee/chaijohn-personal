@@ -49,13 +49,20 @@
     <h1 style="text-align:center;margin-bottom:0.5rem">🏠 Chaijohn Dashboard</h1>
     <p style="text-align:center;color:var(--text-secondary);margin-bottom:2rem">First-time Setup</p>
 
-    <!-- Step 1: Set PIN -->
+    <!-- Step 1: Set PIN (shown when no PIN exists) -->
     <div class="card step-card" id="step-pin">
       <h2 style="margin-bottom:1rem;display:flex;align-items:center">
-        <span class="step-num">1</span>Create Your PIN
+        <span class="step-num">1</span><span id="pin-heading">Create Your PIN</span>
       </h2>
+
+      <!-- Change PIN row (hidden until PIN already exists) -->
+      <div class="form-group" id="old-pin-row" style="display:none">
+        <label for="setup-old-pin">Current PIN</label>
+        <input type="password" id="setup-old-pin" maxlength="6" inputmode="numeric" placeholder="••••" autocomplete="current-password">
+      </div>
+
       <div class="form-group">
-        <label for="setup-pin">PIN (4-6 digits)</label>
+        <label for="setup-pin" id="new-pin-label">PIN (4-6 digits)</label>
         <input type="password" id="setup-pin" maxlength="6" inputmode="numeric" placeholder="••••" autocomplete="new-password">
       </div>
       <div class="form-group">
@@ -64,7 +71,10 @@
       </div>
       <div id="pin-error" style="color:var(--color-expense);font-size:0.85rem;margin-bottom:0.75rem;display:none"></div>
       <button class="btn btn-primary w-full" id="set-pin-btn">Set PIN</button>
-      <div id="pin-success" style="color:var(--color-income);text-align:center;margin-top:0.75rem;display:none">✓ PIN set successfully</div>
+      <div style="text-align:center;margin-top:0.75rem">
+        <a href="/index.html" style="font-size:0.82rem;color:var(--text-secondary)">Back to login</a>
+      </div>
+      <div id="pin-success" style="color:var(--color-income);text-align:center;margin-top:0.75rem;display:none">PIN set — you are now logged in</div>
     </div>
 
     <!-- Step 2: Initialize Airtable schema -->
@@ -97,6 +107,21 @@
   const pinErr    = document.getElementById('pin-error');
   const pinSuccess = document.getElementById('pin-success');
   const schemaLog = document.getElementById('schema-log');
+  let pinAlreadySet = false;
+
+  function showChangePinMode() {
+    pinAlreadySet = true;
+    document.getElementById('pin-heading').textContent = 'Change Your PIN';
+    document.getElementById('new-pin-label').textContent = 'New PIN (4-6 digits)';
+    document.getElementById('old-pin-row').style.display = 'block';
+    setBtn.textContent = 'Change PIN';
+  }
+
+  function unlockStep2() {
+    step2.style.opacity = '1';
+    step2.style.pointerEvents = 'all';
+    pinSuccess.style.display = 'block';
+  }
 
   setBtn.addEventListener('click', async () => {
     const pin  = document.getElementById('setup-pin').value;
@@ -115,24 +140,53 @@
     }
 
     setBtn.disabled = true;
-    setBtn.textContent = 'Setting PIN…';
-    try {
-      const r = await fetch('/api/auth/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
-      });
-      if (!r.ok) throw new Error(await r.text());
+    setBtn.textContent = pinAlreadySet ? 'Changing…' : 'Setting PIN…';
 
-      pinSuccess.style.display = 'block';
-      step2.style.opacity = '1';
-      step2.style.pointerEvents = 'all';
-      setBtn.textContent = 'PIN Set ✓';
+    try {
+      let r;
+      if (pinAlreadySet) {
+        const oldPin = document.getElementById('setup-old-pin').value;
+        if (!oldPin) {
+          pinErr.textContent = 'Enter your current PIN first';
+          pinErr.style.display = 'block';
+          setBtn.disabled = false;
+          setBtn.textContent = 'Change PIN';
+          return;
+        }
+        r = await fetch('/api/auth/change-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ old_pin: oldPin, new_pin: pin })
+        });
+      } else {
+        r = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+      }
+
+      if (r.status === 409) {
+        // PIN already exists — switch to change-PIN mode automatically
+        showChangePinMode();
+        pinErr.textContent = 'PIN already set. Enter your current PIN above to change it.';
+        pinErr.style.display = 'block';
+        setBtn.disabled = false;
+        return;
+      }
+
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || 'Request failed');
+      }
+
+      unlockStep2();
+      setBtn.textContent = pinAlreadySet ? 'PIN Changed ✓' : 'PIN Set ✓';
     } catch (e) {
       pinErr.textContent = e.message;
       pinErr.style.display = 'block';
       setBtn.disabled = false;
-      setBtn.textContent = 'Set PIN';
+      setBtn.textContent = pinAlreadySet ? 'Change PIN' : 'Set PIN';
     }
   });
 
