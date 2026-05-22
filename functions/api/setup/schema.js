@@ -85,9 +85,18 @@ async function batchDelete(apiKey, baseId, tableName, ids) {
 }
 
 function linkedField(name, tableId) {
-  // Pass only linkedTableId — add via addField() after table creation to avoid
-  // Airtable's strict oneOf validation on table-creation linked field options
-  return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, isReversed: false } };
+  if (tableId) {
+    return {
+      name,
+      type: 'multipleRecordLinks',
+      options: {
+        linkedTableId: tableId,
+        prefersSingleRecordLink: true,
+        isReversed: false
+      }
+    };
+  }
+  return { name, type: 'singleLineText' };
 }
 
 // ── Table definitions ─────────────────────────────────────────────────────────
@@ -404,100 +413,26 @@ export async function onRequestPost(context) {
   if (phase === 'tables') {
     const results = [];
 
-    // Step 1: create all non-linked tables
+    // Step 1: create Categories, Liabilities, Assets, Diary, AI_Chats, Drop_Zone_Queue, Quotes
     for (const def of PHASE1_TABLES) {
       results.push(await createTable(apiKey, BASE_ID, def));
       await delay(250);
     }
 
-    // Step 2: create Transactions, Utilities, Budgets, Liability_Payments
-    // WITHOUT linked fields to avoid Airtable's strict oneOf validation
-    const phase3NoLinks = [
-      {
-        name: 'Transactions',
-        fields: [
-          { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-          { name: 'type', type: 'singleSelect', options: { choices: [{ name: 'Income' }, { name: 'Expense' }] } },
-          { name: 'amount', type: 'number', options: { precision: 0 } },
-          { name: 'description', type: 'singleLineText' },
-          { name: 'entity', type: 'singleLineText' },
-          { name: 'note', type: 'singleLineText' },
-          { name: 'source', type: 'singleSelect', options: { choices: [
-            { name: 'Manual' }, { name: 'DropZone' }, { name: 'LiabilityPayment' }
-          ]}}
-        ]
-      },
-      {
-        name: 'Utilities',
-        fields: [
-          { name: 'month', type: 'date', options: { dateFormat: { name: 'iso' } } },
-          { name: 'electricity_units', type: 'number', options: { precision: 2 } },
-          { name: 'electricity_charge', type: 'number', options: { precision: 0 } },
-          { name: 'water_units', type: 'number', options: { precision: 2 } },
-          { name: 'water_charge', type: 'number', options: { precision: 0 } },
-          { name: 'notes', type: 'multilineText' }
-        ]
-      },
-      {
-        name: 'Budgets',
-        fields: [
-          { name: 'label', type: 'singleLineText' },
-          { name: 'amount', type: 'number', options: { precision: 0 } },
-          { name: 'period', type: 'singleSelect', options: { choices: [
-            { name: 'Monthly' }, { name: 'Annual' }, { name: '3x-year' }, { name: 'One-time' }, { name: 'Open-end' }
-          ]}},
-          { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-          { name: 'end_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-          { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
-          { name: 'notes', type: 'multilineText' }
-        ]
-      },
-      {
-        name: 'Liability_Payments',
-        fields: [
-          { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-          { name: 'total_payment', type: 'number', options: { precision: 0 } },
-          { name: 'principal', type: 'number', options: { precision: 0 } },
-          { name: 'interest', type: 'number', options: { precision: 0 } },
-          { name: 'notes', type: 'singleLineText' }
-        ]
-      }
-    ];
+    // Step 2: fetch table IDs to pass linked table references
+    await delay(300);
+    const tableIds = await getTableIds(apiKey, BASE_ID);
+    const catTableId = tableIds['Categories'];
+    const liabTableId = tableIds['Liabilities'];
 
-    for (const def of phase3NoLinks) {
+    // Step 3: create Transactions, Utilities, Budgets, Liability_Payments with linked fields inline
+    const phase3Tables = buildPhase3Tables(catTableId, liabTableId);
+    for (const def of phase3Tables) {
       results.push(await createTable(apiKey, BASE_ID, def));
       await delay(250);
     }
 
-    // Step 3: fetch table IDs, then add linked fields via fields endpoint
-    // (field creation has simpler validation than table creation)
-    await delay(300);
-    const tableIds = await getTableIds(apiKey, BASE_ID);
-
-    const linkTasks = [
-      { table: 'Transactions', field: 'category_id', linkedTo: 'Categories' },
-      { table: 'Budgets',      field: 'category_id', linkedTo: 'Categories' },
-      { table: 'Liability_Payments', field: 'liability_id', linkedTo: 'Liabilities' }
-    ];
-
-    const linkResults = [];
-    for (const task of linkTasks) {
-      const tableId = tableIds[task.table];
-      const linkedTableId = tableIds[task.linkedTo];
-      if (!tableId || !linkedTableId) {
-        linkResults.push({ field: `${task.table}.${task.field}`, status: 'skipped', reason: 'table not found' });
-        continue;
-      }
-      const r = await addField(apiKey, BASE_ID, tableId, {
-        name: task.field,
-        type: 'multipleRecordLinks',
-        options: { linkedTableId, isReversed: false }
-      });
-      linkResults.push({ field: `${task.table}.${task.field}`, ...r });
-      await delay(200);
-    }
-
-    return jsonResponse({ phase: 'tables', results, linked_fields: linkResults });
+    return jsonResponse({ phase: 'tables', results });
   }
 
   /* ── PHASE: dedup ────────────────────────────────────────────────────────── */
