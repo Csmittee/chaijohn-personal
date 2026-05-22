@@ -25,6 +25,22 @@ async function createTable(apiKey, baseId, def) {
   return { status: 'created', table: def.name, id: data.id };
 }
 
+// Add a single field to an existing table — simpler validation than table creation
+async function addField(apiKey, baseId, tableId, fieldDef) {
+  const res = await fetch(`${META}/${baseId}/tables/${tableId}/fields`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(fieldDef)
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = (body?.error?.message || '').toLowerCase();
+    if (msg.includes('already exist') || msg.includes('duplicate')) return { status: 'already_exists' };
+    return { status: 'error', error: JSON.stringify(body) };
+  }
+  return { status: 'created' };
+}
+
 async function getTableIds(apiKey, baseId) {
   const res = await fetch(`${META}/${baseId}/tables`, {
     headers: { Authorization: `Bearer ${apiKey}` }
@@ -34,7 +50,7 @@ async function getTableIds(apiKey, baseId) {
   return Object.fromEntries((data.tables || []).map(t => [t.name, t.id]));
 }
 
-// Batch create up to 10 records per request — avoids per-record delays
+// Batch create up to 10 records per request
 async function batchCreate(apiKey, baseId, tableName, recordsFields) {
   const created = [];
   for (let i = 0; i < recordsFields.length; i += 10) {
@@ -52,16 +68,26 @@ async function batchCreate(apiKey, baseId, tableName, recordsFields) {
   return created;
 }
 
-function linkedField(name, tableId) {
-  if (tableId) {
-    // Airtable oneOf schema: must have BOTH isReversed AND prefersSingleRecordLink
-    return { name, type: 'multipleRecordLinks', options: {
-      linkedTableId: tableId,
-      isReversed: false,
-      prefersSingleRecordLink: true
-    }};
+// Batch delete up to 10 records per request
+async function batchDelete(apiKey, baseId, tableName, ids) {
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 10) {
+    const chunk = ids.slice(i, i + 10);
+    const qs = chunk.map(id => `records[]=${id}`).join('&');
+    const res = await fetch(`${AIRTABLE_BASE}/${baseId}/${encodeURIComponent(tableName)}?${qs}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (res.ok) deleted += chunk.length;
+    if (i + 10 < ids.length) await delay(200);
   }
-  return { name, type: 'singleLineText' };
+  return deleted;
+}
+
+function linkedField(name, tableId) {
+  // Pass only linkedTableId — add via addField() after table creation to avoid
+  // Airtable's strict oneOf validation on table-creation linked field options
+  return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, isReversed: false } };
 }
 
 // ── Table definitions ─────────────────────────────────────────────────────────
@@ -378,25 +404,135 @@ export async function onRequestPost(context) {
   if (phase === 'tables') {
     const results = [];
 
-    // Phase 1: tables with no linked fields
+    // Step 1: create all non-linked tables
     for (const def of PHASE1_TABLES) {
       results.push(await createTable(apiKey, BASE_ID, def));
       await delay(250);
     }
 
-    // Phase 2: fetch actual table IDs for linked fields
-    await delay(300);
-    const tableIds = await getTableIds(apiKey, BASE_ID);
-    const catTableId = tableIds['Categories'];
-    const liabTableId = tableIds['Liabilities'];
+    // Step 2: create Transactions, Utilities, Budgets, Liability_Payments
+    // WITHOUT linked fields to avoid Airtable's strict oneOf validation
+    const phase3NoLinks = [
+      {
+        name: 'Transactions',
+        fields: [
+          { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+          { name: 'type', type: 'singleSelect', options: { choices: [{ name: 'Income' }, { name: 'Expense' }] } },
+          { name: 'amount', type: 'number', options: { precision: 0 } },
+          { name: 'description', type: 'singleLineText' },
+          { name: 'entity', type: 'singleLineText' },
+          { name: 'note', type: 'singleLineText' },
+          { name: 'source', type: 'singleSelect', options: { choices: [
+            { name: 'Manual' }, { name: 'DropZone' }, { name: 'LiabilityPayment' }
+          ]}}
+        ]
+      },
+      {
+        name: 'Utilities',
+        fields: [
+          { name: 'month', type: 'date', options: { dateFormat: { name: 'iso' } } },
+          { name: 'electricity_units', type: 'number', options: { precision: 2 } },
+          { name: 'electricity_charge', type: 'number', options: { precision: 0 } },
+          { name: 'water_units', type: 'number', options: { precision: 2 } },
+          { name: 'water_charge', type: 'number', options: { precision: 0 } },
+          { name: 'notes', type: 'multilineText' }
+        ]
+      },
+      {
+        name: 'Budgets',
+        fields: [
+          { name: 'label', type: 'singleLineText' },
+          { name: 'amount', type: 'number', options: { precision: 0 } },
+          { name: 'period', type: 'singleSelect', options: { choices: [
+            { name: 'Monthly' }, { name: 'Annual' }, { name: '3x-year' }, { name: 'One-time' }, { name: 'Open-end' }
+          ]}},
+          { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+          { name: 'end_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+          { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
+          { name: 'notes', type: 'multilineText' }
+        ]
+      },
+      {
+        name: 'Liability_Payments',
+        fields: [
+          { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+          { name: 'total_payment', type: 'number', options: { precision: 0 } },
+          { name: 'principal', type: 'number', options: { precision: 0 } },
+          { name: 'interest', type: 'number', options: { precision: 0 } },
+          { name: 'notes', type: 'singleLineText' }
+        ]
+      }
+    ];
 
-    // Phase 3: tables with linked fields
-    for (const def of buildPhase3Tables(catTableId, liabTableId)) {
+    for (const def of phase3NoLinks) {
       results.push(await createTable(apiKey, BASE_ID, def));
       await delay(250);
     }
 
-    return jsonResponse({ phase: 'tables', results });
+    // Step 3: fetch table IDs, then add linked fields via fields endpoint
+    // (field creation has simpler validation than table creation)
+    await delay(300);
+    const tableIds = await getTableIds(apiKey, BASE_ID);
+
+    const linkTasks = [
+      { table: 'Transactions', field: 'category_id', linkedTo: 'Categories' },
+      { table: 'Budgets',      field: 'category_id', linkedTo: 'Categories' },
+      { table: 'Liability_Payments', field: 'liability_id', linkedTo: 'Liabilities' }
+    ];
+
+    const linkResults = [];
+    for (const task of linkTasks) {
+      const tableId = tableIds[task.table];
+      const linkedTableId = tableIds[task.linkedTo];
+      if (!tableId || !linkedTableId) {
+        linkResults.push({ field: `${task.table}.${task.field}`, status: 'skipped', reason: 'table not found' });
+        continue;
+      }
+      const r = await addField(apiKey, BASE_ID, tableId, {
+        name: task.field,
+        type: 'multipleRecordLinks',
+        options: { linkedTableId, isReversed: false }
+      });
+      linkResults.push({ field: `${task.table}.${task.field}`, ...r });
+      await delay(200);
+    }
+
+    return jsonResponse({ phase: 'tables', results, linked_fields: linkResults });
+  }
+
+  /* ── PHASE: dedup ────────────────────────────────────────────────────────── */
+  // Removes duplicate category records — keeps first of each name, deletes rest
+  if (phase === 'dedup') {
+    const res = await fetch(
+      `${AIRTABLE_BASE}/${BASE_ID}/Categories?maxRecords=500`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    );
+    if (!res.ok) return jsonResponse({ error: 'Could not fetch categories' }, 500);
+    const data = await res.json();
+    const allRecords = data.records || [];
+
+    const seen = new Set();
+    const toDelete = [];
+    allRecords.forEach(r => {
+      const name = r.fields.name || '';
+      if (seen.has(name)) {
+        toDelete.push(r.id);
+      } else {
+        seen.add(name);
+      }
+    });
+
+    let deleted = 0;
+    if (toDelete.length > 0) {
+      deleted = await batchDelete(apiKey, BASE_ID, 'Categories', toDelete);
+    }
+
+    return jsonResponse({
+      phase: 'dedup',
+      total_before: allRecords.length,
+      duplicates_deleted: deleted,
+      kept: allRecords.length - deleted
+    });
   }
 
   /* ── PHASE: seed ──────────────────────────────────────────────────────────── */

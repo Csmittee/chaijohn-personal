@@ -87,10 +87,9 @@
       </p>
       <button class="btn btn-primary w-full" id="init-schema-btn">Initialize Schema</button>
       <button class="btn btn-outline w-full" id="seed-budgets-btn"
-        style="margin-top:0.5rem;display:none"
-        title="Run this if budgets failed but categories already exist">
-        Re-seed Budgets Only
-      </button>
+        style="margin-top:0.5rem;display:none">Re-seed Budgets Only</button>
+      <button class="btn btn-outline w-full" id="dedup-btn"
+        style="margin-top:0.5rem;display:none">Clean Up Duplicate Categories</button>
       <div class="status-log hidden" id="schema-log"></div>
     </div>
 
@@ -223,6 +222,11 @@
         log(`${ok ? '✓' : '✗'} ${item.table}: ${item.status}${item.error ? ' — ' + item.error : ''}`,
           ok ? 'log-ok' : 'log-err');
       });
+      (d1.linked_fields || []).forEach(item => {
+        const ok = item.status === 'created' || item.status === 'already_exists';
+        log(`  ${ok ? '↗' : '✗'} link ${item.field}: ${item.status}${item.error ? ' — ' + item.error : ''}`,
+          ok ? 'log-ok' : 'log-err');
+      });
 
       // Step 2: seed data (~10-15s, separate request avoids timeout)
       log('Step 2/2 — Seeding categories, liabilities, budgets…');
@@ -247,8 +251,33 @@
       log('Error: ' + e.message, 'log-err');
       initBtn.disabled = false;
       initBtn.textContent = 'Retry';
-      // Show the partial-retry button in case only budgets failed
       document.getElementById('seed-budgets-btn').style.display = 'block';
+      document.getElementById('dedup-btn').style.display = 'block';
+    }
+  });
+
+  // Show dedup button immediately if user is already logged in (may have duplicates)
+  document.getElementById('dedup-btn').style.display = 'block';
+
+  // Deduplicate categories — removes duplicate rows keeping first of each name
+  document.getElementById('dedup-btn').addEventListener('click', async () => {
+    schemaLog.classList.remove('hidden');
+    const btn = document.getElementById('dedup-btn');
+    btn.disabled = true; btn.textContent = 'Cleaning up…';
+    const log = (msg, cls = 'log-info') => {
+      const d = document.createElement('div');
+      d.className = cls; d.textContent = msg;
+      schemaLog.appendChild(d); schemaLog.scrollTop = schemaLog.scrollHeight;
+    };
+    try {
+      const r = await fetch('/api/setup/schema?phase=dedup', { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { log('Error: ' + (d.error || 'Unknown'), 'log-err'); btn.disabled = false; btn.textContent = 'Clean Up Duplicate Categories'; return; }
+      log(`✓ Dedup done: had ${d.total_before}, deleted ${d.duplicates_deleted}, kept ${d.kept}`, 'log-ok');
+      btn.textContent = 'Done ✓';
+    } catch (e) {
+      log('Error: ' + e.message, 'log-err');
+      btn.disabled = false; btn.textContent = 'Clean Up Duplicate Categories';
     }
   });
 
