@@ -1,852 +1,589 @@
-/**
- * entry.injector.js — Data entry page logic.
- * Handles Transactions, Utilities, Debts, and Budgets tabs.
- */
+/* entry.injector.js — Chaijohn Entry Page */
+(function () {
+  'use strict';
 
-/* ─── Utility helpers ─── */
-function formatThb(amount) {
-  if (amount === null || amount === undefined || isNaN(amount)) return '฿—';
-  const n = Math.round(Number(amount));
-  if (Math.abs(n) >= 100) return '฿' + n.toLocaleString('en-US');
-  return '฿' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+  const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
 
-function todayIso() {
-  return new Date().toISOString().split('T')[0];
-}
+  let categories = [];
+  let liabilities = [];
+  let txPeriod = 'daily';
+  let txType = 'Expense';
+  let elecChart, waterChart;
 
-function currentMonthIso() {
-  const d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
-
-async function api(path, options) {
-  options = options || {};
-  const res = await fetch(path, Object.assign({}, options, {
-    headers: Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}),
-    credentials: 'same-origin'
-  }));
-  if (res.status === 401) { window.location.href = '/index.html'; throw new Error('Unauthorized'); }
-  return res;
-}
-
-function showFlash(msg, type) {
-  type = type || 'success';
-  const el = document.createElement('div');
-  el.textContent = msg;
-  el.style.cssText = 'position:fixed;top:1rem;right:1rem;padding:0.75rem 1.25rem;border-radius:8px;' +
-    'background:' + (type === 'success' ? '#22c55e' : '#ef4444') + ';color:white;font-weight:500;z-index:9999;' +
-    'box-shadow:0 4px 12px rgba(0,0,0,0.2)';
-  document.body.appendChild(el);
-  setTimeout(function () { if (el.parentNode) el.remove(); }, 3000);
-}
-
-function escHtml(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/* ─── Tab switching ─── */
-function initTabs() {
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  const tabPanels = document.querySelectorAll('.tab-panel');
-
-  tabBtns.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      const target = btn.dataset.tab;
-      tabBtns.forEach(function (b) { b.classList.remove('active'); });
-      tabPanels.forEach(function (p) { p.style.display = 'none'; p.classList.remove('active'); });
-      btn.classList.add('active');
-      const panel = document.getElementById('tab-' + target);
-      if (panel) { panel.style.display = 'block'; panel.classList.add('active'); }
-
-      // Lazy load tab data on first activation
-      if (target === 'transactions' && !window._txLoaded) { window._txLoaded = true; initTransactions(); }
-      if (target === 'utilities' && !window._utilLoaded) { window._utilLoaded = true; initUtilities(); }
-      if (target === 'debts' && !window._debtsLoaded) { window._debtsLoaded = true; initDebts(); }
-      if (target === 'budgets' && !window._budgetsLoaded) { window._budgetsLoaded = true; initBudgets(); }
-    });
-  });
-}
-
-/* ════════════════════════════════════════
-   TRANSACTIONS TAB
-════════════════════════════════════════ */
-let txCategories = [];
-let txType = 'Expense';
-let txListPeriod = 'daily';
-
-async function loadCategories(forType) {
-  try {
-    const res = await api('/api/categories?type=' + (forType || ''));
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.records || [];
-  } catch (e) { return []; }
-}
-
-function populateCategorySelect(categories, type) {
-  const sel = document.getElementById('tx-category');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">— Category —</option>';
-  const filtered = categories.filter(function (c) {
-    return !c.fields.type || c.fields.type.toLowerCase() === type.toLowerCase();
-  });
-  filtered.forEach(function (c) {
-    const opt = document.createElement('option');
-    opt.value = c.fields.name || c.id;
-    opt.textContent = c.fields.name || c.id;
-    sel.appendChild(opt);
-  });
-}
-
-function getTxDateRange(period) {
-  const now = new Date();
-  let start, end;
-  if (period === 'daily') {
-    start = end = todayIso();
-  } else if (period === 'weekly') {
-    const day = now.getDay();
-    const s = new Date(now); s.setDate(now.getDate() - day);
-    const e = new Date(s); e.setDate(s.getDate() + 6);
-    start = s.toISOString().split('T')[0];
-    end = e.toISOString().split('T')[0];
-  } else { // monthly
-    start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  /* ── API helpers ── */
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { credentials: 'same-origin', ...opts });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || `API error ${r.status}`);
+    }
+    return r.json();
   }
-  return { start, end };
-}
 
-async function loadTransactionList() {
-  const container = document.getElementById('tx-list');
-  if (!container) return;
-  container.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.5">Loading…</div>';
+  function showMsg(elId, text, ok = true) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = ok ? 'var(--success, #22c55e)' : '#ef4444';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  }
 
-  const { start, end } = getTxDateRange(txListPeriod);
-  try {
-    const res = await api('/api/transactions?start=' + start + '&end=' + end + '&limit=200');
-    if (!res.ok) { container.innerHTML = '<div style="color:#ef4444;padding:1rem">Failed to load transactions</div>'; return; }
-    const data = await res.json();
-    const records = data.records || [];
+  function addMsg(el, text, ok = true) {
+    el.textContent = text;
+    el.style.color = ok ? 'var(--success, #22c55e)' : '#ef4444';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  }
 
-    if (records.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.5">No transactions for this period</div>';
-      return;
+  /* ── Tab switching ── */
+  function initTabs() {
+    document.querySelectorAll('#entry-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#entry-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = document.getElementById(btn.dataset.tab + '-tab');
+        if (panel) panel.classList.add('active');
+        if (btn.dataset.tab === 'liabilities') loadLiabilityTab();
+        if (btn.dataset.tab === 'budgets') loadBudgetTab();
+        if (btn.dataset.tab === 'utilities') loadUtilityHistory();
+      });
+    });
+
+    document.querySelectorAll('#tx-period-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#tx-period-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        txPeriod = btn.dataset.txperiod;
+        loadTransactions();
+      });
+    });
+  }
+
+  /* ── Categories ── */
+  async function loadCategories() {
+    const res = await api('/api/categories?active=false');
+    categories = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
+    populateCategoryDropdowns();
+  }
+
+  function populateCategoryDropdowns() {
+    const earns = categories.filter(c => c.type === 'Earn');
+    const expenses = categories.filter(c => c.type === 'Expense');
+    const loans = categories.filter(c => c.type === 'Loan' || c.type === 'Investment');
+
+    // Transaction category dropdown — filtered by current type
+    renderCatSelect('tx-category', txType === 'Income' ? earns : expenses);
+    // Budget category dropdown
+    renderCatSelect('budget-category', [...earns, ...expenses, ...loans]);
+  }
+
+  function renderCatSelect(selId, cats) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const grouped = {};
+    cats.forEach(c => {
+      const g = c.group || 'Other';
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(c);
+    });
+    sel.innerHTML = '<option value="">— Select —</option>' +
+      Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([grp, items]) =>
+        `<optgroup label="${grp}">` +
+        items.map(c => `<option value="${c.id}">${c.name}</option>`).join('') +
+        '</optgroup>'
+      ).join('');
+  }
+
+  /* ── Transactions ── */
+  function initTransactionForm() {
+    const today = new Date().toISOString().split('T')[0];
+    const dateEl = document.getElementById('tx-date');
+    if (dateEl) dateEl.value = today;
+
+    const btnIncome = document.getElementById('type-income');
+    const btnExpense = document.getElementById('type-expense');
+
+    function setType(type) {
+      txType = type;
+      if (btnIncome) btnIncome.className = 'btn btn-lg ' + (type === 'Income' ? 'btn-success' : 'btn-outline');
+      if (btnExpense) btnExpense.className = 'btn btn-lg ' + (type === 'Expense' ? 'btn-danger' : 'btn-outline');
+      renderCatSelect('tx-category', type === 'Income'
+        ? categories.filter(c => c.type === 'Earn')
+        : categories.filter(c => c.type === 'Expense'));
     }
 
-    // Group by date
-    const byDate = {};
-    records.forEach(function (r) {
-      const date = r.fields.date || 'Unknown';
-      if (!byDate[date]) byDate[date] = [];
-      byDate[date].push(r);
-    });
+    btnIncome?.addEventListener('click', () => setType('Income'));
+    btnExpense?.addEventListener('click', () => setType('Expense'));
+    setType('Expense');
 
-    const sortedDates = Object.keys(byDate).sort(function (a, b) { return b > a ? 1 : -1; });
+    // Ensure msg element exists
+    ensureMsgEl('tx-msg', 'save-tx');
 
-    let html = '';
-    sortedDates.forEach(function (date) {
-      const txs = byDate[date];
-      const dayTotal = txs.reduce(function (s, t) {
-        return s + (t.fields.type === 'Expense' ? -(t.fields.amount || 0) : (t.fields.amount || 0));
-      }, 0);
-
-      const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const totalClass = dayTotal >= 0 ? 'amount-positive' : 'amount-negative';
-
-      html += `<div class="tx-group">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.03);border-radius:8px 8px 0 0;border-bottom:1px solid rgba(255,255,255,0.06)">
-          <span style="font-size:0.82rem;font-weight:600">${dateLabel}</span>
-          <span style="font-size:0.82rem;font-weight:600" class="${totalClass}">${dayTotal >= 0 ? '+' : ''}${formatThb(Math.abs(dayTotal))}</span>
-        </div>`;
-
-      txs.forEach(function (tx) {
-        const f = tx.fields;
-        const isExp = f.type === 'Expense';
-        html += `<div class="tx-row" data-id="${tx.id}" style="padding:0.55rem 0.75rem;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;gap:0.5rem;cursor:pointer">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:0.83rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.description || f.category_name || f.entity || '—')}</div>
-            <div style="font-size:0.72rem;opacity:0.55;margin-top:0.1rem">${escHtml(f.category_name || '')}${f.entity ? ' · ' + escHtml(f.entity) : ''}</div>
-          </div>
-          <span style="font-size:0.88rem;font-weight:600;white-space:nowrap" class="${isExp ? 'amount-negative' : 'amount-positive'}">${isExp ? '-' : '+'}${formatThb(f.amount)}</span>
-          <button class="tx-delete-btn" data-id="${tx.id}" style="background:none;border:none;color:#ef444488;cursor:pointer;font-size:1rem;padding:0.15rem 0.3rem;flex-shrink:0" title="Delete">✕</button>
-        </div>
-        <div class="tx-edit-form" id="tx-edit-${tx.id}" style="display:none;padding:0.75rem;background:rgba(0,0,0,0.2);border-radius:0 0 8px 8px;gap:0.5rem">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
-            <div>
-              <label style="font-size:0.72rem;opacity:0.6;display:block;margin-bottom:0.2rem">Date</label>
-              <input type="date" class="form-input tx-edit-date" value="${f.date || ''}" style="width:100%;box-sizing:border-box">
-            </div>
-            <div>
-              <label style="font-size:0.72rem;opacity:0.6;display:block;margin-bottom:0.2rem">Amount</label>
-              <input type="number" class="form-input tx-edit-amount" value="${f.amount || ''}" min="0" step="0.01" style="width:100%;box-sizing:border-box">
-            </div>
-          </div>
-          <div style="margin-bottom:0.5rem">
-            <label style="font-size:0.72rem;opacity:0.6;display:block;margin-bottom:0.2rem">Description</label>
-            <input type="text" class="form-input tx-edit-description" value="${escHtml(f.description || '')}" style="width:100%;box-sizing:border-box">
-          </div>
-          <div style="display:flex;gap:0.5rem">
-            <button class="btn btn-primary btn-sm tx-edit-save" data-id="${tx.id}">Save</button>
-            <button class="btn btn-outline btn-sm tx-edit-cancel" data-id="${tx.id}">Cancel</button>
-          </div>
-        </div>`;
-      });
-      html += '</div>';
-    });
-
-    container.innerHTML = html;
-
-    // Wire up row clicks for expand/inline edit
-    container.querySelectorAll('.tx-row').forEach(function (row) {
-      row.addEventListener('click', function (e) {
-        if (e.target.closest('.tx-delete-btn')) return;
-        const id = row.dataset.id;
-        const editForm = document.getElementById('tx-edit-' + id);
-        if (editForm) {
-          const isOpen = editForm.style.display !== 'none';
-          // Close all other edit forms
-          container.querySelectorAll('.tx-edit-form').forEach(function (f) { f.style.display = 'none'; });
-          editForm.style.display = isOpen ? 'none' : 'flex';
-          editForm.style.flexDirection = 'column';
-        }
-      });
-    });
-
-    // Wire delete buttons
-    container.querySelectorAll('.tx-delete-btn').forEach(function (btn) {
-      btn.addEventListener('click', async function (e) {
-        e.stopPropagation();
-        const id = btn.dataset.id;
-        if (!confirm('Delete this transaction?')) return;
-        try {
-          const res = await api('/api/transactions/' + id, { method: 'DELETE' });
-          if (res.ok) { showFlash('Deleted'); loadTransactionList(); }
-          else showFlash('Delete failed', 'error');
-        } catch (err) { showFlash('Error: ' + err.message, 'error'); }
-      });
-    });
-
-    // Wire edit save/cancel
-    container.querySelectorAll('.tx-edit-save').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const id = btn.dataset.id;
-        const form = document.getElementById('tx-edit-' + id);
-        const date = form.querySelector('.tx-edit-date').value;
-        const amount = parseFloat(form.querySelector('.tx-edit-amount').value);
-        const description = form.querySelector('.tx-edit-description').value;
-        if (!amount || isNaN(amount)) { showFlash('Amount required', 'error'); return; }
-        try {
-          const res = await api('/api/transactions/' + id, {
-            method: 'PATCH',
-            body: JSON.stringify({ date, amount, description })
-          });
-          if (res.ok) { showFlash('Updated'); loadTransactionList(); }
-          else showFlash('Update failed', 'error');
-        } catch (err) { showFlash('Error: ' + err.message, 'error'); }
-      });
-    });
-
-    container.querySelectorAll('.tx-edit-cancel').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        const id = btn.dataset.id;
-        const form = document.getElementById('tx-edit-' + id);
-        if (form) form.style.display = 'none';
-      });
-    });
-
-  } catch (e) {
-    container.innerHTML = '<div style="color:#ef4444;padding:1rem">Error: ' + e.message + '</div>';
-  }
-}
-
-async function initTransactions() {
-  // Load categories
-  txCategories = await loadCategories('Expense');
-  populateCategorySelect(txCategories, 'Expense');
-
-  // Set today
-  const dateInput = document.getElementById('tx-date');
-  if (dateInput) dateInput.value = todayIso();
-
-  // Type toggle (EARN/EXPENSE)
-  const typeEarn = document.getElementById('tx-type-earn');
-  const typeExpense = document.getElementById('tx-type-expense');
-
-  function setTxType(type) {
-    txType = type;
-    if (typeEarn) typeEarn.classList.toggle('active', type === 'Income');
-    if (typeExpense) typeExpense.classList.toggle('active', type === 'Expense');
-    populateCategorySelect(txCategories, type);
-  }
-
-  if (typeEarn) typeEarn.addEventListener('click', function () { setTxType('Income'); });
-  if (typeExpense) typeExpense.addEventListener('click', function () { setTxType('Expense'); });
-
-  // Save button
-  const saveBtn = document.getElementById('tx-save-btn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', async function () {
-      const date = document.getElementById('tx-date')?.value;
-      const amount = parseFloat(document.getElementById('tx-amount')?.value);
-      const categoryName = document.getElementById('tx-category')?.value;
-      const entity = document.getElementById('tx-entity')?.value || '';
+    document.getElementById('save-tx')?.addEventListener('click', async () => {
+      const amount = document.getElementById('tx-amount')?.value;
+      const categoryId = document.getElementById('tx-category')?.value;
       const description = document.getElementById('tx-description')?.value || '';
+      const entity = document.getElementById('tx-entity')?.value || '';
+      const date = document.getElementById('tx-date')?.value || today;
       const note = document.getElementById('tx-note')?.value || '';
 
-      if (!amount || isNaN(amount)) { showFlash('Amount is required', 'error'); return; }
-      if (!date) { showFlash('Date is required', 'error'); return; }
+      if (!amount || Number(amount) <= 0) return alert('Amount is required');
 
-      saveBtn.disabled = true;
+      const body = {
+        date, amount: Number(amount), type: txType,
+        description, entity, note, source: 'Manual'
+      };
+      if (categoryId) body.category_id = [categoryId];
+
       try {
-        const res = await api('/api/transactions', {
+        await api('/api/transactions', {
           method: 'POST',
-          body: JSON.stringify({
-            date,
-            type: txType,
-            amount,
-            category_name: categoryName || undefined,
-            entity: entity || undefined,
-            description: description || undefined,
-            note: note || undefined,
-            source: 'Manual'
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
-        if (res.ok) {
-          showFlash('Saved!');
-          // Clear form but keep type and date
-          if (document.getElementById('tx-amount')) document.getElementById('tx-amount').value = '';
-          if (document.getElementById('tx-category')) document.getElementById('tx-category').value = '';
-          if (document.getElementById('tx-entity')) document.getElementById('tx-entity').value = '';
-          if (document.getElementById('tx-description')) document.getElementById('tx-description').value = '';
-          if (document.getElementById('tx-note')) document.getElementById('tx-note').value = '';
-          loadTransactionList();
-        } else {
-          const d = await res.json().catch(function () { return {}; });
-          showFlash(d.error || 'Save failed', 'error');
-        }
+        showMsg('tx-msg', 'Saved!');
+        document.getElementById('tx-amount').value = '';
+        document.getElementById('tx-description').value = '';
+        document.getElementById('tx-note').value = '';
+        loadTransactions();
       } catch (err) {
-        showFlash('Error: ' + err.message, 'error');
-      } finally {
-        saveBtn.disabled = false;
+        showMsg('tx-msg', err.message, false);
       }
     });
   }
 
-  // Period tabs for list
-  const periodTabs = document.querySelectorAll('[data-tx-period]');
-  periodTabs.forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      periodTabs.forEach(function (t) { t.classList.remove('active'); });
-      tab.classList.add('active');
-      txListPeriod = tab.dataset.txPeriod;
-      loadTransactionList();
-    });
-  });
+  async function loadTransactions() {
+    const list = document.getElementById('tx-list');
+    if (!list) return;
 
-  loadTransactionList();
-}
-
-/* ════════════════════════════════════════
-   UTILITIES TAB
-════════════════════════════════════════ */
-let utilitiesHistory = [];
-
-async function loadUtilitiesForMonth(month) {
-  // month = YYYY-MM
-  try {
-    const year = month.split('-')[0];
-    const res = await api('/api/utilities?year=' + year);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const records = data.records || [];
-    // Find record matching the month
-    const monthDate = month + '-01';
-    return records.find(function (r) { return (r.fields.month || '').startsWith(month); }) || null;
-  } catch (e) { return null; }
-}
-
-async function loadUtilitiesHistory() {
-  const container = document.getElementById('util-history-table');
-  if (!container) return;
-
-  try {
-    const year = new Date().getFullYear();
-    const prevYear = year - 1;
-    const [res1, res2] = await Promise.all([
-      api('/api/utilities?year=' + year),
-      api('/api/utilities?year=' + prevYear)
-    ]);
-    const [data1, data2] = await Promise.all([
-      res1.json().catch(function () { return {}; }),
-      res2.json().catch(function () { return {}; })
-    ]);
-    utilitiesHistory = [...(data2.records || []), ...(data1.records || [])];
-    utilitiesHistory.sort(function (a, b) {
-      return (b.fields.month || '') > (a.fields.month || '') ? 1 : -1;
-    });
-
-    if (utilitiesHistory.length === 0) {
-      container.innerHTML = '<p style="opacity:0.5;text-align:center;padding:1rem">No utility records yet</p>';
-      return;
-    }
-
-    const rows = utilitiesHistory.slice(0, 12).map(function (r) {
-      const f = r.fields;
-      return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
-        '<td style="padding:0.45rem">' + (f.month || '').substring(0, 7) + '</td>' +
-        '<td style="text-align:right;padding:0.45rem">' + (f.electricity_units || '—') + '</td>' +
-        '<td style="text-align:right;padding:0.45rem">' + (f.electricity_charge ? formatThb(f.electricity_charge) : '—') + '</td>' +
-        '<td style="text-align:right;padding:0.45rem">' + (f.water_units || '—') + '</td>' +
-        '<td style="text-align:right;padding:0.45rem">' + (f.water_charge ? formatThb(f.water_charge) : '—') + '</td>' +
-        '</tr>';
-    }).join('');
-
-    container.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem">' +
-      '<thead><tr style="font-size:0.72rem;color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.1)">' +
-      '<th style="text-align:left;padding:0.35rem">Month</th>' +
-      '<th style="text-align:right;padding:0.35rem">Elec Units</th>' +
-      '<th style="text-align:right;padding:0.35rem">Elec Charge</th>' +
-      '<th style="text-align:right;padding:0.35rem">Water Units</th>' +
-      '<th style="text-align:right;padding:0.35rem">Water Charge</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table>';
-  } catch (e) {
-    container.innerHTML = '<p style="color:#ef4444;padding:1rem">Failed to load history</p>';
-  }
-}
-
-function updateUtilityRateDisplay(unitsId, chargeId, rateId, vsId) {
-  const units = parseFloat(document.getElementById(unitsId)?.value) || 0;
-  const charge = parseFloat(document.getElementById(chargeId)?.value) || 0;
-  const rateEl = document.getElementById(rateId);
-  if (rateEl) {
-    if (units > 0 && charge > 0) {
-      const rate = charge / units;
-      rateEl.textContent = 'Rate: ' + formatThb(rate) + ' / unit';
+    const now = new Date();
+    let start;
+    if (txPeriod === 'daily') {
+      start = now.toISOString().split('T')[0];
+    } else if (txPeriod === 'weekly') {
+      const d = new Date(now); d.setDate(d.getDate() - 6);
+      start = d.toISOString().split('T')[0];
     } else {
-      rateEl.textContent = '';
-    }
-  }
-}
-
-async function initUtilities() {
-  const monthInput = document.getElementById('util-month');
-  if (monthInput) {
-    monthInput.value = currentMonthIso();
-    monthInput.addEventListener('change', async function () {
-      const record = await loadUtilitiesForMonth(monthInput.value);
-      if (record) {
-        const f = record.fields;
-        if (document.getElementById('util-elec-units')) document.getElementById('util-elec-units').value = f.electricity_units || '';
-        if (document.getElementById('util-elec-charge')) document.getElementById('util-elec-charge').value = f.electricity_charge || '';
-        if (document.getElementById('util-water-units')) document.getElementById('util-water-units').value = f.water_units || '';
-        if (document.getElementById('util-water-charge')) document.getElementById('util-water-charge').value = f.water_charge || '';
-        if (document.getElementById('util-notes')) document.getElementById('util-notes').value = f.notes || '';
-      } else {
-        ['util-elec-units', 'util-elec-charge', 'util-water-units', 'util-water-charge', 'util-notes'].forEach(function (id) {
-          const el = document.getElementById(id);
-          if (el) el.value = '';
-        });
-      }
-      updateUtilityRateDisplay('util-elec-units', 'util-elec-charge', 'util-elec-rate', 'util-elec-vs');
-      updateUtilityRateDisplay('util-water-units', 'util-water-charge', 'util-water-rate', 'util-water-vs');
-    });
-  }
-
-  // Auto-calc rates on input
-  ['util-elec-units', 'util-elec-charge'].forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', function () {
-      updateUtilityRateDisplay('util-elec-units', 'util-elec-charge', 'util-elec-rate', 'util-elec-vs');
-    });
-  });
-  ['util-water-units', 'util-water-charge'].forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', function () {
-      updateUtilityRateDisplay('util-water-units', 'util-water-charge', 'util-water-rate', 'util-water-vs');
-    });
-  });
-
-  // Save button
-  const saveBtn = document.getElementById('util-save-btn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', async function () {
-      const month = document.getElementById('util-month')?.value;
-      if (!month) { showFlash('Select a month', 'error'); return; }
-      const elecUnits = parseFloat(document.getElementById('util-elec-units')?.value) || null;
-      const elecCharge = parseFloat(document.getElementById('util-elec-charge')?.value) || null;
-      const waterUnits = parseFloat(document.getElementById('util-water-units')?.value) || null;
-      const waterCharge = parseFloat(document.getElementById('util-water-charge')?.value) || null;
-      const notes = document.getElementById('util-notes')?.value || '';
-
-      saveBtn.disabled = true;
-      try {
-        const res = await api('/api/utilities', {
-          method: 'POST',
-          body: JSON.stringify({
-            month: month + '-01',
-            electricity_units: elecUnits,
-            electricity_charge: elecCharge,
-            water_units: waterUnits,
-            water_charge: waterCharge,
-            notes: notes || undefined
-          })
-        });
-        if (res.ok) {
-          showFlash('Utilities saved!');
-          loadUtilitiesHistory();
-        } else {
-          const d = await res.json().catch(function () { return {}; });
-          showFlash(d.error || 'Save failed', 'error');
-        }
-      } catch (err) {
-        showFlash('Error: ' + err.message, 'error');
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-  }
-
-  loadUtilitiesHistory();
-}
-
-/* ════════════════════════════════════════
-   DEBTS TAB
-════════════════════════════════════════ */
-let activeDebts = [];
-
-async function loadDebts() {
-  const tableContainer = document.getElementById('debts-table');
-  const paySelect = document.getElementById('payment-debt-select');
-
-  try {
-    const res = await api('/api/debts');
-    if (!res.ok) throw new Error('Failed to load debts');
-    const data = await res.json();
-    activeDebts = (data.records || []).filter(function (d) {
-      const status = (d.fields.status || '').toLowerCase();
-      return status !== 'paid' && status !== 'closed';
-    });
-
-    // Populate payment select
-    if (paySelect) {
-      paySelect.innerHTML = '<option value="">— Select debt —</option>';
-      activeDebts.forEach(function (d) {
-        const f = d.fields;
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        const balance = f.current_balance || f.original_amount || 0;
-        opt.textContent = (f.creditor_name || 'Unknown') + ' (balance: ' + formatThb(balance) + ')';
-        paySelect.appendChild(opt);
-      });
+      start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     }
 
-    // Render debts table
-    if (tableContainer) {
-      if (activeDebts.length === 0) {
-        tableContainer.innerHTML = '<p style="opacity:0.5;text-align:center;padding:1rem">No active debts</p>';
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    try {
+      const res = await api(`/api/transactions?start=${start}&limit=200`);
+      const records = (res.records || []).map(r => r.fields);
+      if (records.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:1.5rem">No transactions yet</div>';
         return;
       }
-      const typeColors = { 'Bank': '#3b82f6', 'Family': '#f59e0b', 'Other': '#94a3b8' };
-      const rows = activeDebts.map(function (d) {
-        const f = d.fields;
-        const color = typeColors[f.creditor_type] || '#94a3b8';
-        const balance = f.current_balance || f.original_amount || 0;
-        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">' +
-          '<td style="padding:0.5rem">' + escHtml(f.creditor_name || '') + '</td>' +
-          '<td style="padding:0.5rem"><span style="background:' + color + '22;color:' + color + ';padding:0.15rem 0.4rem;border-radius:4px;font-size:0.72rem;font-weight:600">' + escHtml(f.creditor_type || 'Other') + '</span></td>' +
-          '<td style="text-align:right;padding:0.5rem;font-weight:600" class="amount-negative">' + formatThb(balance) + '</td>' +
-          '<td style="text-align:right;padding:0.5rem">' + (f.interest_rate ? f.interest_rate + '%' : '—') + '</td>' +
-          '<td style="text-align:right;padding:0.5rem">' + formatThb(f.monthly_payment) + '</td>' +
-          '<td style="text-align:right;padding:0.5rem;opacity:0.6">' + (f.due_date || '—') + '</td>' +
-          '</tr>';
+      const byDate = {};
+      records.forEach(r => {
+        const d = r.date || 'Unknown';
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(r);
+      });
+
+      list.innerHTML = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, txs]) => {
+        const dayTotal = txs.reduce((s, t) => s + (t.type === 'Income' ? 1 : -1) * Number(t.amount || 0), 0);
+        return `
+          <div style="margin-bottom:1rem">
+            <div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);
+              display:flex;justify-content:space-between;padding:0.25rem 0;border-bottom:1px solid var(--border)">
+              <span>${date}</span>
+              <span style="color:${dayTotal >= 0 ? '#22c55e' : '#ef4444'}">${fmt(dayTotal)}</span>
+            </div>
+            ${txs.map(t => {
+              const catId = Array.isArray(t.category_id) ? t.category_id[0] : t.category_id;
+              const cat = catMap[catId];
+              const isIncome = t.type === 'Income';
+              return `
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:0.5rem 0;border-bottom:1px solid var(--border)">
+                  <div>
+                    <div style="font-size:0.88rem">${t.description || t.entity || 'Transaction'}</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary)">
+                      ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''}
+                      ${t.note ? ' · ' + t.note : ''}
+                    </div>
+                  </div>
+                  <div style="font-weight:700;color:${isIncome ? '#22c55e' : '#ef4444'}">
+                    ${isIncome ? '+' : '-'}${fmt(t.amount)}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
       }).join('');
-
-      const totalBalance = activeDebts.reduce(function (s, d) {
-        return s + (d.fields.current_balance || d.fields.original_amount || 0);
-      }, 0);
-
-      tableContainer.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem">' +
-        '<thead><tr style="font-size:0.72rem;color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.1)">' +
-        '<th style="text-align:left;padding:0.35rem">Creditor</th><th style="padding:0.35rem">Type</th>' +
-        '<th style="text-align:right;padding:0.35rem">Balance</th><th style="text-align:right;padding:0.35rem">Rate</th>' +
-        '<th style="text-align:right;padding:0.35rem">Monthly</th><th style="text-align:right;padding:0.35rem">Due</th>' +
-        '</tr></thead><tbody>' + rows + '</tbody>' +
-        '<tfoot><tr style="border-top:1px solid rgba(255,255,255,0.1);font-weight:600">' +
-        '<td colspan="2" style="padding:0.4rem">Total</td>' +
-        '<td class="amount-negative" style="text-align:right;padding:0.4rem">' + formatThb(totalBalance) + '</td>' +
-        '<td colspan="3"></td>' +
-        '</tr></tfoot></table>';
+    } catch (err) {
+      list.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
-  } catch (e) {
-    if (tableContainer) tableContainer.innerHTML = '<p style="color:#ef4444;padding:1rem">Error: ' + e.message + '</p>';
   }
-}
 
-async function initDebts() {
-  const payDateInput = document.getElementById('payment-date');
-  if (payDateInput) payDateInput.value = todayIso();
+  /* ── Utilities ── */
+  function initUtilityForm() {
+    const monthEl = document.getElementById('util-month');
+    if (monthEl) {
+      const now = new Date();
+      monthEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
 
-  await loadDebts();
+    const elecUnits = document.getElementById('util-elec-units');
+    const elecCharge = document.getElementById('util-elec-charge');
+    const waterUnits = document.getElementById('util-water-units');
+    const waterCharge = document.getElementById('util-water-charge');
 
-  // Save payment
-  const payBtn = document.getElementById('save-payment-btn');
-  if (payBtn) {
-    payBtn.addEventListener('click', async function () {
-      const debtId = document.getElementById('payment-debt-select')?.value;
-      const amount = parseFloat(document.getElementById('payment-amount')?.value);
-      const date = document.getElementById('payment-date')?.value;
+    function updateRateDisplay(units, charge, displayId) {
+      const u = Number(units?.value || 0);
+      const c = Number(charge?.value || 0);
+      const el = document.getElementById(displayId);
+      if (el) el.textContent = u > 0 && c > 0 ? `Rate: ${fmt(c / u)}/unit` : '';
+    }
+
+    elecUnits?.addEventListener('input', () => updateRateDisplay(elecUnits, elecCharge, 'elec-rate-display'));
+    elecCharge?.addEventListener('input', () => updateRateDisplay(elecUnits, elecCharge, 'elec-rate-display'));
+    waterUnits?.addEventListener('input', () => updateRateDisplay(waterUnits, waterCharge, 'water-rate-display'));
+    waterCharge?.addEventListener('input', () => updateRateDisplay(waterUnits, waterCharge, 'water-rate-display'));
+
+    ensureMsgEl('util-msg', 'save-util');
+
+    document.getElementById('save-util')?.addEventListener('click', async () => {
+      const monthVal = document.getElementById('util-month')?.value;
+      if (!monthVal) return alert('Month is required');
+      const month = monthVal + '-01';
+      const body = {
+        month,
+        electricity_units: Number(elecUnits?.value || 0) || undefined,
+        electricity_charge: Number(elecCharge?.value || 0) || undefined,
+        water_units: Number(waterUnits?.value || 0) || undefined,
+        water_charge: Number(waterCharge?.value || 0) || undefined,
+        notes: document.getElementById('util-notes')?.value || ''
+      };
+      Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+
+      try {
+        await api('/api/utilities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        showMsg('util-msg', 'Saved!');
+        loadUtilityHistory();
+      } catch (err) {
+        showMsg('util-msg', err.message, false);
+      }
+    });
+  }
+
+  async function loadUtilityHistory() {
+    const tableEl = document.getElementById('util-history-table');
+    if (!tableEl) return;
+
+    try {
+      const now = new Date();
+      const res = await api(`/api/utilities?year=${now.getFullYear()}`);
+      const records = (res.records || []).map(r => r.fields).slice(0, 12);
+
+      if (records.length === 0) {
+        tableEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No utility records yet.</div>';
+        return;
+      }
+
+      tableEl.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:0.25rem">Month</th>
+            <th style="text-align:right">Elec Units</th>
+            <th style="text-align:right">Elec ฿</th>
+            <th style="text-align:right">Water Units</th>
+            <th style="text-align:right">Water ฿</th>
+          </tr></thead>
+          <tbody>${records.map(r => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:0.25rem">${(r.month || '').slice(0, 7)}</td>
+              <td style="text-align:right">${r.electricity_units || '—'}</td>
+              <td style="text-align:right">${r.electricity_charge ? fmt(r.electricity_charge) : '—'}</td>
+              <td style="text-align:right">${r.water_units || '—'}</td>
+              <td style="text-align:right">${r.water_charge ? fmt(r.water_charge) : '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+      // Render mini charts
+      const reversed = [...records].reverse();
+      const labels = reversed.map(r => (r.month || '').slice(0, 7));
+      renderMiniChart('elec-chart', labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
+      renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0), 'Water ฿', '#3b82f6');
+    } catch (err) {
+      tableEl.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
+    }
+  }
+
+  function renderMiniChart(canvasId, labels, data, label, color) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+    new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ label, data, backgroundColor: color + 'bb', borderRadius: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } }
+      }
+    });
+  }
+
+  /* ── Liabilities ── */
+  async function loadLiabilityTab() {
+    const res = await api('/api/liabilities?all=true').catch(() => ({ records: [] }));
+    liabilities = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
+    renderLiabilitySelect();
+    renderLiabilitiesList();
+  }
+
+  function renderLiabilitySelect() {
+    const sel = document.getElementById('payment-liability-select');
+    if (!sel) return;
+    const active = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0);
+    sel.innerHTML = '<option value="">— Select liability —</option>' +
+      active.map(l => `<option value="${l.id}">${l.name} (${fmt(l.current_balance)} @ ${l.interest_rate || 0}%)</option>`).join('');
+
+    sel.addEventListener('change', () => updateInterestPreview(sel.value));
+    updateInterestPreview(sel.value);
+  }
+
+  function updateInterestPreview(liabId) {
+    const preview = document.getElementById('payment-interest-preview');
+    if (!preview) return;
+    const liab = liabilities.find(l => l.id === liabId);
+    if (!liab || !liab.current_balance) { preview.style.display = 'none'; return; }
+
+    const balance = Number(liab.current_balance || 0);
+    const rate = Number(liab.interest_rate || 0);
+    const monthlyRate = rate / 100 / 12;
+    const interest = Math.round(balance * monthlyRate * 100) / 100;
+    const suggested = Number(liab.monthly_payment || 0);
+    const principal = Math.max(0, suggested - interest);
+
+    preview.style.display = 'block';
+    preview.innerHTML = `Balance: ${fmt(balance)} · Est. interest this month: ${fmt(interest)} · Principal: ${fmt(principal)}`;
+
+    const amtEl = document.getElementById('payment-amount');
+    if (amtEl && !amtEl.value && suggested > 0) amtEl.value = suggested;
+  }
+
+  function initLiabilityForm() {
+    const today = new Date().toISOString().split('T')[0];
+    const pdateEl = document.getElementById('payment-date');
+    if (pdateEl) pdateEl.value = today;
+
+    ensureMsgEl('payment-msg', 'save-payment');
+    ensureMsgEl('liab-msg', 'save-liability');
+
+    document.getElementById('save-payment')?.addEventListener('click', async () => {
+      const liabId = document.getElementById('payment-liability-select')?.value;
+      const amount = document.getElementById('payment-amount')?.value;
+      const date = document.getElementById('payment-date')?.value || today;
       const note = document.getElementById('payment-note')?.value || '';
 
-      if (!debtId) { showFlash('Select a debt', 'error'); return; }
-      if (!amount || isNaN(amount)) { showFlash('Enter payment amount', 'error'); return; }
-      if (!date) { showFlash('Select payment date', 'error'); return; }
+      if (!liabId) return alert('Select a liability');
+      if (!amount || Number(amount) <= 0) return alert('Enter payment amount');
 
-      payBtn.disabled = true;
       try {
-        const res = await api('/api/debts/' + debtId, {
+        const res = await api(`/api/liabilities/${liabId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ payment_amount: amount, payment_date: date, note: note || undefined })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payment_amount: Number(amount), date, note })
         });
-        if (res.ok) {
-          showFlash('Payment logged!');
-          if (document.getElementById('payment-amount')) document.getElementById('payment-amount').value = '';
-          if (document.getElementById('payment-note')) document.getElementById('payment-note').value = '';
-          await loadDebts();
-        } else {
-          const d = await res.json().catch(function () { return {}; });
-          showFlash(d.error || 'Save failed', 'error');
-        }
+        const msg = `Payment logged. Interest: ${fmt(res.interest)}, Principal: ${fmt(res.principal)}, New balance: ${fmt(res.new_balance)}`;
+        showMsg('payment-msg', msg);
+        document.getElementById('payment-amount').value = '';
+        document.getElementById('payment-note').value = '';
+        loadLiabilityTab();
       } catch (err) {
-        showFlash('Error: ' + err.message, 'error');
-      } finally {
-        payBtn.disabled = false;
+        showMsg('payment-msg', err.message, false);
       }
     });
-  }
 
-  // Add new debt
-  const addDebtBtn = document.getElementById('add-debt-btn');
-  if (addDebtBtn) {
-    addDebtBtn.addEventListener('click', async function () {
-      const creditorName = document.getElementById('new-creditor-name')?.value;
-      const creditorType = document.getElementById('new-creditor-type')?.value || 'Other';
-      const originalAmount = parseFloat(document.getElementById('new-original-amount')?.value);
-      const interestRate = parseFloat(document.getElementById('new-interest-rate')?.value) || null;
-      const monthlyPayment = parseFloat(document.getElementById('new-monthly-payment')?.value) || null;
-      const dueDate = document.getElementById('new-due-date')?.value || null;
-      const notes = document.getElementById('new-debt-notes')?.value || null;
+    document.getElementById('save-liability')?.addEventListener('click', async () => {
+      const name = document.getElementById('liab-name')?.value?.trim();
+      if (!name) return alert('Name is required');
+      const body = {
+        name,
+        creditor_type: document.getElementById('liab-creditor-type')?.value || 'Other',
+        loan_size: Number(document.getElementById('liab-loan-size')?.value || 0) || undefined,
+        current_balance: Number(document.getElementById('liab-balance')?.value || 0) || undefined,
+        interest_rate: Number(document.getElementById('liab-rate')?.value || 0) || undefined,
+        monthly_payment: Number(document.getElementById('liab-monthly')?.value || 0) || undefined,
+        start_date: document.getElementById('liab-start')?.value || undefined,
+        notes: document.getElementById('liab-notes')?.value || ''
+      };
+      Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 
-      if (!creditorName) { showFlash('Creditor name required', 'error'); return; }
-      if (!originalAmount || isNaN(originalAmount)) { showFlash('Amount required', 'error'); return; }
-
-      addDebtBtn.disabled = true;
       try {
-        const res = await api('/api/debts', {
+        await api('/api/liabilities', {
           method: 'POST',
-          body: JSON.stringify({
-            creditor_name: creditorName,
-            creditor_type: creditorType,
-            original_amount: originalAmount,
-            current_balance: originalAmount,
-            interest_rate: interestRate,
-            monthly_payment: monthlyPayment,
-            due_date: dueDate,
-            notes: notes
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
-        if (res.ok) {
-          showFlash('Debt added!');
-          // Clear new debt form
-          ['new-creditor-name', 'new-original-amount', 'new-interest-rate', 'new-monthly-payment', 'new-due-date', 'new-debt-notes'].forEach(function (id) {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-          });
-          await loadDebts();
-        } else {
-          const d = await res.json().catch(function () { return {}; });
-          showFlash(d.error || 'Failed to add debt', 'error');
-        }
+        showMsg('liab-msg', 'Liability added!');
+        ['liab-name', 'liab-loan-size', 'liab-balance', 'liab-rate', 'liab-monthly', 'liab-start', 'liab-notes']
+          .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        loadLiabilityTab();
       } catch (err) {
-        showFlash('Error: ' + err.message, 'error');
-      } finally {
-        addDebtBtn.disabled = false;
+        showMsg('liab-msg', err.message, false);
       }
     });
   }
-}
 
-/* ════════════════════════════════════════
-   BUDGETS TAB
-════════════════════════════════════════ */
-let allBudgets = [];
-
-async function loadBudgets() {
-  const container = document.getElementById('budgets-list');
-  if (!container) return;
-
-  try {
-    const [budgetRes, txRes] = await Promise.all([
-      api('/api/budgets'),
-      api('/api/transactions?limit=500')
-    ]);
-    const [budgetData, txData] = await Promise.all([
-      budgetRes.json().catch(function () { return {}; }),
-      txRes.json().catch(function () { return {}; })
-    ]);
-
-    allBudgets = budgetData.records || [];
-    const transactions = txData.records || [];
-
-    // Build expense totals by category
-    const expByCategory = {};
-    transactions.filter(function (t) { return t.fields.type === 'Expense'; }).forEach(function (t) {
-      const cat = t.fields.category_name || 'Uncategorized';
-      expByCategory[cat] = (expByCategory[cat] || 0) + (t.fields.amount || 0);
-    });
-
-    const active = allBudgets.filter(function (b) {
-      return b.fields.active !== false;
-    });
-
+  function renderLiabilitiesList() {
+    const table = document.getElementById('active-liabilities-table');
+    if (!table) return;
+    const active = liabilities.filter(l => l.active !== false);
     if (active.length === 0) {
-      container.innerHTML = '<p style="opacity:0.5;text-align:center;padding:1rem">No active budgets. Create one below.</p>';
+      table.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No liabilities found.</div>';
       return;
     }
-
-    const items = active.map(function (b) {
-      const f = b.fields;
-      const spent = expByCategory[f.label] || 0;
-      const budgetAmt = f.amount || 0;
-      const pct = budgetAmt > 0 ? Math.round((spent / budgetAmt) * 100) : 0;
-
-      let barColor = '#22c55e';
-      let bgColor = 'rgba(34,197,94,0.08)';
-      if (pct > 100) { barColor = '#ef4444'; bgColor = 'rgba(239,68,68,0.08)'; }
-      else if (pct > 80) { barColor = '#f59e0b'; bgColor = 'rgba(245,158,11,0.08)'; }
-
-      return `<div style="background:var(--bg-surface,#252d3d);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:10px;padding:0.85rem;margin-bottom:0.6rem;background:${bgColor}">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">
-          <div>
-            <span style="font-weight:600;font-size:0.88rem">${escHtml(f.label || 'Budget')}</span>
-            <span style="font-size:0.72rem;opacity:0.55;margin-left:0.4rem">${f.period || 'Monthly'}</span>
+    table.innerHTML = active.map(l => {
+      const bal = Number(l.current_balance || 0);
+      const loan = Number(l.loan_size || bal);
+      const paidPct = loan > 0 ? Math.round((1 - bal / loan) * 100) : 0;
+      return `
+        <div style="border-bottom:1px solid var(--border);padding:0.75rem 0">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <strong style="font-size:0.95rem">${l.name}</strong>
+            <span style="font-size:0.85rem;color:#ef4444">${fmt(bal)}</span>
           </div>
-          <div style="display:flex;gap:0.35rem">
-            <button class="budget-delete-btn" data-id="${b.id}" style="background:none;border:none;color:#ef444488;cursor:pointer;font-size:0.8rem;padding:0.2rem 0.4rem" title="Delete">✕</button>
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
+            ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
           </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.5rem">
-          <span class="amount-negative">${formatThb(spent)} spent</span>
-          <span style="opacity:0.6">/ ${formatThb(budgetAmt)} budget</span>
-          <span style="color:${barColor};font-weight:600">${pct}%</span>
-        </div>
-        <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px;overflow:hidden">
-          <div style="background:${barColor};width:${Math.min(pct, 100)}%;height:100%;border-radius:4px;transition:width 0.3s"></div>
-        </div>
-      </div>`;
+          <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
+            <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.15rem">${paidPct}% paid off</div>
+        </div>`;
     }).join('');
-
-    container.innerHTML = items;
-
-    // Wire delete buttons
-    container.querySelectorAll('.budget-delete-btn').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const id = btn.dataset.id;
-        if (!confirm('Delete this budget?')) return;
-        try {
-          const res = await api('/api/budgets/' + id, { method: 'DELETE' });
-          if (res.ok) { showFlash('Budget deleted'); loadBudgets(); }
-          else showFlash('Delete failed', 'error');
-        } catch (err) { showFlash('Error: ' + err.message, 'error'); }
-      });
-    });
-
-  } catch (e) {
-    container.innerHTML = '<p style="color:#ef4444;padding:1rem">Error: ' + e.message + '</p>';
   }
-}
 
-async function initBudgets() {
-  const startInput = document.getElementById('budget-start');
-  if (startInput) startInput.value = todayIso();
+  /* ── Budgets ── */
+  async function loadBudgetTab() {
+    const budgetList = document.getElementById('budgets-list');
+    if (!budgetList) return;
 
-  // Populate categories for budget label suggestions
-  try {
-    const cats = await loadCategories('Expense');
-    const catSelect = document.getElementById('budget-category-select');
-    if (catSelect) {
-      catSelect.innerHTML = '<option value="">— Or pick a category —</option>';
-      cats.forEach(function (c) {
-        const opt = document.createElement('option');
-        opt.value = c.fields.name || '';
-        opt.textContent = c.fields.name || '';
-        catSelect.appendChild(opt);
+    const now = new Date();
+    const nowYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const startOfMonth = nowYM + '-01';
+
+    try {
+      const [budgetRes, txRes] = await Promise.all([
+        api('/api/budgets'),
+        api(`/api/transactions?start=${startOfMonth}&limit=500`)
+      ]);
+
+      const budgets = (budgetRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+      const txs = (txRes.records || []).map(r => r.fields).filter(t => t.type === 'Expense');
+
+      const spendByCat = {};
+      txs.forEach(t => {
+        const catId = Array.isArray(t.category_id) ? t.category_id[0] : t.category_id;
+        if (catId) spendByCat[catId] = (spendByCat[catId] || 0) + Number(t.amount || 0);
       });
-      catSelect.addEventListener('change', function () {
-        if (catSelect.value) {
-          const labelInput = document.getElementById('budget-label');
-          if (labelInput && !labelInput.value) labelInput.value = catSelect.value;
-        }
-      });
+
+      const catMap = {};
+      categories.forEach(c => { catMap[c.id] = c; });
+
+      if (budgets.length === 0) {
+        budgetList.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No budgets yet.</div>';
+        return;
+      }
+
+      budgetList.innerHTML = budgets.map(b => {
+        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+        const cat = catMap[catId];
+        const spent = spendByCat[catId] || 0;
+        const limit = Number(b.amount || 0);
+        const p = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+        const cls = p >= 100 ? '#ef4444' : p >= 85 ? '#f59e0b' : '#22c55e';
+        return `
+          <div style="margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;font-weight:600">
+              <span>${b.label || (cat ? cat.name : 'Budget')}</span>
+              <span>${fmt(spent)} / ${fmt(limit)}</span>
+            </div>
+            <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
+              ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
+            </div>
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${p}%;background:${cls};border-radius:4px;transition:width 0.4s"></div>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      budgetList.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
-  } catch (e) { /* non-critical */ }
+  }
 
-  await loadBudgets();
-
-  // Create budget
-  const createBtn = document.getElementById('create-budget-btn');
-  if (createBtn) {
-    createBtn.addEventListener('click', async function () {
-      const label = document.getElementById('budget-label')?.value;
-      const amount = parseFloat(document.getElementById('budget-amount')?.value);
+  function initBudgetForm() {
+    ensureMsgEl('budget-msg', 'save-budget');
+    document.getElementById('save-budget')?.addEventListener('click', async () => {
+      const label = document.getElementById('budget-label')?.value?.trim();
+      const categoryId = document.getElementById('budget-category')?.value;
+      const amount = document.getElementById('budget-amount')?.value;
       const period = document.getElementById('budget-period')?.value || 'Monthly';
-      const startDate = document.getElementById('budget-start')?.value || todayIso();
-      const endDate = document.getElementById('budget-end')?.value || null;
+      const startDate = document.getElementById('budget-start')?.value;
+      const endDate = document.getElementById('budget-end')?.value;
 
-      if (!label) { showFlash('Budget label required', 'error'); return; }
-      if (!amount || isNaN(amount)) { showFlash('Budget amount required', 'error'); return; }
+      if (!label || !amount) return alert('Label and amount are required');
 
-      createBtn.disabled = true;
+      const body = { label, amount: Number(amount), period, active: true };
+      if (categoryId) body.category_id = [categoryId];
+      if (startDate) body.start_date = startDate;
+      if (endDate) body.end_date = endDate;
+
       try {
-        const res = await api('/api/budgets', {
+        await api('/api/budgets', {
           method: 'POST',
-          body: JSON.stringify({
-            label,
-            amount,
-            period,
-            start_date: startDate,
-            end_date: endDate || undefined,
-            active: true
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
-        if (res.ok) {
-          showFlash('Budget created!');
-          if (document.getElementById('budget-label')) document.getElementById('budget-label').value = '';
-          if (document.getElementById('budget-amount')) document.getElementById('budget-amount').value = '';
-          await loadBudgets();
-        } else {
-          const d = await res.json().catch(function () { return {}; });
-          showFlash(d.error || 'Failed to create budget', 'error');
-        }
+        showMsg('budget-msg', 'Budget created!');
+        ['budget-label', 'budget-amount', 'budget-start', 'budget-end'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
+        loadBudgetTab();
       } catch (err) {
-        showFlash('Error: ' + err.message, 'error');
-      } finally {
-        createBtn.disabled = false;
+        showMsg('budget-msg', err.message, false);
       }
     });
   }
-}
 
-/* ─── Init ─── */
-document.addEventListener('DOMContentLoaded', function () {
-  initTabs();
-
-  // Auto-activate first tab
-  const firstTab = document.querySelector('.tab-btn');
-  if (firstTab) {
-    firstTab.click();
-  } else {
-    // If no tab system, just init transactions directly
-    initTransactions();
+  /* ── Helpers ── */
+  function ensureMsgEl(msgId, anchorId) {
+    if (document.getElementById(msgId)) return;
+    const anchor = document.getElementById(anchorId);
+    if (!anchor) return;
+    const el = document.createElement('div');
+    el.id = msgId;
+    el.style.cssText = 'font-size:0.82rem;margin-top:0.5rem;display:none';
+    anchor.parentNode.insertBefore(el, anchor.nextSibling);
   }
-});
+
+  /* ── Boot ── */
+  document.addEventListener('DOMContentLoaded', async () => {
+    initTabs();
+    try {
+      await loadCategories();
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+    initTransactionForm();
+    initUtilityForm();
+    initLiabilityForm();
+    initBudgetForm();
+    loadTransactions().catch(console.error);
+  });
+})();

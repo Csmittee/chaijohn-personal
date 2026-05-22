@@ -26,7 +26,7 @@
     <div class="tabs" id="entry-tabs">
       <button class="tab-btn active" data-tab="transactions">Transactions</button>
       <button class="tab-btn" data-tab="utilities">Utilities</button>
-      <button class="tab-btn" data-tab="debts">Debts</button>
+      <button class="tab-btn" data-tab="liabilities">Liabilities</button>
       <button class="tab-btn" data-tab="budgets">Budgets</button>
     </div>
 
@@ -138,8 +138,8 @@
       </div>
     </div>
 
-    <!-- ── Debts Tab ── -->
-    <div class="tab-panel" id="debts-tab">
+    <!-- ── Liabilities Tab ── -->
+    <div class="tab-panel" id="liabilities-tab">
 
       <!-- Log a payment -->
       <div class="card" style="margin-bottom:1rem">
@@ -147,9 +147,10 @@
           <span class="section-title">Log a Payment</span>
         </div>
         <div class="form-group">
-          <label for="payment-debt-select">Debt</label>
-          <select id="payment-debt-select"></select>
+          <label for="payment-liability-select">Liability</label>
+          <select id="payment-liability-select"></select>
         </div>
+        <div id="payment-interest-preview" style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem;display:none"></div>
         <div class="form-row">
           <div class="form-group">
             <label for="payment-amount">Payment Amount (฿)</label>
@@ -167,64 +168,65 @@
         <button class="btn btn-success w-full" id="save-payment">Log Payment</button>
       </div>
 
-      <!-- Add new debt -->
+      <!-- Add new liability -->
       <div class="card" style="margin-bottom:1rem">
         <div class="section-header">
-          <span class="section-title">Add New Debt</span>
+          <span class="section-title">Add New Liability</span>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="debt-creditor">Creditor Name</label>
-            <input type="text" id="debt-creditor" placeholder="Bank / Person">
+            <label for="liab-name">Liability Name</label>
+            <input type="text" id="liab-name" placeholder="Bank / Person / Card">
           </div>
           <div class="form-group">
-            <label for="debt-type">Creditor Type</label>
-            <select id="debt-type">
+            <label for="liab-creditor-type">Creditor Type</label>
+            <select id="liab-creditor-type">
               <option value="Bank">Bank</option>
               <option value="Family">Family</option>
+              <option value="Friend">Friend</option>
               <option value="Other">Other</option>
             </select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="debt-original">Original Amount (฿)</label>
-            <input type="number" id="debt-original">
+            <label for="liab-loan-size">Loan Size (฿)</label>
+            <input type="number" id="liab-loan-size" placeholder="Original loan amount">
           </div>
           <div class="form-group">
-            <label for="debt-balance">Current Balance (฿)</label>
-            <input type="number" id="debt-balance">
+            <label for="liab-balance">Current Balance (฿)</label>
+            <input type="number" id="liab-balance" placeholder="Remaining balance">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="debt-rate">Interest Rate (%)</label>
-            <input type="number" id="debt-rate" step="0.01">
+            <label for="liab-rate">Interest Rate (% p.a.)</label>
+            <input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5">
           </div>
           <div class="form-group">
-            <label for="debt-monthly">Monthly Payment (฿)</label>
-            <input type="number" id="debt-monthly">
+            <label for="liab-monthly">Monthly Payment (฿)</label>
+            <input type="number" id="liab-monthly" placeholder="฿">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="debt-due">Due Date</label>
-            <input type="date" id="debt-due">
+            <label for="liab-start">Start Date</label>
+            <input type="date" id="liab-start">
           </div>
           <div class="form-group">
-            <label for="debt-notes">Notes</label>
-            <input type="text" id="debt-notes">
+            <label for="liab-notes">Notes</label>
+            <input type="text" id="liab-notes" placeholder="Optional notes">
           </div>
         </div>
-        <button class="btn btn-primary w-full" id="save-debt">Add Debt</button>
+        <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
       </div>
 
-      <!-- Active debts list -->
+      <!-- Active liabilities list -->
       <div class="card">
         <div class="section-header">
-          <span class="section-title">Active Debts</span>
+          <span class="section-title">Active Liabilities</span>
         </div>
-        <div id="active-debts-table"></div>
+        <div id="active-liabilities-table"></div>
       </div>
     </div>
 

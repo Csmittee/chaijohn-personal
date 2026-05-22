@@ -6,11 +6,74 @@
   <title>Chaijohn — Dashboard</title>
   <link rel="stylesheet" href="/assets/css/global.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    .alert-strip { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .alert-chip { display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.65rem;
+      border-radius:999px; font-size:0.78rem; font-weight:600; }
+    .alert-chip.danger { background:#fee2e2; color:#991b1b; }
+    .alert-chip.warn { background:#fef3c7; color:#92400e; }
+    .alert-chip.info { background:#dbeafe; color:#1e40af; }
+
+    .charts-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1rem; }
+    @media(max-width:900px){ .charts-row { grid-template-columns:1fr; } }
+
+    .meters-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+      gap:0.75rem; margin-bottom:1rem; }
+    .meter-card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+      padding:0.75rem 1rem; }
+    .meter-label { font-size:0.78rem; color:var(--text-secondary); margin-bottom:0.15rem; }
+    .meter-name { font-size:0.92rem; font-weight:600; margin-bottom:0.4rem; }
+    .meter-bar-bg { height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+    .meter-bar-fill { height:100%; border-radius:4px; transition:width 0.5s; }
+    .meter-bar-fill.ok { background:#22c55e; }
+    .meter-bar-fill.warn { background:#f59e0b; }
+    .meter-bar-fill.over { background:#ef4444; }
+    .meter-nums { display:flex; justify-content:space-between; font-size:0.75rem;
+      color:var(--text-secondary); margin-top:0.3rem; }
+
+    .bottom-actions { display:flex; gap:0.75rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+    .btn-sim { background:#7c3aed; color:#fff; }
+    .btn-sim:hover { background:#6d28d9; }
+    .btn-play { background:#0891b2; color:#fff; }
+    .btn-play:hover { background:#0e7490; }
+
+    /* Risk Simulator modal */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5);
+      z-index:500; display:none; align-items:center; justify-content:center; }
+    .modal-backdrop.open { display:flex; }
+    .modal-box { background:var(--surface); border-radius:12px; padding:1.5rem;
+      width:min(480px,92vw); max-height:90vh; overflow-y:auto; }
+    .modal-title { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
+    .modal-close { float:right; background:none; border:none; font-size:1.4rem;
+      cursor:pointer; color:var(--text-secondary); }
+    .sim-result { margin-top:1rem; padding:1rem; background:var(--bg);
+      border-radius:8px; font-size:0.9rem; }
+    .sim-result .big { font-size:1.4rem; font-weight:700; }
+
+    /* Solution Playroom panel */
+    .playroom-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.4);
+      z-index:400; display:none; }
+    .playroom-backdrop.open { display:block; }
+    .playroom-panel { position:fixed; right:0; top:0; bottom:0; width:min(440px,95vw);
+      background:var(--surface); border-left:1px solid var(--border); z-index:401;
+      transform:translateX(100%); transition:transform 0.3s ease; overflow-y:auto; padding:1.5rem; }
+    .playroom-panel.open { transform:translateX(0); }
+    .playroom-title { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
+    .playroom-close { float:right; background:none; border:none; font-size:1.4rem;
+      cursor:pointer; color:var(--text-secondary); }
+    .scenario-card { border:1px solid var(--border); border-radius:8px; padding:0.75rem;
+      margin-bottom:0.75rem; cursor:pointer; transition:border-color 0.2s; }
+    .scenario-card:hover { border-color:var(--primary); }
+    .scenario-card h4 { font-size:0.9rem; font-weight:600; margin:0 0 0.25rem; }
+    .scenario-card p { font-size:0.8rem; color:var(--text-secondary); margin:0; }
+    .scenario-result { margin-top:0.5rem; font-size:0.85rem; font-weight:600;
+      color:var(--primary); display:none; }
+  </style>
 </head>
 <body>
   <nav class="main-nav">
     <div class="nav-inner">
-      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-brand" href="/dashboard.html">Chaijohn</a>
       <a class="nav-link active" href="/dashboard.html">Dashboard</a>
       <a class="nav-link" href="/entry.html">Entry</a>
       <a class="nav-link" href="/diary.html">Diary</a>
@@ -22,120 +85,99 @@
 
   <main class="page-content">
 
-    <!-- Quote banner -->
-    <div id="quote-banner" class="quote-banner hidden">
-      <div class="quote-text" id="quote-text"></div>
-      <div class="quote-author" id="quote-author"></div>
-      <button class="quote-dismiss" id="quote-dismiss" title="Dismiss">×</button>
-    </div>
+    <!-- Alert strip -->
+    <div id="alert-strip" class="alert-strip" style="min-height:0"></div>
 
-    <!-- Filter bar -->
-    <div class="filter-bar">
+    <!-- Period filter bar -->
+    <div class="filter-bar" style="margin-bottom:1rem">
       <div class="period-toggle">
-        <button class="period-btn active" data-period="monthly">Monthly</button>
-        <button class="period-btn" data-period="weekly">Weekly</button>
-        <button class="period-btn" data-period="daily">Daily</button>
+        <button class="period-btn active" data-range="1m">This Month</button>
+        <button class="period-btn" data-range="3m">3 Months</button>
+        <button class="period-btn" data-range="6m">6 Months</button>
+        <button class="period-btn" data-range="12m">12 Months</button>
       </div>
-      <input type="date" id="range-start" class="w-auto">
-      <span style="color:var(--text-secondary);font-size:0.9rem">to</span>
-      <input type="date" id="range-end" class="w-auto">
-      <button class="btn btn-sm btn-outline" id="apply-range">Apply</button>
     </div>
 
-    <!-- Section A: Speed / Cashflow cards -->
-    <div class="speed-panel" id="cashflow-section">
-      <div class="card speed-card" id="spend-rate-card">
-        <div class="metric-label">Spend Rate</div>
-        <div class="gauge-wrap">
-          <canvas id="gauge-chart" width="160" height="90"></canvas>
+    <!-- T1 / T2 / T3 Charts row -->
+    <div class="charts-row">
+
+      <!-- T1: Income vs Expense trend -->
+      <div class="card" style="padding:1rem">
+        <div class="section-title" style="margin-bottom:0.5rem">T1 — Cash Flow</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
+          Income vs Expense by month
         </div>
-        <div class="metric-value" id="spend-rate-value">฿—</div>
-        <div class="metric-sub">per day</div>
+        <div style="height:180px"><canvas id="t1-chart"></canvas></div>
       </div>
 
-      <div class="card speed-card" id="cash-position-card">
-        <div class="metric-label">Cash Position</div>
-        <div style="margin:1rem 0">
-          <canvas id="cashpos-chart" height="60"></canvas>
+      <!-- T2: Expense pareto by category -->
+      <div class="card" style="padding:1rem">
+        <div class="section-title" style="margin-bottom:0.5rem">T2 — Expense Pareto</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
+          Top categories this period
         </div>
-        <div class="metric-value" id="cash-net">฿—</div>
-        <div class="metric-sub" id="cash-sub">income vs expense</div>
+        <div style="height:180px"><canvas id="t2-chart"></canvas></div>
       </div>
 
-      <div class="card speed-card" id="days-critical-card">
-        <div class="metric-label">Days to Critical</div>
-        <div class="metric-value" id="days-value">—</div>
-        <div class="metric-sub" id="critical-date">—</div>
+      <!-- T3: Liability snapshot -->
+      <div class="card" style="padding:1rem">
+        <div class="section-title" style="margin-bottom:0.5rem">T3 — Liabilities</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
+          Current balance per loan
+        </div>
+        <div style="height:180px"><canvas id="t3-chart"></canvas></div>
+        <div id="t3-total" style="text-align:right;font-size:0.8rem;color:var(--text-secondary);margin-top:0.4rem"></div>
       </div>
     </div>
 
-    <!-- Section B: Income vs Expense Trend -->
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="section-header">
-        <span class="section-title">Income vs Expense Trend</span>
-      </div>
-      <div class="chart-container" style="height:220px">
-        <canvas id="trend-chart"></canvas>
-      </div>
+    <!-- Action buttons -->
+    <div class="bottom-actions">
+      <button class="btn btn-sim" id="open-simulator">Risk Simulator</button>
+      <button class="btn btn-play" id="open-playroom">Solution Playroom</button>
     </div>
 
-    <!-- Section C: Expense Pareto -->
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="section-header">
-        <span class="section-title">Expense Pareto by Category</span>
-      </div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="pareto-chart"></canvas>
-      </div>
-    </div>
-
-    <!-- Section D: Paynter Table -->
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="section-header">
-        <span class="section-title">Paynter Table — Top Expense Categories</span>
-      </div>
-      <div id="paynter-table-wrap"></div>
-    </div>
-
-    <!-- Section E: Debt Wave -->
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="section-header">
-        <span class="section-title">Debt Wave</span>
-      </div>
-      <div class="chart-container" style="height:200px">
-        <canvas id="debt-chart"></canvas>
-      </div>
-      <div id="debt-table-wrap" style="margin-top:1rem"></div>
-    </div>
-
-    <!-- Section F: Net Worth Snapshot -->
-    <div class="card" style="margin-bottom:1.5rem">
-      <div class="section-header">
-        <span class="section-title">Net Worth Snapshot</span>
-        <span class="metric-value" id="net-worth-value">฿—</span>
-      </div>
-      <div class="chart-container" style="height:80px">
-        <canvas id="networth-chart"></canvas>
-      </div>
-      <div id="networth-breakdown" style="margin-top:1rem"></div>
-    </div>
-
-    <!-- Section G: Alerts -->
-    <div id="alerts-section" class="hidden" style="margin-bottom:1.5rem">
-      <div class="alert-strip" id="alerts-strip"></div>
-    </div>
-
-    <!-- Drill-down slide panel -->
-    <div class="slide-panel-backdrop" id="drilldown-backdrop"></div>
-    <div class="slide-panel" id="drilldown-panel">
-      <div class="slide-panel-header">
-        <span id="drilldown-title" class="section-title"></span>
-        <button class="slide-panel-close" id="drilldown-close">×</button>
-      </div>
-      <div id="drilldown-content"></div>
+    <!-- 12 Budget Meter Widgets -->
+    <div class="section-title" style="margin-bottom:0.5rem">Budget Meters — Current Month</div>
+    <div class="meters-grid" id="meters-grid">
+      <div style="color:var(--text-secondary);font-size:0.9rem">Loading meters…</div>
     </div>
 
   </main>
+
+  <!-- Risk Simulator Modal -->
+  <div class="modal-backdrop" id="sim-backdrop">
+    <div class="modal-box">
+      <button class="modal-close" id="sim-close">&times;</button>
+      <div class="modal-title">Risk Simulator</div>
+      <div class="form-group">
+        <label>What if I spend an extra…</label>
+        <input type="number" id="sim-extra" placeholder="฿ per month" step="100" min="0">
+      </div>
+      <div class="form-group">
+        <label>On category</label>
+        <select id="sim-category"></select>
+      </div>
+      <div class="form-group">
+        <label>For how many months</label>
+        <input type="number" id="sim-months" placeholder="months" min="1" max="60" value="3">
+      </div>
+      <button class="btn btn-primary w-full" id="run-sim">Simulate</button>
+      <div class="sim-result" id="sim-result" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Solution Playroom Backdrop + Panel -->
+  <div class="playroom-backdrop" id="playroom-backdrop"></div>
+  <div class="playroom-panel" id="playroom-panel">
+    <button class="playroom-close" id="playroom-close">&times;</button>
+    <div class="playroom-title">Solution Playroom</div>
+    <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1rem">
+      Pre-built what-if scenarios based on your current data.
+    </p>
+    <div id="playroom-scenarios">
+      <div style="color:var(--text-secondary)">Loading scenarios…</div>
+    </div>
+  </div>
 
   <script src="/assets/js/auth.js" defer></script>
   <script src="/assets/js/dropzone.js" defer></script>
