@@ -89,11 +89,7 @@ function linkedField(name, tableId) {
     return {
       name,
       type: 'multipleRecordLinks',
-      options: {
-        linkedTableId: tableId,
-        prefersSingleRecordLink: true,
-        isReversed: false
-      }
+      options: { linkedTableId: tableId }
     };
   }
   return { name, type: 'singleLineText' };
