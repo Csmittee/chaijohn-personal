@@ -193,7 +193,7 @@
   initBtn.addEventListener('click', async () => {
     schemaLog.classList.remove('hidden');
     initBtn.disabled = true;
-    initBtn.textContent = 'Initializing…';
+    initBtn.textContent = 'Creating tables…';
 
     const log = (msg, cls = 'log-info') => {
       const d = document.createElement('div');
@@ -203,33 +203,41 @@
       schemaLog.scrollTop = schemaLog.scrollHeight;
     };
 
-    log('Starting Airtable schema initialization…');
     try {
-      const r = await fetch('/api/setup/schema', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      // Step 1: create tables (~10-15s)
+      log('Step 1/2 — Creating Airtable tables…');
+      const r1 = await fetch('/api/setup/schema?phase=tables', { method: 'POST' });
+      const d1 = await r1.json();
+      if (!r1.ok) {
+        log('Error: ' + (d1.error || 'Table creation failed'), 'log-err');
+        initBtn.disabled = false; initBtn.textContent = 'Retry';
+        return;
+      }
+      (d1.results || []).forEach(item => {
+        const ok = item.status === 'created' || item.status === 'already_exists';
+        log(`${ok ? '✓' : '✗'} ${item.table}: ${item.status}${item.error ? ' — ' + item.error : ''}`,
+          ok ? 'log-ok' : 'log-err');
       });
-      const data = await r.json();
 
-      if (data.results) {
-        data.results.forEach(item => {
-          const ok = item.status === 'created' || item.status === 'exists';
-          log(
-            `${ok ? '✓' : '⚠'} ${item.table}: ${item.status}`,
-            ok ? 'log-ok' : 'log-err'
-          );
-        });
+      // Step 2: seed data (~10-15s, separate request avoids timeout)
+      log('Step 2/2 — Seeding categories, liabilities, budgets…');
+      initBtn.textContent = 'Seeding data…';
+      const r2 = await fetch('/api/setup/schema?phase=seed', { method: 'POST' });
+      const d2 = await r2.json();
+      if (!r2.ok) {
+        log('Seed error: ' + (d2.error || 'Unknown'), 'log-err');
+        initBtn.disabled = false; initBtn.textContent = 'Retry seed';
+        return;
       }
+      log(`✓ Categories seeded: ${d2.categories?.seeded ?? 0}`, 'log-ok');
+      log(`${d2.liabilities?.status === 'ok' ? '✓' : '✗'} Liabilities: ${d2.liabilities?.count ?? 0}`,
+        d2.liabilities?.status === 'ok' ? 'log-ok' : 'log-err');
+      log(`${d2.budgets?.status === 'ok' ? '✓' : '✗'} Budgets: ${d2.budgets?.count ?? 0}`,
+        d2.budgets?.status === 'ok' ? 'log-ok' : 'log-err');
 
-      if (r.ok) {
-        log('Schema initialization complete!', 'log-ok');
-        document.getElementById('step-done').classList.remove('hidden');
-        initBtn.textContent = 'Done ✓';
-      } else {
-        log(`Error: ${data.error || 'Unknown error'}`, 'log-err');
-        initBtn.disabled = false;
-        initBtn.textContent = 'Retry';
-      }
+      log('All done! Schema initialized.', 'log-ok');
+      document.getElementById('step-done').classList.remove('hidden');
+      initBtn.textContent = 'Done ✓';
     } catch (e) {
       log('Error: ' + e.message, 'log-err');
       initBtn.disabled = false;

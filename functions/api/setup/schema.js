@@ -1,6 +1,7 @@
-import { createRecord, jsonResponse } from '../_airtable.js';
+import { jsonResponse } from '../_airtable.js';
 
 const META = 'https://api.airtable.com/v0/meta/bases';
+const AIRTABLE_BASE = 'https://api.airtable.com/v0';
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
 async function createTable(apiKey, baseId, def) {
@@ -13,12 +14,12 @@ async function createTable(apiKey, baseId, def) {
     const body = await res.json().catch(() => ({}));
     const msg = (body?.error?.message || body?.message || JSON.stringify(body)).toLowerCase();
     if (msg.includes('already exist') || msg.includes('duplicate') || res.status === 409) {
-      return { status: 'already_exists', table: def.name, id: null };
+      return { status: 'already_exists', table: def.name };
     }
-    return { status: 'error', table: def.name, error: JSON.stringify(body), id: null };
+    return { status: 'error', table: def.name, error: JSON.stringify(body) };
   }
   if (!res.ok) {
-    return { status: 'error', table: def.name, error: await res.text(), id: null };
+    return { status: 'error', table: def.name, error: await res.text() };
   }
   const data = await res.json();
   return { status: 'created', table: def.name, id: data.id };
@@ -33,187 +34,273 @@ async function getTableIds(apiKey, baseId) {
   return Object.fromEntries((data.tables || []).map(t => [t.name, t.id]));
 }
 
-// ── Table definitions ────────────────────────────────────────────────────────
+// Batch create up to 10 records per request — avoids per-record delays
+async function batchCreate(apiKey, baseId, tableName, recordsFields) {
+  const created = [];
+  for (let i = 0; i < recordsFields.length; i += 10) {
+    const chunk = recordsFields.slice(i, i + 10);
+    const res = await fetch(`${AIRTABLE_BASE}/${baseId}/${encodeURIComponent(tableName)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: chunk.map(fields => ({ fields })) })
+    });
+    if (!res.ok) throw new Error(`Batch create ${tableName} error ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    created.push(...data.records);
+    if (i + 10 < recordsFields.length) await delay(200);
+  }
+  return created;
+}
 
-const CATEGORIES_DEF = {
-  name: 'Categories',
-  fields: [
-    { name: 'name', type: 'singleLineText' },
-    { name: 'group', type: 'singleSelect', options: { choices: [
-      { name: 'Loan' }, { name: 'Family' }, { name: 'Basic Living' }, { name: 'Car' },
-      { name: 'Service' }, { name: 'Personal' }, { name: 'Basic IT' }, { name: 'Bus IT' },
-      { name: 'Business' }, { name: 'Per-earn' }, { name: 'Bus-earn' }, { name: 'Investment' }
-    ]}},
-    { name: 'type', type: 'singleSelect', options: { choices: [
-      { name: 'Earn' }, { name: 'Expense' }, { name: 'Loan' }, { name: 'Investment' }
-    ]}},
-    { name: 'expense_type', type: 'singleSelect', options: { choices: [
-      { name: 'FP-FV' }, { name: 'FP-VV' }, { name: 'VP-FV' }, { name: 'VP-VV' }, { name: 'Surprise' }
-    ]}},
-    { name: 'is_business', type: 'checkbox', options: { color: 'blueBright', icon: 'check' } },
-    { name: 'cash_flow', type: 'singleSelect', options: { choices: [
-      { name: 'Cash In' }, { name: 'Cash Out' }, { name: 'Cash In+Out' }
-    ]}},
-    { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } }
-  ]
-};
+function linkedField(name, tableId) {
+  if (tableId) {
+    return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, prefersSingleRecordLink: true } };
+  }
+  return { name, type: 'singleLineText' };
+}
 
-const LIABILITIES_DEF = {
-  name: 'Liabilities',
-  fields: [
-    { name: 'name', type: 'singleLineText' },
-    { name: 'creditor_type', type: 'singleSelect', options: { choices: [
-      { name: 'Bank' }, { name: 'Family' }, { name: 'Friend' }, { name: 'Other' }
-    ]}},
-    { name: 'loan_size', type: 'number', options: { precision: 0 } },
-    { name: 'interest_rate', type: 'number', options: { precision: 2 } },
-    { name: 'monthly_payment', type: 'number', options: { precision: 0 } },
-    { name: 'current_balance', type: 'number', options: { precision: 0 } },
-    { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
-    { name: 'notes', type: 'multilineText' }
-  ]
-};
+// ── Table definitions ─────────────────────────────────────────────────────────
+// IMPORTANT: The FIRST field in each table becomes Airtable's primary field.
+// Linked-record fields cannot be primary — always put a text/date field first.
 
-const ASSETS_DEF = {
-  name: 'Assets',
-  fields: [
-    { name: 'name', type: 'singleLineText' },
-    { name: 'category', type: 'singleSelect', options: { choices: [
-      { name: 'Property' }, { name: 'Vehicle' }, { name: 'Furniture' }, { name: 'Electronics' },
-      { name: 'Collection-Knife' }, { name: 'Collection-Vice' }, { name: 'Collection-Plant' },
-      { name: 'Collection-Doll' }, { name: 'Business' }, { name: 'Inventory' }, { name: 'Other' }
-    ]}},
-    { name: 'cost_price', type: 'number', options: { precision: 0 } },
-    { name: 'estimated_value', type: 'number', options: { precision: 0 } },
-    { name: 'date_acquired', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'status', type: 'singleSelect', options: { choices: [
-      { name: 'Holding' }, { name: 'For Sale' }, { name: 'Sold' }, { name: 'Invested' }
-    ]}},
-    { name: 'velocity', type: 'singleSelect', options: { choices: [
-      { name: 'Fast move' }, { name: 'Slow move' }, { name: 'Illiquid' }
-    ]}},
-    { name: 'notes', type: 'multilineText' },
-    { name: 'cloudinary_image_url', type: 'url' },
-    { name: 'sold_price', type: 'number', options: { precision: 0 } },
-    { name: 'sold_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'sold_via', type: 'singleLineText' }
-  ]
-};
+const PHASE1_TABLES = [
+  {
+    name: 'Categories',
+    fields: [
+      { name: 'name', type: 'singleLineText' },
+      { name: 'group', type: 'singleSelect', options: { choices: [
+        { name: 'Loan' }, { name: 'Family' }, { name: 'Basic Living' }, { name: 'Car' },
+        { name: 'Service' }, { name: 'Personal' }, { name: 'Basic IT' }, { name: 'Bus IT' },
+        { name: 'Business' }, { name: 'Per-earn' }, { name: 'Bus-earn' }, { name: 'Investment' }
+      ]}},
+      { name: 'type', type: 'singleSelect', options: { choices: [
+        { name: 'Earn' }, { name: 'Expense' }, { name: 'Loan' }, { name: 'Investment' }
+      ]}},
+      { name: 'expense_type', type: 'singleSelect', options: { choices: [
+        { name: 'FP-FV' }, { name: 'FP-VV' }, { name: 'VP-FV' }, { name: 'VP-VV' }, { name: 'Surprise' }
+      ]}},
+      { name: 'is_business', type: 'checkbox', options: { color: 'blueBright', icon: 'check' } },
+      { name: 'cash_flow', type: 'singleSelect', options: { choices: [
+        { name: 'Cash In' }, { name: 'Cash Out' }, { name: 'Cash In+Out' }
+      ]}},
+      { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } }
+    ]
+  },
+  {
+    name: 'Liabilities',
+    fields: [
+      { name: 'name', type: 'singleLineText' },
+      { name: 'creditor_type', type: 'singleSelect', options: { choices: [
+        { name: 'Bank' }, { name: 'Family' }, { name: 'Friend' }, { name: 'Other' }
+      ]}},
+      { name: 'loan_size', type: 'number', options: { precision: 0 } },
+      { name: 'interest_rate', type: 'number', options: { precision: 2 } },
+      { name: 'monthly_payment', type: 'number', options: { precision: 0 } },
+      { name: 'current_balance', type: 'number', options: { precision: 0 } },
+      { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
+      { name: 'notes', type: 'multilineText' }
+    ]
+  },
+  {
+    name: 'Assets',
+    fields: [
+      { name: 'name', type: 'singleLineText' },
+      { name: 'category', type: 'singleSelect', options: { choices: [
+        { name: 'Property' }, { name: 'Vehicle' }, { name: 'Furniture' }, { name: 'Electronics' },
+        { name: 'Collection-Knife' }, { name: 'Collection-Vice' }, { name: 'Collection-Plant' },
+        { name: 'Collection-Doll' }, { name: 'Business' }, { name: 'Inventory' }, { name: 'Other' }
+      ]}},
+      { name: 'cost_price', type: 'number', options: { precision: 0 } },
+      { name: 'estimated_value', type: 'number', options: { precision: 0 } },
+      { name: 'date_acquired', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'status', type: 'singleSelect', options: { choices: [
+        { name: 'Holding' }, { name: 'For Sale' }, { name: 'Sold' }, { name: 'Invested' }
+      ]}},
+      { name: 'velocity', type: 'singleSelect', options: { choices: [
+        { name: 'Fast move' }, { name: 'Slow move' }, { name: 'Illiquid' }
+      ]}},
+      { name: 'notes', type: 'multilineText' },
+      { name: 'cloudinary_image_url', type: 'url' },
+      { name: 'sold_price', type: 'number', options: { precision: 0 } },
+      { name: 'sold_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'sold_via', type: 'singleLineText' }
+    ]
+  },
+  {
+    name: 'Diary',
+    fields: [
+      { name: 'title', type: 'singleLineText' },
+      { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'content', type: 'multilineText' },
+      { name: 'entry_type', type: 'singleSelect', options: { choices: [
+        { name: 'Story' }, { name: 'Idea' }, { name: 'Blog' }, { name: 'Finance note' }
+      ]}},
+      { name: 'tags', type: 'singleLineText' },
+      { name: 'publish_to_web', type: 'checkbox', options: { color: 'blueBright', icon: 'check' } },
+      { name: 'published_url', type: 'url' },
+      { name: 'connected_concept', type: 'singleLineText' },
+      { name: 'cloudinary_image_url', type: 'url' }
+    ]
+  },
+  {
+    name: 'AI_Chats',
+    fields: [
+      { name: 'session_id', type: 'singleLineText' },
+      { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'topic', type: 'singleLineText' },
+      { name: 'messages_json', type: 'multilineText' },
+      { name: 'summary', type: 'multilineText' }
+    ]
+  },
+  {
+    name: 'Drop_Zone_Queue',
+    fields: [
+      { name: 'date_received', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'file_type', type: 'singleSelect', options: { choices: [
+        { name: 'Receipt' }, { name: 'Transfer slip' }, { name: 'Product photo' },
+        { name: 'Handwriting' }, { name: 'Quote image' }, { name: 'Other' }
+      ]}},
+      { name: 'cloudinary_url', type: 'url' },
+      { name: 'ai_extracted_text', type: 'multilineText' },
+      { name: 'ai_description', type: 'multilineText' },
+      { name: 'ai_suggested_type', type: 'singleSelect', options: { choices: [
+        { name: 'Transaction' }, { name: 'Asset' }, { name: 'Diary' }, { name: 'Quote' }, { name: 'Ignore' }
+      ]}},
+      { name: 'ai_prefilled_json', type: 'multilineText' },
+      { name: 'status', type: 'singleSelect', options: { choices: [
+        { name: 'Pending' }, { name: 'Approved' }, { name: 'Rejected' }
+      ]}},
+      { name: 'approved_record_id', type: 'singleLineText' }
+    ]
+  },
+  {
+    name: 'Quotes',
+    fields: [
+      { name: 'text', type: 'multilineText' },
+      { name: 'author', type: 'singleLineText' },
+      { name: 'source', type: 'singleLineText' },
+      { name: 'date_added', type: 'date', options: { dateFormat: { name: 'iso' } } },
+      { name: 'mood_tag', type: 'singleSelect', options: { choices: [
+        { name: 'Motivation' }, { name: 'Wisdom' }, { name: 'Funny' }, { name: 'Business' }, { name: 'Life' }
+      ]}},
+      { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
+      { name: 'cloudinary_image_url', type: 'url' }
+    ]
+  }
+];
 
-const DIARY_DEF = {
-  name: 'Diary',
-  fields: [
-    { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'title', type: 'singleLineText' },
-    { name: 'content', type: 'multilineText' },
-    { name: 'entry_type', type: 'singleSelect', options: { choices: [
-      { name: 'Story' }, { name: 'Idea' }, { name: 'Blog' }, { name: 'Finance note' }
-    ]}},
-    { name: 'tags', type: 'singleLineText' },
-    { name: 'publish_to_web', type: 'checkbox', options: { color: 'blueBright', icon: 'check' } },
-    { name: 'published_url', type: 'url' },
-    { name: 'connected_concept', type: 'singleLineText' },
-    { name: 'cloudinary_image_url', type: 'url' }
-  ]
-};
+function buildPhase3Tables(catTableId, liabTableId) {
+  return [
+    {
+      name: 'Transactions',
+      fields: [
+        { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+        // type must be singleSelect — NOT linked. Used to filter Income vs Expense.
+        { name: 'type', type: 'singleSelect', options: { choices: [
+          { name: 'Income' }, { name: 'Expense' }
+        ]}},
+        linkedField('category_id', catTableId),
+        { name: 'amount', type: 'number', options: { precision: 0 } },
+        { name: 'description', type: 'singleLineText' },
+        { name: 'entity', type: 'singleLineText' },
+        { name: 'note', type: 'singleLineText' },
+        { name: 'source', type: 'singleSelect', options: { choices: [
+          { name: 'Manual' }, { name: 'DropZone' }, { name: 'LiabilityPayment' }
+        ]}}
+      ]
+    },
+    {
+      // Utilities tracks electricity and water per month separately
+      name: 'Utilities',
+      fields: [
+        { name: 'month', type: 'date', options: { dateFormat: { name: 'iso' } } },
+        { name: 'electricity_units', type: 'number', options: { precision: 2 } },
+        { name: 'electricity_charge', type: 'number', options: { precision: 0 } },
+        { name: 'water_units', type: 'number', options: { precision: 2 } },
+        { name: 'water_charge', type: 'number', options: { precision: 0 } },
+        { name: 'notes', type: 'multilineText' }
+      ]
+    },
+    {
+      name: 'Budgets',
+      fields: [
+        // label is the primary field — linked fields cannot be primary
+        { name: 'label', type: 'singleLineText' },
+        linkedField('category_id', catTableId),
+        { name: 'amount', type: 'number', options: { precision: 0 } },
+        { name: 'period', type: 'singleSelect', options: { choices: [
+          { name: 'Monthly' }, { name: 'Annual' }, { name: '3x-year' }, { name: 'One-time' }, { name: 'Open-end' }
+        ]}},
+        { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+        { name: 'end_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+        { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
+        { name: 'notes', type: 'multilineText' }
+      ]
+    },
+    {
+      name: 'Liability_Payments',
+      fields: [
+        // date is the primary field — linked fields cannot be primary
+        { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
+        linkedField('liability_id', liabTableId),
+        { name: 'total_payment', type: 'number', options: { precision: 0 } },
+        { name: 'principal', type: 'number', options: { precision: 0 } },
+        { name: 'interest', type: 'number', options: { precision: 0 } },
+        { name: 'notes', type: 'singleLineText' }
+      ]
+    }
+  ];
+}
 
-const AI_CHATS_DEF = {
-  name: 'AI_Chats',
-  fields: [
-    { name: 'session_id', type: 'singleLineText' },
-    { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'topic', type: 'singleLineText' },
-    { name: 'messages_json', type: 'multilineText' },
-    { name: 'summary', type: 'multilineText' }
-  ]
-};
-
-const DROP_ZONE_DEF = {
-  name: 'Drop_Zone_Queue',
-  fields: [
-    { name: 'date_received', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'file_type', type: 'singleSelect', options: { choices: [
-      { name: 'Receipt' }, { name: 'Transfer slip' }, { name: 'Product photo' },
-      { name: 'Handwriting' }, { name: 'Quote image' }, { name: 'Other' }
-    ]}},
-    { name: 'cloudinary_url', type: 'url' },
-    { name: 'ai_extracted_text', type: 'multilineText' },
-    { name: 'ai_description', type: 'multilineText' },
-    { name: 'ai_suggested_type', type: 'singleSelect', options: { choices: [
-      { name: 'Transaction' }, { name: 'Asset' }, { name: 'Diary' }, { name: 'Quote' }, { name: 'Ignore' }
-    ]}},
-    { name: 'ai_prefilled_json', type: 'multilineText' },
-    { name: 'status', type: 'singleSelect', options: { choices: [
-      { name: 'Pending' }, { name: 'Approved' }, { name: 'Rejected' }
-    ]}},
-    { name: 'approved_record_id', type: 'singleLineText' }
-  ]
-};
-
-const QUOTES_DEF = {
-  name: 'Quotes',
-  fields: [
-    { name: 'text', type: 'multilineText' },
-    { name: 'author', type: 'singleLineText' },
-    { name: 'source', type: 'singleLineText' },
-    { name: 'date_added', type: 'date', options: { dateFormat: { name: 'iso' } } },
-    { name: 'mood_tag', type: 'singleSelect', options: { choices: [
-      { name: 'Motivation' }, { name: 'Wisdom' }, { name: 'Funny' }, { name: 'Business' }, { name: 'Life' }
-    ]}},
-    { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
-    { name: 'cloudinary_image_url', type: 'url' }
-  ]
-};
-
-// ── Seed data ───────────────────────────────────────────────────────────────
+// ── Seed data ──────────────────────────────────────────────────────────────────
 
 const CATEGORY_SEEDS = [
-  { name: 'Tisco', group: 'Loan', expense_type: 'FP-FV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Watch interest', group: 'Loan', expense_type: 'FP-FV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Thai credit', group: 'Loan', expense_type: 'FP-FV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Credit Kasikorn', group: 'Loan', expense_type: 'FP-FV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Credit KTC', group: 'Loan', expense_type: 'FP-FV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Friend and Family loan', group: 'Loan', expense_type: 'VP-VV', type: 'Loan', cash_flow: 'Cash In+Out', active: true },
-  { name: 'Kid school', group: 'Family', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Kid training', group: 'Family', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Wife salary', group: 'Family', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Kid salary', group: 'Family', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Travel activities', group: 'Family', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Coffee', group: 'Basic Living', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Food super', group: 'Basic Living', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Food restaurant', group: 'Basic Living', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Electricity', group: 'Basic Living', expense_type: 'FP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Home water', group: 'Basic Living', expense_type: 'FP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Fuel', group: 'Basic Living', expense_type: 'FP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Drinking water', group: 'Basic Living', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'AIS net', group: 'Basic IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'My AIS', group: 'Basic IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Netflix/Disney', group: 'Basic IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Youtube music', group: 'Basic IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'iCloud', group: 'Basic IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Car insurance', group: 'Car', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Battery replacement', group: 'Car', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Car services', group: 'Car', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Tires', group: 'Car', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Maid', group: 'Service', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Gym', group: 'Personal', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Cigarette', group: 'Personal', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Medicine', group: 'Personal', expense_type: 'Surprise', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Personal need', group: 'Personal', expense_type: 'VP-VV', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Unplanned buy', group: 'Personal', expense_type: 'Surprise', type: 'Expense', cash_flow: 'Cash Out', active: true },
-  { name: 'Flow account', group: 'Bus IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', is_business: true, active: true },
-  { name: 'Cloudflare', group: 'Bus IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', is_business: true, active: true },
-  { name: 'Canva', group: 'Bus IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', is_business: true, active: true },
-  { name: 'Anthropic', group: 'Bus IT', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', is_business: true, active: true },
-  { name: 'Accountant', group: 'Business', expense_type: 'FP-FV', type: 'Expense', cash_flow: 'Cash Out', is_business: true, active: true },
-  { name: 'Project investment', group: 'Investment', expense_type: 'VP-VV', type: 'Investment', cash_flow: 'Cash Out', active: true },
-  { name: 'Old stocks sale', group: 'Per-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', active: true },
-  { name: 'Collection sale', group: 'Per-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', active: true },
-  { name: 'Stock earn', group: 'Per-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', active: true },
-  { name: 'Pilates I-Flex', group: 'Bus-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', is_business: true, active: true },
-  { name: 'Satu Sale', group: 'Bus-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', is_business: true, active: true },
-  { name: 'Ploikong sale', group: 'Bus-earn', expense_type: 'VP-VV', type: 'Earn', cash_flow: 'Cash In', is_business: true, active: true }
+  { name: 'Tisco', group: 'Loan', type: 'Loan', expense_type: 'FP-FV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Watch interest', group: 'Loan', type: 'Loan', expense_type: 'FP-FV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Thai credit', group: 'Loan', type: 'Loan', expense_type: 'FP-FV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Credit Kasikorn', group: 'Loan', type: 'Loan', expense_type: 'FP-FV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Credit KTC', group: 'Loan', type: 'Loan', expense_type: 'FP-FV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Friend and Family loan', group: 'Loan', type: 'Loan', expense_type: 'VP-VV', cash_flow: 'Cash In+Out', active: true },
+  { name: 'Kid school', group: 'Family', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Kid training', group: 'Family', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Wife salary', group: 'Family', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Kid salary', group: 'Family', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Travel activities', group: 'Family', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Coffee', group: 'Basic Living', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Food super', group: 'Basic Living', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Food restaurant', group: 'Basic Living', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Electricity', group: 'Basic Living', type: 'Expense', expense_type: 'FP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Home water', group: 'Basic Living', type: 'Expense', expense_type: 'FP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Fuel', group: 'Basic Living', type: 'Expense', expense_type: 'FP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Drinking water', group: 'Basic Living', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'AIS net', group: 'Basic IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'My AIS', group: 'Basic IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Netflix/Disney', group: 'Basic IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Youtube music', group: 'Basic IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'iCloud', group: 'Basic IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Car insurance', group: 'Car', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Battery replacement', group: 'Car', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Car services', group: 'Car', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Tires', group: 'Car', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Maid', group: 'Service', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Gym', group: 'Personal', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', active: true },
+  { name: 'Cigarette', group: 'Personal', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Medicine', group: 'Personal', type: 'Expense', expense_type: 'Surprise', cash_flow: 'Cash Out', active: true },
+  { name: 'Personal need', group: 'Personal', type: 'Expense', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Unplanned buy', group: 'Personal', type: 'Expense', expense_type: 'Surprise', cash_flow: 'Cash Out', active: true },
+  { name: 'Flow account', group: 'Bus IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', is_business: true, active: true },
+  { name: 'Cloudflare', group: 'Bus IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', is_business: true, active: true },
+  { name: 'Canva', group: 'Bus IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', is_business: true, active: true },
+  { name: 'Anthropic', group: 'Bus IT', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', is_business: true, active: true },
+  { name: 'Accountant', group: 'Business', type: 'Expense', expense_type: 'FP-FV', cash_flow: 'Cash Out', is_business: true, active: true },
+  { name: 'Project investment', group: 'Investment', type: 'Investment', expense_type: 'VP-VV', cash_flow: 'Cash Out', active: true },
+  { name: 'Old stocks sale', group: 'Per-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', active: true },
+  { name: 'Collection sale', group: 'Per-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', active: true },
+  { name: 'Stock earn', group: 'Per-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', active: true },
+  { name: 'Pilates I-Flex', group: 'Bus-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', is_business: true, active: true },
+  { name: 'Satu Sale', group: 'Bus-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', is_business: true, active: true },
+  { name: 'Ploikong sale', group: 'Bus-earn', type: 'Earn', expense_type: 'VP-VV', cash_flow: 'Cash In', is_business: true, active: true }
 ];
 
 const LIABILITY_SEEDS = [
@@ -225,7 +312,7 @@ const LIABILITY_SEEDS = [
   { name: 'Friend and Family', creditor_type: 'Family', loan_size: 200000, interest_rate: 0, monthly_payment: 0, current_balance: 200000, active: true }
 ];
 
-// catName → actual Categories.name (for cases where budget seed name differs from category name)
+// catName → actual Categories.name where they differ
 const BUDGET_CAT_MAP = {
   'Travel': 'Travel activities',
   'Unplanned': 'Unplanned buy'
@@ -265,139 +352,100 @@ const BUDGET_SEEDS = [
   { catName: 'Accountant', amount: 12500, period: 'Annual' }
 ];
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+// ── Main handler ──────────────────────────────────────────────────────────────
+// phase=tables  → create all 11 tables (~10-15s, safe)
+// phase=seed    → seed categories, liabilities, budgets (~10-15s, safe)
+// (no phase)    → defaults to tables — setup.html calls both separately
 
 export async function onRequestPost(context) {
-  const { env } = context;
+  const { env, request } = context;
+  const url = new URL(request.url);
+  const phase = url.searchParams.get('phase') || 'tables';
+
   const BASE_ID = env.AIRTABLE_BASE_ID || 'apphBGWfSPL45oSFd';
   const apiKey = env.AIRTABLE_API_KEY;
-  if (!apiKey) return new Response(JSON.stringify({ error: 'AIRTABLE_API_KEY not set' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'AIRTABLE_API_KEY not set' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 
-  const results = [];
+  /* ── PHASE: tables ────────────────────────────────────────────────────────── */
+  if (phase === 'tables') {
+    const results = [];
 
-  // ── Phase 1: tables with no linked fields ─────────────────────────────────
-  for (const def of [CATEGORIES_DEF, LIABILITIES_DEF, ASSETS_DEF, DIARY_DEF, AI_CHATS_DEF, DROP_ZONE_DEF, QUOTES_DEF]) {
-    results.push(await createTable(apiKey, BASE_ID, def));
+    // Phase 1: tables with no linked fields
+    for (const def of PHASE1_TABLES) {
+      results.push(await createTable(apiKey, BASE_ID, def));
+      await delay(250);
+    }
+
+    // Phase 2: fetch actual table IDs for linked fields
     await delay(300);
-  }
+    const tableIds = await getTableIds(apiKey, BASE_ID);
+    const catTableId = tableIds['Categories'];
+    const liabTableId = tableIds['Liabilities'];
 
-  // ── Phase 2: fetch table IDs so linked fields can be wired ───────────────
-  await delay(300);
-  const tableIds = await getTableIds(apiKey, BASE_ID);
-  const catTableId = tableIds['Categories'];
-  const liabTableId = tableIds['Liabilities'];
-
-  function linkedField(name, tableId) {
-    if (tableId) {
-      return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, prefersSingleRecordLink: true } };
+    // Phase 3: tables with linked fields
+    for (const def of buildPhase3Tables(catTableId, liabTableId)) {
+      results.push(await createTable(apiKey, BASE_ID, def));
+      await delay(250);
     }
-    // Fallback to text if table creation failed
-    return { name, type: 'singleLineText' };
+
+    return jsonResponse({ phase: 'tables', results });
   }
 
-  // ── Phase 3: tables with linked fields ───────────────────────────────────
-  results.push(await createTable(apiKey, BASE_ID, {
-    name: 'Transactions',
-    fields: [
-      { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-      linkedField('category_id', catTableId),
-      { name: 'amount', type: 'number', options: { precision: 0 } },
-      { name: 'description', type: 'singleLineText' },
-      { name: 'entity', type: 'singleLineText' },
-      { name: 'note', type: 'singleLineText' },
-      { name: 'source', type: 'singleSelect', options: { choices: [{ name: 'Manual' }, { name: 'DropZone' }] } }
-    ]
-  }));
-  await delay(300);
-
-  results.push(await createTable(apiKey, BASE_ID, {
-    name: 'Utilities',
-    fields: [
-      { name: 'month', type: 'date', options: { dateFormat: { name: 'iso' } } },
-      linkedField('category_id', catTableId),
-      { name: 'units', type: 'number', options: { precision: 2 } },
-      { name: 'unit_rate', type: 'formula', options: { formula: 'IF({units}, {charge}/{units}, 0)' } },
-      { name: 'charge', type: 'number', options: { precision: 0 } },
-      { name: 'notes', type: 'multilineText' }
-    ]
-  }));
-  await delay(300);
-
-  results.push(await createTable(apiKey, BASE_ID, {
-    name: 'Budgets',
-    fields: [
-      linkedField('category_id', catTableId),
-      { name: 'amount', type: 'number', options: { precision: 0 } },
-      { name: 'period', type: 'singleSelect', options: { choices: [
-        { name: 'Monthly' }, { name: 'Annual' }, { name: '3x-year' }, { name: 'One-time' }, { name: 'Open-end' }
-      ]}},
-      { name: 'start_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-      { name: 'end_date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-      { name: 'active', type: 'checkbox', options: { color: 'greenBright', icon: 'check' } },
-      { name: 'notes', type: 'multilineText' }
-    ]
-  }));
-  await delay(300);
-
-  results.push(await createTable(apiKey, BASE_ID, {
-    name: 'Liability_Payments',
-    fields: [
-      linkedField('liability_id', liabTableId),
-      { name: 'date', type: 'date', options: { dateFormat: { name: 'iso' } } },
-      { name: 'total_paid', type: 'number', options: { precision: 0 } },
-      { name: 'interest_portion', type: 'number', options: { precision: 0 } },
-      { name: 'principal_portion', type: 'number', options: { precision: 0 } },
-      { name: 'note', type: 'singleLineText' }
-    ]
-  }));
-  await delay(300);
-
-  // ── Phase 4: seed Categories ──────────────────────────────────────────────
-  const catSeeds = [];
-  const catIdByName = {};
-  for (const cat of CATEGORY_SEEDS) {
+  /* ── PHASE: seed ──────────────────────────────────────────────────────────── */
+  if (phase === 'seed') {
+    // Seed Categories in batches of 10
+    let catRecords = [];
     try {
-      const rec = await createRecord(apiKey, BASE_ID, 'Categories', cat);
-      catIdByName[cat.name] = rec.id;
-      catSeeds.push({ name: cat.name, status: 'seeded' });
+      catRecords = await batchCreate(apiKey, BASE_ID, 'Categories', CATEGORY_SEEDS);
     } catch (e) {
-      catSeeds.push({ name: cat.name, status: 'error', error: e.message });
+      return jsonResponse({ phase: 'seed', error: 'Categories seed failed: ' + e.message }, 500);
     }
-    await delay(250);
-  }
+    const catIdByName = {};
+    catRecords.forEach(r => { catIdByName[r.fields.name] = r.id; });
 
-  // ── Phase 5: seed Liabilities ─────────────────────────────────────────────
-  const liabSeeds = [];
-  for (const liab of LIABILITY_SEEDS) {
+    // Seed Liabilities in one batch
+    let liabSeeds = { status: 'ok', count: 0 };
     try {
-      const rec = await createRecord(apiKey, BASE_ID, 'Liabilities', liab);
-      liabSeeds.push({ name: liab.name, status: 'seeded', id: rec.id });
+      const recs = await batchCreate(apiKey, BASE_ID, 'Liabilities', LIABILITY_SEEDS);
+      liabSeeds = { status: 'ok', count: recs.length };
     } catch (e) {
-      liabSeeds.push({ name: liab.name, status: 'error', error: e.message });
+      liabSeeds = { status: 'error', error: e.message };
     }
-    await delay(250);
-  }
 
-  // ── Phase 6: seed Budgets (requires category IDs) ─────────────────────────
-  const today = new Date().toISOString().split('T')[0];
-  const budgetSeeds = [];
-  for (const b of BUDGET_SEEDS) {
-    const actualName = BUDGET_CAT_MAP[b.catName] || b.catName;
-    const catId = catIdByName[actualName];
-    const fields = { amount: b.amount, period: b.period, start_date: today, active: true };
-    if (catId) fields.category_id = [catId];
+    // Seed Budgets in batches — requires category IDs from above
+    const today = new Date().toISOString().split('T')[0];
+    const budgetFields = BUDGET_SEEDS.map(b => {
+      const actualName = BUDGET_CAT_MAP[b.catName] || b.catName;
+      const catId = catIdByName[actualName];
+      const fields = {
+        label: actualName,
+        amount: b.amount,
+        period: b.period,
+        start_date: today,
+        active: true
+      };
+      if (catId) fields.category_id = [catId];
+      return fields;
+    });
+
+    let budgetSeeds = { status: 'ok', count: 0 };
     try {
-      await createRecord(apiKey, BASE_ID, 'Budgets', fields);
-      budgetSeeds.push({ catName: b.catName, status: 'seeded', linked: !!catId });
+      const recs = await batchCreate(apiKey, BASE_ID, 'Budgets', budgetFields);
+      budgetSeeds = { status: 'ok', count: recs.length };
     } catch (e) {
-      budgetSeeds.push({ catName: b.catName, status: 'error', error: e.message });
+      budgetSeeds = { status: 'error', error: e.message };
     }
-    await delay(250);
+
+    return jsonResponse({
+      phase: 'seed',
+      categories: { seeded: catRecords.length },
+      liabilities: liabSeeds,
+      budgets: budgetSeeds
+    });
   }
 
-  return jsonResponse({
-    success: true,
-    tables: results,
-    seeds: { categories: catSeeds, liabilities: liabSeeds, budgets: budgetSeeds }
-  });
+  return jsonResponse({ error: `Unknown phase: ${phase}. Use ?phase=tables or ?phase=seed` }, 400);
 }
