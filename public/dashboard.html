@@ -11,8 +11,8 @@
     .alert-chip { display:inline-flex; align-items:center; gap:0.35rem; padding:0.25rem 0.65rem;
       border-radius:999px; font-size:0.78rem; font-weight:600; }
     .alert-chip.danger { background:#fee2e2; color:#991b1b; }
-    .alert-chip.warn { background:#fef3c7; color:#92400e; }
-    .alert-chip.info { background:#dbeafe; color:#1e40af; }
+    .alert-chip.warn   { background:#fef3c7; color:#92400e; }
+    .alert-chip.info   { background:#dbeafe; color:#1e40af; }
 
     .charts-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1rem; }
     @media(max-width:900px){ .charts-row { grid-template-columns:1fr; } }
@@ -22,52 +22,60 @@
     .meter-card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
       padding:0.75rem 1rem; }
     .meter-label { font-size:0.78rem; color:var(--text-secondary); margin-bottom:0.15rem; }
-    .meter-name { font-size:0.92rem; font-weight:600; margin-bottom:0.4rem; }
+    .meter-name  { font-size:0.92rem; font-weight:600; margin-bottom:0.4rem; }
     .meter-bar-bg { height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
     .meter-bar-fill { height:100%; border-radius:4px; transition:width 0.5s; }
-    .meter-bar-fill.ok { background:#22c55e; }
+    .meter-bar-fill.ok   { background:#22c55e; }
     .meter-bar-fill.warn { background:#f59e0b; }
     .meter-bar-fill.over { background:#ef4444; }
     .meter-nums { display:flex; justify-content:space-between; font-size:0.75rem;
       color:var(--text-secondary); margin-top:0.3rem; }
 
     .bottom-actions { display:flex; gap:0.75rem; margin-bottom:1.5rem; flex-wrap:wrap; }
-    .btn-sim { background:#7c3aed; color:#fff; }
-    .btn-sim:hover { background:#6d28d9; }
+    .btn-sim  { background:#7c3aed; color:#fff; }
+    .btn-sim:hover  { background:#6d28d9; }
     .btn-play { background:#0891b2; color:#fff; }
     .btn-play:hover { background:#0e7490; }
 
-    /* Risk Simulator modal */
+    /* Modal */
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5);
       z-index:500; display:none; align-items:center; justify-content:center; }
     .modal-backdrop.open { display:flex; }
     .modal-box { background:var(--surface); border-radius:12px; padding:1.5rem;
-      width:min(480px,92vw); max-height:90vh; overflow-y:auto; }
+      width:min(520px,94vw); max-height:90vh; overflow-y:auto; }
     .modal-title { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
     .modal-close { float:right; background:none; border:none; font-size:1.4rem;
       cursor:pointer; color:var(--text-secondary); }
-    .sim-result { margin-top:1rem; padding:1rem; background:var(--bg);
-      border-radius:8px; font-size:0.9rem; }
-    .sim-result .big { font-size:1.4rem; font-weight:700; }
+    .sim-result { margin-top:0.75rem; padding:1rem; background:var(--bg-page,#f8fafc);
+      border-radius:8px; font-size:0.88rem; line-height:1.6; }
+    .sim-result .big { font-size:1.3rem; font-weight:700; }
+    .sim-section-label { font-size:0.82rem; font-weight:600; color:var(--text-secondary);
+      margin:1rem 0 0.5rem; padding-top:0.75rem; border-top:1px solid var(--border); }
+    .commit-row { display:flex; justify-content:space-between; font-size:0.82rem;
+      padding:0.2rem 0; }
+    .commit-row.paid { color:var(--text-secondary); text-decoration:line-through; }
+    .commit-row.due  { color:#ef4444; font-weight:600; }
 
-    /* Solution Playroom panel */
+    /* Playroom */
     .playroom-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.4);
       z-index:400; display:none; }
     .playroom-backdrop.open { display:block; }
-    .playroom-panel { position:fixed; right:0; top:0; bottom:0; width:min(440px,95vw);
+    .playroom-panel { position:fixed; right:0; top:0; bottom:0; width:min(460px,96vw);
       background:var(--surface); border-left:1px solid var(--border); z-index:401;
       transform:translateX(100%); transition:transform 0.3s ease; overflow-y:auto; padding:1.5rem; }
     .playroom-panel.open { transform:translateX(0); }
-    .playroom-title { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
+    .playroom-title { font-size:1.1rem; font-weight:700; margin-bottom:0.75rem; }
     .playroom-close { float:right; background:none; border:none; font-size:1.4rem;
       cursor:pointer; color:var(--text-secondary); }
-    .scenario-card { border:1px solid var(--border); border-radius:8px; padding:0.75rem;
-      margin-bottom:0.75rem; cursor:pointer; transition:border-color 0.2s; }
-    .scenario-card:hover { border-color:var(--primary); }
-    .scenario-card h4 { font-size:0.9rem; font-weight:600; margin:0 0 0.25rem; }
-    .scenario-card p { font-size:0.8rem; color:var(--text-secondary); margin:0; }
-    .scenario-result { margin-top:0.5rem; font-size:0.85rem; font-weight:600;
-      color:var(--primary); display:none; }
+    .playroom-impact { padding:0.6rem 0.75rem; border-radius:6px; font-size:0.9rem;
+      font-weight:600; margin-bottom:0.75rem; }
+    .playroom-impact.saving { background:#dcfce7; color:#166534; }
+    .playroom-impact.over   { background:#fee2e2; color:#991b1b; }
+    .playroom-impact.neutral { background:var(--bg-page,#f8fafc); color:var(--text-secondary); }
+
+    /* T2 drill */
+    .t2-back { background:none; border:none; cursor:pointer; color:var(--color-primary,#3b82f6);
+      font-size:0.8rem; padding:0; margin-bottom:0.25rem; }
   </style>
 </head>
 <body>
@@ -88,7 +96,7 @@
     <!-- Alert strip -->
     <div id="alert-strip" class="alert-strip" style="min-height:0"></div>
 
-    <!-- Period filter bar -->
+    <!-- Period filter -->
     <div class="filter-bar" style="margin-bottom:1rem">
       <div class="period-toggle">
         <button class="period-btn active" data-range="1m">This Month</button>
@@ -98,32 +106,33 @@
       </div>
     </div>
 
-    <!-- T1 / T2 / T3 Charts row -->
+    <!-- Charts row -->
     <div class="charts-row">
 
-      <!-- T1: Income vs Expense trend -->
+      <!-- T1: Cash Flow -->
       <div class="card" style="padding:1rem">
-        <div class="section-title" style="margin-bottom:0.5rem">T1 — Cash Flow</div>
-        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
+        <div class="section-title" style="margin-bottom:0.25rem">T1 — Cash Flow</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem" id="t1-subtitle">
           Income vs Expense by month
         </div>
         <div style="height:180px"><canvas id="t1-chart"></canvas></div>
       </div>
 
-      <!-- T2: Expense pareto by category -->
+      <!-- T2: Expense Pareto -->
       <div class="card" style="padding:1rem">
-        <div class="section-title" style="margin-bottom:0.5rem">T2 — Expense Pareto</div>
-        <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
-          Top categories this period
+        <div class="section-title" style="margin-bottom:0.25rem">T2 — Expense Pareto</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+          <button class="t2-back hidden" id="t2-back-btn">← All groups</button>
+          <span style="font-size:0.75rem;color:var(--text-secondary)" id="t2-subtitle">By group</span>
         </div>
         <div style="height:180px"><canvas id="t2-chart"></canvas></div>
       </div>
 
-      <!-- T3: Liability snapshot -->
+      <!-- T3: Liabilities -->
       <div class="card" style="padding:1rem">
-        <div class="section-title" style="margin-bottom:0.5rem">T3 — Liabilities</div>
+        <div class="section-title" style="margin-bottom:0.25rem">T3 — Liabilities</div>
         <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem">
-          Current balance per loan
+          Balance by loan (largest first)
         </div>
         <div style="height:180px"><canvas id="t3-chart"></canvas></div>
         <div id="t3-total" style="text-align:right;font-size:0.8rem;color:var(--text-secondary);margin-top:0.4rem"></div>
@@ -136,7 +145,7 @@
       <button class="btn btn-play" id="open-playroom">Solution Playroom</button>
     </div>
 
-    <!-- 12 Budget Meter Widgets -->
+    <!-- Budget Meters -->
     <div class="section-title" style="margin-bottom:0.5rem">Budget Meters — Current Month</div>
     <div class="meters-grid" id="meters-grid">
       <div style="color:var(--text-secondary);font-size:0.9rem">Loading meters…</div>
@@ -144,38 +153,79 @@
 
   </main>
 
-  <!-- Risk Simulator Modal -->
+  <!-- ── Risk Simulator Modal ── -->
   <div class="modal-backdrop" id="sim-backdrop">
     <div class="modal-box">
       <button class="modal-close" id="sim-close">&times;</button>
-      <div class="modal-title">Risk Simulator</div>
-      <div class="form-group">
-        <label>What if I spend an extra…</label>
-        <input type="number" id="sim-extra" placeholder="฿ per month" step="100" min="0">
+      <div class="modal-title">📊 Cash Position Simulator</div>
+
+      <!-- Primary: Cash position -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Bank balance (฿)</label>
+          <input type="number" id="sim-bank" placeholder="0" step="1000" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>Cash in hand (฿)</label>
+          <input type="number" id="sim-cash" placeholder="0" step="100" inputmode="numeric">
+        </div>
       </div>
-      <div class="form-group">
-        <label>On category</label>
-        <select id="sim-category"></select>
-      </div>
-      <div class="form-group">
-        <label>For how many months</label>
-        <input type="number" id="sim-months" placeholder="months" min="1" max="60" value="3">
-      </div>
-      <button class="btn btn-primary w-full" id="run-sim">Simulate</button>
+      <button class="btn btn-primary w-full" id="run-sim">Simulate Month-End Position</button>
       <div class="sim-result" id="sim-result" style="display:none"></div>
+
+      <!-- Secondary: What-if -->
+      <div class="sim-section-label">What if I spend extra?</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Extra spend / month (฿)</label>
+          <input type="number" id="sim-extra" placeholder="0" step="100" min="0">
+        </div>
+        <div class="form-group">
+          <label>For how many months</label>
+          <input type="number" id="sim-months" value="3" min="1" max="60">
+        </div>
+      </div>
+      <button class="btn btn-outline w-full" id="run-extra-sim">Calculate Impact</button>
+      <div class="sim-result" id="sim-extra-result" style="display:none"></div>
     </div>
   </div>
 
-  <!-- Solution Playroom Backdrop + Panel -->
+  <!-- ── Solution Playroom Panel ── -->
   <div class="playroom-backdrop" id="playroom-backdrop"></div>
   <div class="playroom-panel" id="playroom-panel">
     <button class="playroom-close" id="playroom-close">&times;</button>
     <div class="playroom-title">Solution Playroom</div>
     <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1rem">
-      Pre-built what-if scenarios based on your current data.
+      Pick a category to explore its budget vs actual spend.
     </p>
-    <div id="playroom-scenarios">
-      <div style="color:var(--text-secondary)">Loading scenarios…</div>
+
+    <div class="form-group" style="margin-bottom:1rem">
+      <label for="playroom-cat-select">Category</label>
+      <select id="playroom-cat-select">
+        <option value="">— Select a category —</option>
+      </select>
+    </div>
+
+    <div id="playroom-content" style="display:none">
+      <div style="height:160px;margin-bottom:1rem">
+        <canvas id="playroom-chart"></canvas>
+      </div>
+
+      <div class="form-row" style="margin-bottom:0.5rem">
+        <div class="form-group">
+          <label>Current budget (฿)</label>
+          <input type="number" id="playroom-budget" step="100" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>Projected spend (฿)</label>
+          <input type="number" id="playroom-projected" step="100" inputmode="numeric" placeholder="What if…">
+        </div>
+      </div>
+
+      <div id="playroom-impact" class="playroom-impact neutral" style="display:none"></div>
+
+      <button class="btn btn-primary w-full" id="playroom-save">Save Budget</button>
+      <div id="playroom-msg" style="display:none;font-size:0.82rem;margin-top:0.5rem;text-align:center"></div>
     </div>
   </div>
 

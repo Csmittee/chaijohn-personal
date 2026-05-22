@@ -26,8 +26,8 @@ export async function onRequestPost(context) {
   switch (suggested_type) {
     case 'Transaction':
       targetTable = 'Transactions';
+      if (!recordFields.date) recordFields.date = today;
       recordFields.source = recordFields.source || 'DropZone';
-      // Ensure amount is a number
       if (recordFields.amount !== undefined) {
         recordFields.amount = Number(recordFields.amount);
       }
@@ -65,6 +65,7 @@ export async function onRequestPost(context) {
   try {
     newRecord = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, targetTable, recordFields);
   } catch (err) {
+    console.error(`DropZone approve failed — table:${targetTable} fields:${JSON.stringify(recordFields)} err:${err.message}`);
     return errorResponse(`Failed to create ${suggested_type} record: ${err.message}`, 500);
   }
 
