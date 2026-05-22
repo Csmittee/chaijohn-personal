@@ -28,11 +28,12 @@
         <div style="padding:0.75rem;border-bottom:1px solid var(--border)">
           <input type="search" id="diary-search" placeholder="Search entries..." class="w-full" style="margin-bottom:0.5rem">
           <div class="flex" style="gap:0.4rem;flex-wrap:wrap" id="type-filters">
-            <button class="badge badge-primary active-filter" data-type="">All</button>
+            <button class="badge badge-primary" data-type="">All</button>
             <button class="badge badge-gray" data-type="Story">Story</button>
             <button class="badge badge-gray" data-type="Idea">Idea</button>
             <button class="badge badge-gray" data-type="Blog">Blog</button>
-            <button class="badge badge-gray" data-type="Finance note">Finance note</button>
+            <button class="badge badge-gray" data-type="Project">Project</button>
+            <button class="badge badge-gray" data-type="Skill">Skill</button>
           </div>
         </div>
         <div id="diary-entry-list"></div>
@@ -46,7 +47,8 @@
           <div class="flex items-center justify-between" style="margin-bottom:1rem">
             <button class="btn btn-primary btn-sm" id="new-entry-btn">+ New Entry</button>
             <div class="flex gap-1">
-              <button class="btn btn-sm btn-outline" id="preview-toggle">Preview</button>
+              <button class="btn btn-sm btn-primary" id="edit-mode-btn">Edit</button>
+              <button class="btn btn-sm btn-outline" id="preview-mode-btn">Preview</button>
               <button class="btn btn-sm btn-danger hidden" id="delete-entry-btn">Delete</button>
               <button class="btn btn-sm btn-primary" id="save-entry-btn">Save</button>
             </div>
@@ -67,7 +69,8 @@
                   <option value="Story">Story</option>
                   <option value="Idea">Idea</option>
                   <option value="Blog">Blog</option>
-                  <option value="Finance note">Finance note</option>
+                  <option value="Project">Project</option>
+                  <option value="Skill">Skill</option>
                 </select>
               </div>
             </div>
@@ -80,10 +83,9 @@
             <div class="form-group">
               <label for="entry-content">Content</label>
               <textarea id="entry-content" rows="12" placeholder="Write here... (Markdown supported)"></textarea>
+              <!-- Preview panel (shown in Preview mode) -->
+              <div id="entry-preview" class="card" style="display:none;min-height:200px;margin-top:0.5rem;white-space:pre-wrap;font-size:0.9rem;line-height:1.7"></div>
             </div>
-
-            <!-- Preview panel -->
-            <div id="entry-preview" class="hidden card" style="min-height:200px;margin-bottom:1rem;white-space:pre-wrap;font-size:0.9rem;line-height:1.7"></div>
 
             <div class="form-row">
               <div class="form-group">
@@ -92,18 +94,19 @@
               </div>
               <div class="form-group">
                 <label for="entry-concept">Connected Concept</label>
-                <input type="text" id="entry-concept" placeholder="Obsidian link or keyword">
+                <input type="text" id="entry-concept" list="concept-datalist" placeholder="Obsidian link or keyword">
+                <datalist id="concept-datalist"></datalist>
               </div>
             </div>
 
             <!-- Image from dropzone -->
-            <div id="entry-image-wrap" class="hidden form-group">
+            <div id="entry-image-wrap" class="form-group" style="display:none">
               <label>Image (from Drop Zone)</label>
               <img id="entry-image" src="" alt="" style="max-width:100%;border-radius:var(--radius);margin-top:0.3rem">
             </div>
 
             <!-- Blog publish section (shown when type=Blog) -->
-            <div id="blog-publish-section" class="hidden" style="padding:0.75rem;background:rgba(59,130,246,0.05);border-radius:var(--radius);margin-bottom:1rem;border:1px solid rgba(59,130,246,0.2)">
+            <div id="blog-publish-section" style="display:none;padding:0.75rem;background:rgba(59,130,246,0.05);border-radius:var(--radius);margin-bottom:1rem;border:1px solid rgba(59,130,246,0.2)">
               <label class="flex items-center gap-1" style="cursor:pointer">
                 <input type="checkbox" id="publish-toggle" style="width:auto">
                 <span style="font-weight:500">Publish to web</span>
@@ -126,18 +129,22 @@
   </main>
 
   <!-- AI Assist Modal -->
-  <div class="modal-backdrop hidden" id="ai-assist-modal">
+  <div class="modal-backdrop" id="ai-assist-modal">
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title">AI Writing Assistant</span>
         <button class="btn btn-sm btn-outline" id="ai-modal-close">×</button>
       </div>
+      <p style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.75rem">
+        Note: AI calls use Anthropic credits. Ensure your balance is topped up if responses fail.
+      </p>
       <div class="flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem">
         <button class="btn btn-sm btn-outline ai-assist-type" data-assist="refine">Refine writing</button>
         <button class="btn btn-sm btn-outline ai-assist-type" data-assist="expand">Expand idea</button>
         <button class="btn btn-sm btn-outline ai-assist-type" data-assist="summarize">Summarize</button>
         <button class="btn btn-sm btn-outline ai-assist-type" data-assist="tags">Suggest tags</button>
       </div>
+      <div id="ai-loading" style="display:none;text-align:center;padding:0.5rem;color:var(--text-secondary)">⏳ AI is thinking…</div>
       <div id="ai-assist-output" style="min-height:100px;padding:0.75rem;background:var(--bg-page);border-radius:var(--radius);font-size:0.9rem;margin-bottom:1rem;white-space:pre-wrap;line-height:1.6"></div>
       <div class="flex justify-between">
         <button class="btn btn-sm btn-outline" id="ai-modal-close2">Cancel</button>

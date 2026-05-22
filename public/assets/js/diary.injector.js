@@ -1,9 +1,6 @@
-/**
- * diary.injector.js — Diary and blog editor page logic.
- * Handles entry list, editor, AI assist, search, and type filters.
- */
+/* diary.injector.js — Diary and blog editor page logic */
 
-/* ─── Utility helpers ─── */
+/* ─── Utility ─── */
 function todayIso() {
   return new Date().toISOString().split('T')[0];
 }
@@ -36,26 +33,48 @@ function escHtml(str) {
 /* ─── State ─── */
 let allEntries = [];
 let currentEntryId = null;
-let activeTypeFilter = null;
+let activeTypeFilter = '';
 let isPreviewMode = false;
+
+/* ─── Fix 12: Ensure Airtable entry_type choices are current (non-blocking) ─── */
+function ensureDiaryTypes() {
+  fetch('/api/diary/fix-types', { method: 'POST', credentials: 'same-origin' })
+    .catch(function () { /* ignore — background maintenance call */ });
+}
+
+/* ─── Fix 13: Concept datalist ─── */
+const CONCEPT_PRESETS = [
+  'obsidian', 'project-memory', 'skill-library',
+  'business-idea', 'personal-growth', 'finance-concept'
+];
+
+function buildConceptDatalist() {
+  const datalist = document.getElementById('concept-datalist');
+  if (!datalist) return;
+  const concepts = new Set(CONCEPT_PRESETS);
+  allEntries.forEach(function (e) {
+    if (e.fields.connected_concept) concepts.add(e.fields.connected_concept.trim());
+  });
+  datalist.innerHTML = Array.from(concepts).map(function (c) {
+    return '<option value="' + escHtml(c) + '">';
+  }).join('');
+}
 
 /* ─── Load entry list ─── */
 async function loadEntryList() {
   const container = document.getElementById('diary-entry-list');
   if (!container) return;
-
   container.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.45">Loading…</div>';
-
   try {
     const res = await api('/api/diary');
     if (!res.ok) throw new Error('Failed to load entries');
     const data = await res.json();
     allEntries = data.records || [];
-    // Sort by date desc
     allEntries.sort(function (a, b) {
       return (b.fields.date || '') > (a.fields.date || '') ? 1 : -1;
     });
     renderEntryList(allEntries);
+    buildConceptDatalist();
   } catch (e) {
     container.innerHTML = '<p style="color:#ef4444;padding:1rem">Error: ' + e.message + '</p>';
   }
@@ -64,19 +83,14 @@ async function loadEntryList() {
 function renderEntryList(entries) {
   const container = document.getElementById('diary-entry-list');
   if (!container) return;
-
   const search = (document.getElementById('diary-search')?.value || '').toLowerCase().trim();
-
   let filtered = entries;
 
-  // Apply type filter
   if (activeTypeFilter) {
     filtered = filtered.filter(function (e) {
       return (e.fields.entry_type || '').toLowerCase() === activeTypeFilter.toLowerCase();
     });
   }
-
-  // Apply search
   if (search) {
     filtered = filtered.filter(function (e) {
       const f = e.fields;
@@ -93,10 +107,11 @@ function renderEntryList(entries) {
   }
 
   const typeColors = {
-    'Note': '#3b82f6',
-    'Blog': '#22c55e',
-    'Reflection': '#8b5cf6',
-    'Idea': '#f59e0b'
+    Story: '#8b5cf6',
+    Blog: '#22c55e',
+    Idea: '#f59e0b',
+    Project: '#3b82f6',
+    Skill: '#06b6d4'
   };
 
   container.innerHTML = filtered.map(function (entry) {
@@ -104,23 +119,23 @@ function renderEntryList(entries) {
     const color = typeColors[f.entry_type] || '#94a3b8';
     const isActive = entry.id === currentEntryId;
     const preview = (f.content || '').replace(/<[^>]*>/g, '').substring(0, 80);
-
-    return `<div class="diary-entry-item${isActive ? ' active' : ''}" data-id="${entry.id}" style="padding:0.7rem 0.85rem;border-radius:8px;cursor:pointer;margin-bottom:0.35rem;border:1px solid ${isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.04)'};background:${isActive ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)'}">
-      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.25rem">
-        <span style="background:${color}22;color:${color};padding:0.1rem 0.45rem;border-radius:4px;font-size:0.68rem;font-weight:600">${escHtml(f.entry_type || 'Note')}</span>
-        <span style="font-size:0.72rem;color:rgba(255,255,255,0.4)">${f.date || ''}</span>
-        ${f.publish_to_web ? '<span style="font-size:0.65rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:0.1rem 0.3rem;border-radius:3px">Web</span>' : ''}
-      </div>
-      <div style="font-weight:500;font-size:0.86rem;margin-bottom:0.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(f.title || 'Untitled')}</div>
-      ${preview ? '<div style="font-size:0.76rem;opacity:0.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(preview) + '</div>' : ''}
-    </div>`;
+    return '<div class="diary-entry-item' + (isActive ? ' active' : '') + '" data-id="' + entry.id + '"' +
+      ' style="padding:0.7rem 0.85rem;border-radius:8px;cursor:pointer;margin-bottom:0.35rem;' +
+      'border:1px solid ' + (isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.04)') + ';' +
+      'background:' + (isActive ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)') + '">' +
+      '<div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.25rem">' +
+      '<span style="background:' + color + '22;color:' + color + ';padding:0.1rem 0.45rem;border-radius:4px;font-size:0.68rem;font-weight:600">' + escHtml(f.entry_type || 'Story') + '</span>' +
+      '<span style="font-size:0.72rem;color:rgba(255,255,255,0.4)">' + (f.date || '') + '</span>' +
+      (f.publish_to_web ? '<span style="font-size:0.65rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:0.1rem 0.3rem;border-radius:3px">Web</span>' : '') +
+      '</div>' +
+      '<div style="font-weight:500;font-size:0.86rem;margin-bottom:0.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(f.title || 'Untitled') + '</div>' +
+      (preview ? '<div style="font-size:0.76rem;opacity:0.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(preview) + '</div>' : '') +
+      '</div>';
   }).join('');
 
-  // Wire click events
   container.querySelectorAll('.diary-entry-item').forEach(function (item) {
     item.addEventListener('click', function () {
-      const id = item.dataset.id;
-      const entry = allEntries.find(function (e) { return e.id === id; });
+      const entry = allEntries.find(function (e) { return e.id === item.dataset.id; });
       if (entry) loadEntryInEditor(entry);
     });
   });
@@ -131,49 +146,43 @@ function loadEntryInEditor(entry) {
   currentEntryId = entry.id;
   const f = entry.fields;
 
-  // Populate fields
-  const fields = {
+  var fieldMap = {
     'entry-date': f.date || '',
     'entry-title': f.title || '',
     'entry-content': f.content || '',
     'entry-tags': f.tags || '',
     'entry-concept': f.connected_concept || ''
   };
-  Object.keys(fields).forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) el.value = fields[id];
+  Object.keys(fieldMap).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = fieldMap[id];
   });
 
-  // Entry type select
-  const typeSelect = document.getElementById('entry-type');
+  var typeSelect = document.getElementById('entry-type');
   if (typeSelect) {
-    typeSelect.value = f.entry_type || 'Note';
+    typeSelect.value = f.entry_type || 'Story';
     toggleBlogSection(f.entry_type === 'Blog');
   }
 
-  // Blog publish checkbox
-  const publishCheck = document.getElementById('entry-publish');
+  var publishCheck = document.getElementById('publish-toggle');
   if (publishCheck) publishCheck.checked = !!f.publish_to_web;
 
-  // Image
-  const imageEl = document.getElementById('entry-image-preview');
-  if (imageEl) {
+  var imageWrap = document.getElementById('entry-image-wrap');
+  var imageEl = document.getElementById('entry-image');
+  if (imageWrap && imageEl) {
     if (f.cloudinary_image_url) {
       imageEl.src = f.cloudinary_image_url;
-      imageEl.style.display = 'block';
+      imageWrap.style.display = 'block';
     } else {
-      imageEl.style.display = 'none';
+      imageWrap.style.display = 'none';
     }
   }
 
-  // Show delete button
-  const deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) deleteBtn.style.display = 'inline-block';
+  var deleteBtn = document.getElementById('delete-entry-btn');
+  if (deleteBtn) deleteBtn.classList.remove('hidden');
 
-  // Close preview mode
-  if (isPreviewMode) togglePreview(false);
+  if (isPreviewMode) setEditMode();
 
-  // Mark active in list
   renderEntryList(allEntries);
 }
 
@@ -181,81 +190,90 @@ function loadEntryInEditor(entry) {
 function clearEditor() {
   currentEntryId = null;
 
-  const fields = ['entry-date', 'entry-title', 'entry-content', 'entry-tags', 'entry-concept'];
-  fields.forEach(function (id) {
-    const el = document.getElementById(id);
+  ['entry-date', 'entry-title', 'entry-content', 'entry-tags', 'entry-concept'].forEach(function (id) {
+    var el = document.getElementById(id);
     if (el) el.value = id === 'entry-date' ? todayIso() : '';
   });
 
-  const typeSelect = document.getElementById('entry-type');
-  if (typeSelect) typeSelect.value = 'Note';
+  var typeSelect = document.getElementById('entry-type');
+  if (typeSelect) typeSelect.value = 'Story';
   toggleBlogSection(false);
 
-  const publishCheck = document.getElementById('entry-publish');
+  var publishCheck = document.getElementById('publish-toggle');
   if (publishCheck) publishCheck.checked = false;
 
-  const imageEl = document.getElementById('entry-image-preview');
-  if (imageEl) imageEl.style.display = 'none';
+  var imageWrap = document.getElementById('entry-image-wrap');
+  if (imageWrap) imageWrap.style.display = 'none';
 
-  const deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) deleteBtn.style.display = 'none';
+  var deleteBtn = document.getElementById('delete-entry-btn');
+  if (deleteBtn) deleteBtn.classList.add('hidden');
 
-  if (isPreviewMode) togglePreview(false);
+  if (isPreviewMode) setEditMode();
 
   renderEntryList(allEntries);
 
-  // Focus title
   setTimeout(function () {
-    const titleEl = document.getElementById('entry-title');
+    var titleEl = document.getElementById('entry-title');
     if (titleEl) titleEl.focus();
   }, 50);
 }
 
 /* ─── Blog section visibility ─── */
 function toggleBlogSection(show) {
-  const section = document.getElementById('blog-publish-section');
+  var section = document.getElementById('blog-publish-section');
   if (section) section.style.display = show ? 'block' : 'none';
 }
 
-/* ─── Preview toggle ─── */
-function togglePreview(force) {
-  isPreviewMode = force !== undefined ? force : !isPreviewMode;
-  const contentEl = document.getElementById('entry-content');
-  const previewEl = document.getElementById('entry-preview');
-  const toggleBtn = document.getElementById('preview-toggle');
+/* ─── Fix 9: Edit / Preview two-button toggle ─── */
+function setEditMode() {
+  isPreviewMode = false;
+  var contentEl = document.getElementById('entry-content');
+  var previewEl = document.getElementById('entry-preview');
+  var editBtn = document.getElementById('edit-mode-btn');
+  var prevBtn = document.getElementById('preview-mode-btn');
 
-  if (!contentEl || !previewEl) return;
+  if (contentEl) contentEl.style.display = '';
+  if (previewEl) previewEl.style.display = 'none';
+  if (editBtn) { editBtn.classList.add('btn-primary'); editBtn.classList.remove('btn-outline'); }
+  if (prevBtn) { prevBtn.classList.remove('btn-primary'); prevBtn.classList.add('btn-outline'); }
+}
 
-  if (isPreviewMode) {
-    const rawContent = contentEl.value;
-    previewEl.innerHTML = rawContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-    contentEl.style.display = 'none';
+function setPreviewMode() {
+  isPreviewMode = true;
+  var contentEl = document.getElementById('entry-content');
+  var previewEl = document.getElementById('entry-preview');
+  var editBtn = document.getElementById('edit-mode-btn');
+  var prevBtn = document.getElementById('preview-mode-btn');
+
+  if (previewEl && contentEl) {
+    var raw = contentEl.value;
+    previewEl.innerHTML = raw
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
     previewEl.style.display = 'block';
-    if (toggleBtn) toggleBtn.textContent = '✏️ Edit';
-  } else {
-    contentEl.style.display = 'block';
-    previewEl.style.display = 'none';
-    if (toggleBtn) toggleBtn.textContent = '👁 Preview';
   }
+  if (contentEl) contentEl.style.display = 'none';
+  if (editBtn) { editBtn.classList.remove('btn-primary'); editBtn.classList.add('btn-outline'); }
+  if (prevBtn) { prevBtn.classList.add('btn-primary'); prevBtn.classList.remove('btn-outline'); }
 }
 
 /* ─── Save entry ─── */
 async function saveEntry() {
-  const saveBtn = document.getElementById('save-entry-btn');
-  const date = document.getElementById('entry-date')?.value;
-  const title = document.getElementById('entry-title')?.value;
-  const content = document.getElementById('entry-content')?.value;
-  const entryType = document.getElementById('entry-type')?.value || 'Note';
-  const tags = document.getElementById('entry-tags')?.value || '';
-  const concept = document.getElementById('entry-concept')?.value || '';
-  const publishToWeb = document.getElementById('entry-publish')?.checked || false;
+  var saveBtn = document.getElementById('save-entry-btn');
+  var date = document.getElementById('entry-date')?.value;
+  var title = document.getElementById('entry-title')?.value;
+  var content = document.getElementById('entry-content')?.value;
+  var entryType = document.getElementById('entry-type')?.value || 'Story';
+  var tags = document.getElementById('entry-tags')?.value || '';
+  var concept = document.getElementById('entry-concept')?.value || '';
+  var publishToWeb = document.getElementById('publish-toggle')?.checked || false;
 
   if (!title) { showFlash('Title is required', 'error'); return; }
   if (!date) { showFlash('Date is required', 'error'); return; }
 
   if (saveBtn) saveBtn.disabled = true;
 
-  const body = {
+  var body = {
     date,
     title,
     content: content || '',
@@ -264,12 +282,10 @@ async function saveEntry() {
     connected_concept: concept || undefined,
     publish_to_web: entryType === 'Blog' ? publishToWeb : undefined
   };
-
-  // Remove undefined keys
   Object.keys(body).forEach(function (k) { if (body[k] === undefined) delete body[k]; });
 
   try {
-    let res;
+    var res;
     if (currentEntryId) {
       res = await api('/api/diary/' + currentEntryId, { method: 'PATCH', body: JSON.stringify(body) });
     } else {
@@ -277,14 +293,14 @@ async function saveEntry() {
     }
 
     if (res.ok) {
-      const data = await res.json();
+      var data = await res.json();
       showFlash(currentEntryId ? 'Updated!' : 'Saved!');
       if (!currentEntryId && data.record) {
         currentEntryId = data.record.id || data.id;
       }
       await loadEntryList();
     } else {
-      const d = await res.json().catch(function () { return {}; });
+      var d = await res.json().catch(function () { return {}; });
       showFlash(d.error || 'Save failed', 'error');
     }
   } catch (e) {
@@ -300,13 +316,13 @@ async function deleteEntry() {
   if (!confirm('Delete this entry? This cannot be undone.')) return;
 
   try {
-    const res = await api('/api/diary/' + currentEntryId, { method: 'DELETE' });
+    var res = await api('/api/diary/' + currentEntryId, { method: 'DELETE' });
     if (res.ok) {
       showFlash('Deleted');
       clearEditor();
       await loadEntryList();
     } else {
-      const d = await res.json().catch(function () { return {}; });
+      var d = await res.json().catch(function () { return {}; });
       showFlash(d.error || 'Delete failed', 'error');
     }
   } catch (e) {
@@ -314,18 +330,19 @@ async function deleteEntry() {
   }
 }
 
-/* ─── AI Assist: SSE streaming ─── */
+/* ─── Fix 10: AI Assist SSE streaming with spinner ─── */
 async function streamAiAssist(prompt) {
-  const output = document.getElementById('ai-assist-output');
+  var output = document.getElementById('ai-assist-output');
+  var loading = document.getElementById('ai-loading');
   if (!output) return '';
 
   output.textContent = '';
-  output.style.opacity = '1';
+  if (loading) loading.style.display = 'block';
 
-  let fullText = '';
+  var fullText = '';
 
   try {
-    const res = await fetch('/api/ai-chat', {
+    var res = await fetch('/api/ai-chat', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -337,41 +354,41 @@ async function streamAiAssist(prompt) {
     });
 
     if (!res.ok || !res.body) {
-      output.textContent = 'AI error: ' + res.status;
+      output.textContent = 'AI error ' + res.status + '. Check your Anthropic credit balance at anthropic.com.';
+      if (loading) loading.style.display = 'none';
       return '';
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      chunk.split('\n').forEach(function (line) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
-              fullText += parsed.delta.text;
-              output.textContent = fullText;
-            }
-          } catch (e) { /* skip malformed SSE line */ }
-        }
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      var text = decoder.decode(chunk.value, { stream: true });
+      text.split('\n').forEach(function (line) {
+        if (!line.startsWith('data: ')) return;
+        var data = line.slice(6).trim();
+        if (data === '[DONE]') return;
+        try {
+          var parsed = JSON.parse(data);
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullText += parsed.delta.text;
+            output.textContent = fullText;
+          }
+        } catch (e) { /* skip malformed SSE line */ }
       });
     }
-
-    return fullText;
   } catch (e) {
     output.textContent = 'Error: ' + e.message;
-    return '';
   }
+
+  if (loading) loading.style.display = 'none';
+  return fullText;
 }
 
 function getAssistPrompt(assistType, content) {
-  const prompts = {
+  var prompts = {
     refine: 'Please refine and improve this writing while keeping my voice and tone. Do not add bullet points or headers unless they already exist:\n\n' + content,
     expand: 'Please expand and develop this idea further with more depth and detail. Keep the same voice:\n\n' + content,
     summarize: 'Please summarize this in 2-3 concise sentences:\n\n' + content,
@@ -380,156 +397,121 @@ function getAssistPrompt(assistType, content) {
   return prompts[assistType] || prompts.refine;
 }
 
-/* ─── Image upload for diary entry ─── */
-async function uploadEntryImage(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('folder', 'diary/' + new Date().getFullYear());
-
-  const res = await fetch('/api/upload-image', {
-    method: 'POST',
-    credentials: 'same-origin',
-    body: formData
-  });
-
-  if (!res.ok) throw new Error('Upload failed');
-  const data = await res.json();
-  return data.url || data.secure_url || '';
-}
-
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
-  // Load entries
+  // Fix 12: keep Airtable choices in sync (non-blocking)
+  ensureDiaryTypes();
+
+  // Load entries on boot
   loadEntryList();
 
   // New entry button
-  const newEntryBtn = document.getElementById('new-entry-btn');
+  var newEntryBtn = document.getElementById('new-entry-btn');
   if (newEntryBtn) newEntryBtn.addEventListener('click', clearEditor);
 
-  // Save button
-  const saveBtn = document.getElementById('save-entry-btn');
+  // Save / delete buttons
+  var saveBtn = document.getElementById('save-entry-btn');
   if (saveBtn) saveBtn.addEventListener('click', saveEntry);
 
-  // Delete button
-  const deleteBtn = document.getElementById('delete-entry-btn');
-  if (deleteBtn) {
-    deleteBtn.style.display = 'none';
-    deleteBtn.addEventListener('click', deleteEntry);
-  }
+  var deleteBtn = document.getElementById('delete-entry-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', deleteEntry);
 
-  // Preview toggle
-  const previewToggle = document.getElementById('preview-toggle');
-  if (previewToggle) previewToggle.addEventListener('click', function () { togglePreview(); });
+  // Fix 9: Edit / Preview two-button toggle
+  var editModeBtn = document.getElementById('edit-mode-btn');
+  var previewModeBtn = document.getElementById('preview-mode-btn');
+  if (editModeBtn) editModeBtn.addEventListener('click', setEditMode);
+  if (previewModeBtn) previewModeBtn.addEventListener('click', setPreviewMode);
 
-  // Search input
-  const searchInput = document.getElementById('diary-search');
+  // Search
+  var searchInput = document.getElementById('diary-search');
   if (searchInput) {
-    searchInput.addEventListener('input', function () {
-      renderEntryList(allEntries);
-    });
+    searchInput.addEventListener('input', function () { renderEntryList(allEntries); });
   }
 
-  // Type filter buttons
-  const typeFilterBtns = document.querySelectorAll('[data-type-filter]');
+  // Fix 12: type filter buttons use data-type (not data-type-filter)
+  var typeFilterBtns = document.querySelectorAll('#type-filters [data-type]');
   typeFilterBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      const filter = btn.dataset.typeFilter;
-      if (activeTypeFilter === filter) {
-        // Toggle off
-        activeTypeFilter = null;
-        typeFilterBtns.forEach(function (b) { b.classList.remove('active'); });
-      } else {
-        activeTypeFilter = filter === 'all' ? null : filter;
-        typeFilterBtns.forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-      }
+      var filter = btn.dataset.type;
+      // Clicking the already-active non-All filter toggles it off
+      activeTypeFilter = (activeTypeFilter === filter && filter !== '') ? '' : filter;
+      typeFilterBtns.forEach(function (b) {
+        var isActive = b.dataset.type === activeTypeFilter;
+        b.className = 'badge ' + (isActive ? 'badge-primary' : 'badge-gray');
+      });
       renderEntryList(allEntries);
     });
   });
 
   // Entry type change → show/hide blog section
-  const typeSelect = document.getElementById('entry-type');
+  var typeSelect = document.getElementById('entry-type');
   if (typeSelect) {
     typeSelect.addEventListener('change', function () {
       toggleBlogSection(typeSelect.value === 'Blog');
     });
   }
 
-  // Image upload
-  const imageInput = document.getElementById('entry-image-file');
-  if (imageInput) {
-    imageInput.addEventListener('change', async function () {
-      const file = this.files[0];
-      if (!file) return;
-      try {
-        const url = await uploadEntryImage(file);
-        const imgEl = document.getElementById('entry-image-preview');
-        if (imgEl) { imgEl.src = url; imgEl.style.display = 'block'; }
-        // Store URL in hidden field if present
-        const urlField = document.getElementById('entry-image-url');
-        if (urlField) urlField.value = url;
-        showFlash('Image uploaded!');
-      } catch (e) {
-        showFlash('Image upload failed: ' + e.message, 'error');
-      }
-      this.value = '';
-    });
-  }
+  /* ─── Fix 10: AI Assist Modal ─── */
+  var aiAssistBtn = document.getElementById('ai-assist-btn');
+  var aiModal = document.getElementById('ai-assist-modal');
+  var aiModalClose = document.getElementById('ai-modal-close');
+  var aiModalClose2 = document.getElementById('ai-modal-close2');
+  var useResultBtn = document.getElementById('ai-use-result');
 
-  /* ─── AI Assist Modal ─── */
-  const aiAssistBtn = document.getElementById('ai-assist-btn');
-  const aiModal = document.getElementById('ai-assist-modal');
-  const aiModalClose = document.getElementById('ai-modal-close');
-  const aiModalBackdrop = document.getElementById('ai-modal-backdrop');
-  const useThisBtn = document.getElementById('ai-use-this-btn');
-
-  if (aiAssistBtn && aiModal) {
-    aiAssistBtn.addEventListener('click', function () {
-      aiModal.style.display = 'flex';
-      const output = document.getElementById('ai-assist-output');
-      if (output) output.textContent = 'Choose a mode above to get AI suggestions…';
-    });
+  function openAiModal() {
+    if (!aiModal) return;
+    aiModal.classList.add('open');
+    var output = document.getElementById('ai-assist-output');
+    if (output) output.textContent = 'Choose a mode above to get AI suggestions…';
+    var loading = document.getElementById('ai-loading');
+    if (loading) loading.style.display = 'none';
   }
 
   function closeAiModal() {
-    if (aiModal) aiModal.style.display = 'none';
+    if (aiModal) aiModal.classList.remove('open');
   }
 
+  if (aiAssistBtn) aiAssistBtn.addEventListener('click', openAiModal);
   if (aiModalClose) aiModalClose.addEventListener('click', closeAiModal);
-  if (aiModalBackdrop) aiModalBackdrop.addEventListener('click', closeAiModal);
+  if (aiModalClose2) aiModalClose2.addEventListener('click', closeAiModal);
 
-  // AI assist type buttons
-  const assistTypeBtns = document.querySelectorAll('.ai-assist-type');
+  // Click outside modal box to close
+  if (aiModal) {
+    aiModal.addEventListener('click', function (e) {
+      if (e.target === aiModal) closeAiModal();
+    });
+  }
+
+  // Fix 10: AI assist type buttons — use data-assist (not data-assist-type)
+  var assistTypeBtns = document.querySelectorAll('.ai-assist-type');
   assistTypeBtns.forEach(function (btn) {
+    btn.dataset.originalText = btn.textContent;
     btn.addEventListener('click', async function () {
-      const assistType = btn.dataset.assistType;
-      const content = document.getElementById('entry-content')?.value || '';
+      var assistType = btn.dataset.assist;
+      var content = document.getElementById('entry-content')?.value || '';
       if (!content.trim()) { showFlash('Write some content first', 'error'); return; }
 
       assistTypeBtns.forEach(function (b) { b.disabled = true; });
       btn.textContent = '⏳ Working…';
 
-      const prompt = getAssistPrompt(assistType, content);
+      var prompt = getAssistPrompt(assistType, content);
       await streamAiAssist(prompt);
 
-      btn.textContent = btn.dataset.originalText || 'Assist';
+      btn.textContent = btn.dataset.originalText;
       assistTypeBtns.forEach(function (b) { b.disabled = false; });
     });
   });
 
-  // Store original button text
-  assistTypeBtns.forEach(function (btn) {
-    btn.dataset.originalText = btn.textContent;
-  });
-
-  // "Use this" button: copy AI output to content field
-  if (useThisBtn) {
-    useThisBtn.addEventListener('click', function () {
-      const output = document.getElementById('ai-assist-output');
-      const contentEl = document.getElementById('entry-content');
-      if (output && contentEl && output.textContent && output.textContent !== 'Choose a mode above to get AI suggestions…') {
+  // Fix 10: "Use this" button — correct ID is ai-use-result
+  if (useResultBtn) {
+    useResultBtn.addEventListener('click', function () {
+      var output = document.getElementById('ai-assist-output');
+      var contentEl = document.getElementById('entry-content');
+      var placeholder = 'Choose a mode above to get AI suggestions…';
+      if (output && contentEl && output.textContent && output.textContent !== placeholder) {
         contentEl.value = output.textContent;
         closeAiModal();
+        if (isPreviewMode) setEditMode();
         showFlash('Applied to editor!');
       } else {
         showFlash('No AI output to use yet', 'error');
@@ -537,17 +519,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Set up entry preview div if not already in HTML
-  if (!document.getElementById('entry-preview')) {
-    const contentEl = document.getElementById('entry-content');
-    if (contentEl) {
-      const previewEl = document.createElement('div');
-      previewEl.id = 'entry-preview';
-      previewEl.style.cssText = 'display:none;min-height:200px;padding:0.75rem;background:rgba(255,255,255,0.02);border-radius:8px;font-size:0.9rem;line-height:1.7;border:1px solid rgba(255,255,255,0.08)';
-      contentEl.parentNode.insertBefore(previewEl, contentEl.nextSibling);
-    }
-  }
-
-  // Initialize with blank state
+  // Start in edit mode
+  setEditMode();
   clearEditor();
 });

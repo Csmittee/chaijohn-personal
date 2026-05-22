@@ -1,7 +1,7 @@
 import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
-const BUSINESS_BASE_ID = 'appMBjlfYyVd8I7ML';
+const BUSINESS_BASE_ID_FALLBACK = 'appMBjlfYyVd8I7ML';
 const TABLE = 'Diary';
 const BLOGS_TABLE = 'Blogs';
 
@@ -70,7 +70,7 @@ export async function onRequestPost(context) {
   // If publish_to_web=true and entry_type="Blog", also push to business base
   if (body.publish_to_web === true && body.entry_type === 'Blog') {
     try {
-      await createRecord(env.AIRTABLE_API_KEY, BUSINESS_BASE_ID, BLOGS_TABLE, {
+      await createRecord(env.AIRTABLE_API_KEY, env.AIRTABLE_BUSINESS_BASE_ID || BUSINESS_BASE_ID_FALLBACK, BLOGS_TABLE, {
         title,
         content: content || '',
         tags: body.tags || '',
