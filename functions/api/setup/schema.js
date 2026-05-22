@@ -54,8 +54,12 @@ async function batchCreate(apiKey, baseId, tableName, recordsFields) {
 
 function linkedField(name, tableId) {
   if (tableId) {
-    // isReversed is required; prefersSingleRecordLink is NOT accepted on create
-    return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, isReversed: false } };
+    // Airtable oneOf schema: must have BOTH isReversed AND prefersSingleRecordLink
+    return { name, type: 'multipleRecordLinks', options: {
+      linkedTableId: tableId,
+      isReversed: false,
+      prefersSingleRecordLink: true
+    }};
   }
   return { name, type: 'singleLineText' };
 }
@@ -397,52 +401,76 @@ export async function onRequestPost(context) {
 
   /* ── PHASE: seed ──────────────────────────────────────────────────────────── */
   if (phase === 'seed') {
-    // Seed Categories in batches of 10
+    async function countExisting(table) {
+      const res = await fetch(
+        `${AIRTABLE_BASE}/${BASE_ID}/${encodeURIComponent(table)}?maxRecords=1`,
+        { headers: { Authorization: `Bearer ${apiKey}` } }
+      );
+      if (!res.ok) return 0;
+      const d = await res.json();
+      return (d.records || []).length;
+    }
+
+    // Seed Categories — skip if already populated
     let catRecords = [];
-    try {
-      catRecords = await batchCreate(apiKey, BASE_ID, 'Categories', CATEGORY_SEEDS);
-    } catch (e) {
-      return jsonResponse({ phase: 'seed', error: 'Categories seed failed: ' + e.message }, 500);
+    const existingCats = await countExisting('Categories');
+    if (existingCats > 0) {
+      // Already seeded — just fetch IDs for budget linking
+      const res = await fetch(
+        `${AIRTABLE_BASE}/${BASE_ID}/Categories?maxRecords=200`,
+        { headers: { Authorization: `Bearer ${apiKey}` } }
+      );
+      const d = await res.json();
+      catRecords = d.records || [];
+    } else {
+      try {
+        catRecords = await batchCreate(apiKey, BASE_ID, 'Categories', CATEGORY_SEEDS);
+      } catch (e) {
+        return jsonResponse({ phase: 'seed', error: 'Categories seed failed: ' + e.message }, 500);
+      }
     }
     const catIdByName = {};
     catRecords.forEach(r => { catIdByName[r.fields.name] = r.id; });
 
-    // Seed Liabilities in one batch
-    let liabSeeds = { status: 'ok', count: 0 };
-    try {
-      const recs = await batchCreate(apiKey, BASE_ID, 'Liabilities', LIABILITY_SEEDS);
-      liabSeeds = { status: 'ok', count: recs.length };
-    } catch (e) {
-      liabSeeds = { status: 'error', error: e.message };
+    // Seed Liabilities — skip if already populated
+    let liabSeeds = { status: 'ok', count: 0, skipped: false };
+    const existingLiabs = await countExisting('Liabilities');
+    if (existingLiabs > 0) {
+      liabSeeds = { status: 'ok', count: existingLiabs, skipped: true };
+    } else {
+      try {
+        const recs = await batchCreate(apiKey, BASE_ID, 'Liabilities', LIABILITY_SEEDS);
+        liabSeeds = { status: 'ok', count: recs.length };
+      } catch (e) {
+        liabSeeds = { status: 'error', error: e.message };
+      }
     }
 
-    // Seed Budgets in batches — requires category IDs from above
-    const today = new Date().toISOString().split('T')[0];
-    const budgetFields = BUDGET_SEEDS.map(b => {
-      const actualName = BUDGET_CAT_MAP[b.catName] || b.catName;
-      const catId = catIdByName[actualName];
-      const fields = {
-        label: actualName,
-        amount: b.amount,
-        period: b.period,
-        start_date: today,
-        active: true
-      };
-      if (catId) fields.category_id = [catId];
-      return fields;
-    });
-
-    let budgetSeeds = { status: 'ok', count: 0 };
-    try {
-      const recs = await batchCreate(apiKey, BASE_ID, 'Budgets', budgetFields);
-      budgetSeeds = { status: 'ok', count: recs.length };
-    } catch (e) {
-      budgetSeeds = { status: 'error', error: e.message };
+    // Seed Budgets — skip if already populated
+    let budgetSeeds = { status: 'ok', count: 0, skipped: false };
+    const existingBudgets = await countExisting('Budgets');
+    if (existingBudgets > 0) {
+      budgetSeeds = { status: 'ok', count: existingBudgets, skipped: true };
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      const budgetFields = BUDGET_SEEDS.map(b => {
+        const actualName = BUDGET_CAT_MAP[b.catName] || b.catName;
+        const catId = catIdByName[actualName];
+        const fields = { label: actualName, amount: b.amount, period: b.period, start_date: today, active: true };
+        if (catId) fields.category_id = [catId];
+        return fields;
+      });
+      try {
+        const recs = await batchCreate(apiKey, BASE_ID, 'Budgets', budgetFields);
+        budgetSeeds = { status: 'ok', count: recs.length };
+      } catch (e) {
+        budgetSeeds = { status: 'error', error: e.message };
+      }
     }
 
     return jsonResponse({
       phase: 'seed',
-      categories: { seeded: catRecords.length },
+      categories: { seeded: catRecords.length, skipped: existingCats > 0 },
       liabilities: liabSeeds,
       budgets: budgetSeeds
     });
