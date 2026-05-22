@@ -54,7 +54,8 @@ async function batchCreate(apiKey, baseId, tableName, recordsFields) {
 
 function linkedField(name, tableId) {
   if (tableId) {
-    return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, prefersSingleRecordLink: true } };
+    // isReversed is required; prefersSingleRecordLink is NOT accepted on create
+    return { name, type: 'multipleRecordLinks', options: { linkedTableId: tableId, isReversed: false } };
   }
   return { name, type: 'singleLineText' };
 }
@@ -447,5 +448,45 @@ export async function onRequestPost(context) {
     });
   }
 
-  return jsonResponse({ error: `Unknown phase: ${phase}. Use ?phase=tables or ?phase=seed` }, 400);
+  /* ── PHASE: seed-budgets ─────────────────────────────────────────────────── */
+  // Use when categories + liabilities are already seeded but budgets failed
+  if (phase === 'seed-budgets') {
+    // Fetch existing category records to get their IDs
+    let catRecords;
+    try {
+      const res = await fetch(
+        `${AIRTABLE_BASE}/${BASE_ID}/${encodeURIComponent('Categories')}?maxRecords=200`,
+        { headers: { Authorization: `Bearer ${apiKey}` } }
+      );
+      if (!res.ok) throw new Error(`Fetch categories error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      catRecords = data.records || [];
+    } catch (e) {
+      return jsonResponse({ phase: 'seed-budgets', error: 'Could not fetch categories: ' + e.message }, 500);
+    }
+
+    const catIdByName = {};
+    catRecords.forEach(r => { catIdByName[r.fields.name] = r.id; });
+
+    const today = new Date().toISOString().split('T')[0];
+    const budgetFields = BUDGET_SEEDS.map(b => {
+      const actualName = BUDGET_CAT_MAP[b.catName] || b.catName;
+      const catId = catIdByName[actualName];
+      const fields = { label: actualName, amount: b.amount, period: b.period, start_date: today, active: true };
+      if (catId) fields.category_id = [catId];
+      return fields;
+    });
+
+    let budgetSeeds = { status: 'ok', count: 0 };
+    try {
+      const recs = await batchCreate(apiKey, BASE_ID, 'Budgets', budgetFields);
+      budgetSeeds = { status: 'ok', count: recs.length };
+    } catch (e) {
+      budgetSeeds = { status: 'error', error: e.message };
+    }
+
+    return jsonResponse({ phase: 'seed-budgets', budgets: budgetSeeds });
+  }
+
+  return jsonResponse({ error: `Unknown phase: ${phase}. Use ?phase=tables, ?phase=seed, or ?phase=seed-budgets` }, 400);
 }

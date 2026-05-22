@@ -86,6 +86,11 @@
         This creates all required tables in your Airtable base. Run once only.
       </p>
       <button class="btn btn-primary w-full" id="init-schema-btn">Initialize Schema</button>
+      <button class="btn btn-outline w-full" id="seed-budgets-btn"
+        style="margin-top:0.5rem;display:none"
+        title="Run this if budgets failed but categories already exist">
+        Re-seed Budgets Only
+      </button>
       <div class="status-log hidden" id="schema-log"></div>
     </div>
 
@@ -242,6 +247,38 @@
       log('Error: ' + e.message, 'log-err');
       initBtn.disabled = false;
       initBtn.textContent = 'Retry';
+      // Show the partial-retry button in case only budgets failed
+      document.getElementById('seed-budgets-btn').style.display = 'block';
+    }
+  });
+
+  // Partial retry: re-seed budgets only (when categories/liabilities already exist)
+  const seedBudgetsBtn = document.getElementById('seed-budgets-btn');
+  seedBudgetsBtn.addEventListener('click', async () => {
+    schemaLog.classList.remove('hidden');
+    seedBudgetsBtn.disabled = true;
+    seedBudgetsBtn.textContent = 'Seeding budgets…';
+    const log = (msg, cls = 'log-info') => {
+      const d = document.createElement('div');
+      d.className = cls; d.textContent = msg;
+      schemaLog.appendChild(d);
+      schemaLog.scrollTop = schemaLog.scrollHeight;
+    };
+    try {
+      const r = await fetch('/api/setup/schema?phase=seed-budgets', { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { log('Error: ' + (d.error || 'Unknown'), 'log-err'); return; }
+      log(`${d.budgets?.status === 'ok' ? '✓' : '✗'} Budgets seeded: ${d.budgets?.count ?? 0}`,
+        d.budgets?.status === 'ok' ? 'log-ok' : 'log-err');
+      if (d.budgets?.status === 'ok') {
+        log('Budgets ready!', 'log-ok');
+        document.getElementById('step-done').classList.remove('hidden');
+        seedBudgetsBtn.textContent = 'Done ✓';
+      }
+    } catch (e) {
+      log('Error: ' + e.message, 'log-err');
+      seedBudgetsBtn.disabled = false;
+      seedBudgetsBtn.textContent = 'Re-seed Budgets Only';
     }
   });
   </script>
