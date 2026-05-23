@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn — Collection</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-link" href="/dashboard.html">Dashboard</a>
+      <a class="nav-link" href="/entry.html">Entry</a>
+      <a class="nav-link" href="/diary.html">Diary</a>
+      <a class="nav-link active" href="/collection.html">Collection</a>
+      <a class="nav-link" href="/ai-advisor.html">AI Advisor</a>
+      <button class="nav-link nav-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page-content">
+
+    <!-- Summary strip -->
+    <div class="card" id="collection-summary" style="margin-bottom:1rem">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;text-align:center">
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Total Holding</div>
+          <div id="sum-holding" class="metric-value">฿—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">For Sale</div>
+          <div id="sum-forsale" class="metric-value">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Sold YTD</div>
+          <div id="sum-sold-ytd" class="amount-positive">฿—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Knife</div>
+          <div id="sum-knife">฿—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Vice</div>
+          <div id="sum-vice">฿—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Plant</div>
+          <div id="sum-plant">฿—</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;color:var(--text-secondary)">Doll</div>
+          <div id="sum-doll">฿—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar" id="collection-filters">
+      <div class="period-toggle">
+        <button class="period-btn active" data-status="">All</button>
+        <button class="period-btn" data-status="Holding">Holding</button>
+        <button class="period-btn" data-status="For Sale">For Sale</button>
+        <button class="period-btn" data-status="Sold">Sold</button>
+      </div>
+      <select id="category-filter" style="width:auto">
+        <option value="">All Categories</option>
+        <option value="Collection-Knife">Knife</option>
+        <option value="Collection-Vice">Vice</option>
+        <option value="Collection-Plant">Plant</option>
+        <option value="Collection-Doll">Doll</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+    <!-- Asset grid -->
+    <div class="asset-grid" id="asset-grid"></div>
+
+    <!-- Floating action button -->
+    <button class="fab-btn" id="add-asset-fab" title="Add Asset">+</button>
+
+  </main>
+
+  <!-- Add/Edit Asset Modal -->
+  <div class="modal-backdrop hidden" id="asset-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="asset-modal-title">Add Asset</span>
+        <button class="btn btn-sm btn-outline" id="asset-modal-close">×</button>
+      </div>
+      <input type="hidden" id="asset-edit-id">
+
+      <div class="form-group">
+        <label for="asset-name">Name</label>
+        <input type="text" id="asset-name" placeholder="Asset name">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="asset-category">Category</label>
+          <select id="asset-category">
+            <option value="Collection-Knife">Knife</option>
+            <option value="Collection-Vice">Vice</option>
+            <option value="Collection-Plant">Plant</option>
+            <option value="Collection-Doll">Doll</option>
+            <option value="Property">Property</option>
+            <option value="Vehicle">Vehicle</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Business">Business</option>
+            <option value="Inventory">Inventory</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="asset-status">Status</label>
+          <select id="asset-status">
+            <option value="Holding">Holding</option>
+            <option value="For Sale">For Sale</option>
+            <option value="Sold">Sold</option>
+            <option value="Invested">Invested</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="asset-cost">Cost Price (฿)</label>
+          <input type="number" id="asset-cost">
+        </div>
+        <div class="form-group">
+          <label for="asset-value">Estimated Value (฿)</label>
+          <input type="number" id="asset-value">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="asset-date">Date Acquired</label>
+          <input type="date" id="asset-date">
+        </div>
+        <div class="form-group">
+          <label for="asset-velocity">Velocity</label>
+          <select id="asset-velocity">
+            <option value="Fast move">Fast move</option>
+            <option value="Slow move">Slow move</option>
+            <option value="Illiquid">Illiquid</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="asset-notes">Notes</label>
+        <textarea id="asset-notes" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="asset-image-file">Image Upload</label>
+        <input type="file" id="asset-image-file" accept="image/*" style="padding:0.3rem">
+      </div>
+      <div class="form-group">
+        <label for="asset-image-url">Or Cloudinary URL</label>
+        <input type="text" id="asset-image-url" placeholder="https://res.cloudinary.com/...">
+      </div>
+      <div id="asset-image-preview" style="margin-bottom:1rem"></div>
+      <div class="flex justify-between">
+        <button class="btn btn-outline" id="asset-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="save-asset-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sell Modal -->
+  <div class="modal-backdrop hidden" id="sell-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Mark as Sold</span>
+        <button class="btn btn-sm btn-outline" id="sell-modal-close">×</button>
+      </div>
+      <input type="hidden" id="sell-asset-id">
+      <div class="form-group">
+        <label for="sell-price">Sold Price (฿)</label>
+        <input type="number" id="sell-price">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sell-date">Sold Date</label>
+          <input type="date" id="sell-date">
+        </div>
+        <div class="form-group">
+          <label for="sell-via">Platform / Via</label>
+          <input type="text" id="sell-via" placeholder="Facebook, Line, etc.">
+        </div>
+      </div>
+      <div class="flex justify-between">
+        <button class="btn btn-outline" id="sell-cancel">Cancel</button>
+        <button class="btn btn-success" id="confirm-sell">Confirm Sale</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Modal -->
+  <div class="modal-backdrop hidden" id="share-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Share Asset</span>
+        <button class="btn btn-sm btn-outline" id="share-modal-close">×</button>
+      </div>
+      <input type="hidden" id="share-asset-id">
+      <div id="share-buttons" style="display:flex;flex-direction:column;gap:0.75rem">
+        <button class="btn btn-primary" id="share-fb">📘 Share on Facebook</button>
+        <button class="btn btn-outline" id="share-ig">📷 Copy Instagram Caption</button>
+        <button class="btn btn-outline" id="share-ploikong">🔄 Ploikong Sync (v2)</button>
+      </div>
+      <div id="share-feedback" style="margin-top:1rem;font-size:0.85rem;color:var(--color-income)"></div>
+    </div>
+  </div>
+
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/collection.injector.js" defer></script>
+</body>
+</html>

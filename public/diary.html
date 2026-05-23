@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn — Diary</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+  <style>
+    .seg-toggle { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; vertical-align:middle; }
+    .seg-btn { padding:0.28rem 0.7rem; font-size:0.8rem; font-weight:500; border:none; cursor:pointer;
+      transition:background 0.15s,color 0.15s; line-height:1.4; background:transparent; color:var(--text-secondary); }
+    .seg-btn.seg-active { background:var(--color-primary,#3b82f6); color:#fff; }
+    .seg-btn:not(.seg-active):hover { background:rgba(255,255,255,0.06); }
+  </style>
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-link" href="/dashboard.html">Dashboard</a>
+      <a class="nav-link" href="/entry.html">Entry</a>
+      <a class="nav-link active" href="/diary.html">Diary</a>
+      <a class="nav-link" href="/collection.html">Collection</a>
+      <a class="nav-link" href="/ai-advisor.html">AI Advisor</a>
+      <button class="nav-link nav-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page-content" style="padding-bottom:0">
+    <div class="diary-layout">
+
+      <!-- Left: entry list panel -->
+      <div class="diary-list-panel" id="diary-list-panel">
+        <div style="padding:0.75rem;border-bottom:1px solid var(--border)">
+          <input type="search" id="diary-search" placeholder="Search entries..." class="w-full" style="margin-bottom:0.5rem">
+          <div class="flex" style="gap:0.4rem;flex-wrap:wrap" id="type-filters">
+            <button class="badge badge-primary" data-type="">All</button>
+            <button class="badge badge-gray" data-type="Story">Story</button>
+            <button class="badge badge-gray" data-type="Idea">Idea</button>
+            <button class="badge badge-gray" data-type="Blog">Blog</button>
+            <button class="badge badge-gray" data-type="Project">Project</button>
+            <button class="badge badge-gray" data-type="Skill">Skill</button>
+          </div>
+        </div>
+        <div id="diary-entry-list"></div>
+      </div>
+
+      <!-- Right: editor panel -->
+      <div class="diary-editor-panel" id="diary-editor-panel">
+        <div style="padding:1rem">
+
+          <!-- Toolbar -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem">
+            <!-- Left: new entry + edit/preview toggle -->
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <button class="btn btn-primary btn-sm" id="new-entry-btn">+ New Entry</button>
+              <div class="seg-toggle">
+                <button class="seg-btn seg-active" id="edit-mode-btn">✏️ Edit</button>
+                <button class="seg-btn" id="preview-mode-btn">👁 Preview</button>
+              </div>
+            </div>
+            <!-- Right: action buttons -->
+            <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+              <button class="btn btn-sm btn-outline hidden" id="cancel-changes-btn" title="Revert all unsaved changes">↩ Cancel</button>
+              <button class="btn btn-sm btn-outline hidden" id="save-as-btn" title="Save current content as a new entry">Copy As New</button>
+              <button class="btn btn-sm btn-danger hidden" id="delete-entry-btn" title="Permanently delete this entry">🗑</button>
+              <button class="btn btn-sm btn-primary" id="save-entry-btn">Save</button>
+            </div>
+          </div>
+
+          <!-- Entry form -->
+          <div id="entry-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="entry-date">Date</label>
+                <input type="date" id="entry-date">
+              </div>
+              <div class="form-group">
+                <label for="entry-type">Type</label>
+                <select id="entry-type">
+                  <option value="Story">Story</option>
+                  <option value="Idea">Idea</option>
+                  <option value="Blog">Blog</option>
+                  <option value="Project">Project</option>
+                  <option value="Skill">Skill</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="entry-title">Title</label>
+              <input type="text" id="entry-title" placeholder="Entry title">
+            </div>
+
+            <div class="form-group">
+              <label for="entry-content">Content</label>
+              <textarea id="entry-content" rows="12" placeholder="Write here… (Markdown supported)"></textarea>
+              <div id="entry-preview" class="card" style="display:none;min-height:200px;margin-top:0.5rem;white-space:pre-wrap;font-size:0.9rem;line-height:1.7"></div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="entry-tags">Tags (comma separated)</label>
+                <input type="text" id="entry-tags" placeholder="finance, idea, 2025">
+              </div>
+              <div class="form-group">
+                <label for="entry-concept">Connected Concept</label>
+                <input type="text" id="entry-concept" list="concept-datalist" placeholder="Obsidian link or keyword">
+                <datalist id="concept-datalist"></datalist>
+              </div>
+            </div>
+
+            <!-- Image upload -->
+            <div class="form-group">
+              <label>Image</label>
+              <div id="entry-image-wrap" style="display:none;margin-bottom:0.4rem">
+                <img id="entry-image" src="" alt="" style="max-width:100%;border-radius:var(--radius);margin-bottom:0.35rem;display:block">
+                <button class="btn btn-sm btn-outline" id="remove-image-btn">✕ Remove</button>
+              </div>
+              <label class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block;margin:0">
+                📷 Add Image
+                <input type="file" id="entry-image-file" accept="image/*" style="display:none">
+              </label>
+              <span id="upload-image-status" style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem"></span>
+            </div>
+
+            <!-- Blog publish section (shown when type=Blog) -->
+            <div id="blog-publish-section" style="display:none;padding:0.75rem;background:rgba(59,130,246,0.05);border-radius:var(--radius);margin-bottom:1rem;border:1px solid rgba(59,130,246,0.2)">
+              <label class="flex items-center gap-1" style="cursor:pointer">
+                <input type="checkbox" id="publish-toggle" style="width:auto">
+                <span style="font-weight:500">Publish to web</span>
+              </label>
+              <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.3rem">
+                When enabled, this blog will be pushed to your business Airtable base for web distribution.
+              </p>
+            </div>
+
+            <!-- AI Assist trigger -->
+            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem">
+              <button class="btn btn-outline btn-sm" id="ai-assist-btn">✨ AI Assist</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- AI Assist Modal -->
+  <div class="modal-backdrop hidden" id="ai-assist-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">AI Writing Assistant</span>
+        <button class="btn btn-sm btn-outline" id="ai-modal-close">×</button>
+      </div>
+      <p style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.75rem">
+        Note: AI calls use Anthropic credits. Ensure your balance is topped up if responses fail.
+      </p>
+      <div class="flex" style="gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem">
+        <button class="btn btn-sm btn-outline ai-assist-type" data-assist="refine">Refine writing</button>
+        <button class="btn btn-sm btn-outline ai-assist-type" data-assist="expand">Expand idea</button>
+        <button class="btn btn-sm btn-outline ai-assist-type" data-assist="summarize">Summarize</button>
+        <button class="btn btn-sm btn-outline ai-assist-type" data-assist="tags">Suggest tags</button>
+      </div>
+      <div id="ai-loading" style="display:none;text-align:center;padding:0.5rem;color:var(--text-secondary)">⏳ AI is thinking…</div>
+      <div id="ai-assist-output" style="min-height:80px;padding:0.75rem;background:var(--bg-page);border-radius:var(--radius);font-size:0.9rem;margin-bottom:1rem;white-space:pre-wrap;line-height:1.6"></div>
+      <div class="flex justify-between">
+        <button class="btn btn-sm btn-outline" id="ai-modal-close2">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="ai-use-result">Use in Content ↑</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/diary.injector.js" defer></script>
+</body>
+</html>

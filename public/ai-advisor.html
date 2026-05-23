@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chaijohn — AI Advisor</title>
+  <link rel="stylesheet" href="/assets/css/global.css">
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/dashboard.html">🏠 Chaijohn</a>
+      <a class="nav-link" href="/dashboard.html">Dashboard</a>
+      <a class="nav-link" href="/entry.html">Entry</a>
+      <a class="nav-link" href="/diary.html">Diary</a>
+      <a class="nav-link" href="/collection.html">Collection</a>
+      <a class="nav-link active" href="/ai-advisor.html">AI Advisor</a>
+      <button class="nav-link nav-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <main class="page-content" style="padding-bottom:0">
+
+    <div class="chat-layout">
+
+      <!-- Sidebar: previous sessions -->
+      <div class="chat-sidebar">
+        <div class="section-header" style="margin-bottom:0.75rem">
+          <span class="section-title" style="font-size:0.9rem">Past Sessions</span>
+          <button class="btn btn-sm btn-primary" id="new-session-btn">+ New</button>
+        </div>
+        <div id="sessions-list" style="font-size:0.82rem"></div>
+      </div>
+
+      <!-- Main chat area -->
+      <div class="chat-main">
+        <!-- Context status bar -->
+        <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0">
+          <div style="font-size:0.85rem;color:var(--text-secondary)" id="context-status">Loading financial context…</div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- Input area -->
+        <div class="chat-input-area">
+          <textarea id="chat-input" placeholder="Ask about cashflow, debt strategy, asset sales…" rows="2"></textarea>
+          <button class="btn btn-primary" id="send-btn">Send</button>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/ai-advisor.injector.js" defer></script>
+</body>
+</html>
