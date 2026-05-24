@@ -1,9 +1,10 @@
-import { getRecord, updateRecord, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
+import { getRecord, updateRecord, createRecord, listRecords, jsonResponse, errorResponse } from '../../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Liabilities';
 const PAYMENTS_TABLE = 'Liability_Payments';
 const TX_TABLE = 'Transactions';
+const CAT_TABLE = 'Categories';
 
 export async function onRequestGet(context) {
   const { env, params } = context;
@@ -64,16 +65,24 @@ export async function onRequestPatch(context) {
       return errorResponse('Failed to create payment record: ' + err.message, 500);
     }
 
-    // Create expense transaction for cash flow tracking (non-fatal)
+    // E3: loan payment = cash OUT — create Expense transaction with entity + category (non-fatal)
     try {
-      await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TX_TABLE, {
+      const catRes = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, CAT_TABLE, {
+        filterByFormula: `AND({active}=TRUE(),{type}='Loan')`,
+        maxRecords: 1
+      });
+      const loanCatId = catRes.records?.[0]?.id || null;
+      const txFields = {
         date: paymentDate,
         amount: paymentAmount,
         type: 'Expense',
+        entity: f.name || '',
         description: `Loan payment — ${f.name || id}`,
         source: 'LiabilityPayment',
         note: body.note || ''
-      });
+      };
+      if (loanCatId) txFields.category_id = [loanCatId];
+      await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TX_TABLE, txFields);
     } catch { /* non-fatal */ }
 
     try {

@@ -2,6 +2,8 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Liabilities';
+const TX_TABLE = 'Transactions';
+const CAT_TABLE = 'Categories';
 
 export async function onRequestGet(context) {
   const { env, request } = context;
@@ -52,6 +54,29 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+
+    // E3: loan received = cash IN — create Income transaction (non-fatal)
+    const loanSize = Number(body.loan_size || 0);
+    if (loanSize > 0) {
+      try {
+        const catRes = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, CAT_TABLE, {
+          filterByFormula: `AND({active}=TRUE(),{type}='Loan')`,
+          maxRecords: 1
+        });
+        const loanCatId = catRes.records?.[0]?.id || null;
+        const txFields = {
+          date: new Date().toISOString().split('T')[0],
+          amount: loanSize,
+          type: 'Income',
+          entity: name,
+          description: `Loan received — ${name}`,
+          source: 'LiabilityPayment'
+        };
+        if (loanCatId) txFields.category_id = [loanCatId];
+        await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TX_TABLE, txFields);
+      } catch { /* non-fatal */ }
+    }
+
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
