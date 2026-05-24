@@ -169,57 +169,65 @@
         <button class="btn btn-success w-full" id="save-payment">Log Payment</button>
       </div>
 
-      <!-- Add new liability -->
+      <!-- Add new liability (collapsible) -->
       <div class="card" style="margin-bottom:1rem">
-        <div class="section-header">
-          <span class="section-title">Add New Liability</span>
+        <button id="liab-form-toggle"
+          style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;
+          display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+          <span class="section-title">＋ Add New Liability</span>
+          <span id="liab-form-chevron"
+            style="transition:transform 0.3s ease;display:inline-block;color:var(--text-secondary);font-size:0.85rem">▼</span>
+        </button>
+        <div id="liab-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+          <div style="padding-top:1rem">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-name">Liability Name</label>
+                <input type="text" id="liab-name" placeholder="Bank / Person / Card">
+              </div>
+              <div class="form-group">
+                <label for="liab-creditor-type">Creditor Type</label>
+                <select id="liab-creditor-type">
+                  <option value="Bank">Bank</option>
+                  <option value="Family">Family</option>
+                  <option value="Friend">Friend</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-loan-size">Loan Size (฿)</label>
+                <input type="number" id="liab-loan-size" placeholder="Original loan amount">
+              </div>
+              <div class="form-group">
+                <label for="liab-balance">Current Balance (฿)</label>
+                <input type="number" id="liab-balance" placeholder="Remaining balance">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-rate">Interest Rate (% p.a.)</label>
+                <input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5">
+              </div>
+              <div class="form-group">
+                <label for="liab-monthly">Monthly Payment (฿)</label>
+                <input type="number" id="liab-monthly" placeholder="฿">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-start">Start Date</label>
+                <input type="date" id="liab-start">
+              </div>
+              <div class="form-group">
+                <label for="liab-notes">Notes</label>
+                <input type="text" id="liab-notes" placeholder="Optional notes">
+              </div>
+            </div>
+            <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
+          </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-name">Liability Name</label>
-            <input type="text" id="liab-name" placeholder="Bank / Person / Card">
-          </div>
-          <div class="form-group">
-            <label for="liab-creditor-type">Creditor Type</label>
-            <select id="liab-creditor-type">
-              <option value="Bank">Bank</option>
-              <option value="Family">Family</option>
-              <option value="Friend">Friend</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-loan-size">Loan Size (฿)</label>
-            <input type="number" id="liab-loan-size" placeholder="Original loan amount">
-          </div>
-          <div class="form-group">
-            <label for="liab-balance">Current Balance (฿)</label>
-            <input type="number" id="liab-balance" placeholder="Remaining balance">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-rate">Interest Rate (% p.a.)</label>
-            <input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5">
-          </div>
-          <div class="form-group">
-            <label for="liab-monthly">Monthly Payment (฿)</label>
-            <input type="number" id="liab-monthly" placeholder="฿">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-start">Start Date</label>
-            <input type="date" id="liab-start">
-          </div>
-          <div class="form-group">
-            <label for="liab-notes">Notes</label>
-            <input type="text" id="liab-notes" placeholder="Optional notes">
-          </div>
-        </div>
-        <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
       </div>
 
       <!-- Active liabilities list -->

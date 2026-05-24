@@ -4,8 +4,10 @@
 
   const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
 
-  let categories  = [];
-  let allBudgets  = [];
+  let categories        = [];
+  let allBudgets        = [];
+  let budgetsData       = [];   // loaded budgets for inline edit
+  let activeBudgetEditId = null;
   let txType      = 'Expense';
   let txPeriod    = 'daily';
   let txMap       = {};   // record ID → tx fields (Fix 6)
@@ -482,6 +484,18 @@
     const pdateEl = document.getElementById('payment-date');
     if (pdateEl) pdateEl.value = today;
 
+    // Fix 18: collapse/expand "Add New Liability" form
+    const liabToggle  = document.getElementById('liab-form-toggle');
+    const liabBody    = document.getElementById('liab-form-body');
+    const liabChevron = document.getElementById('liab-form-chevron');
+    if (liabToggle && liabBody) {
+      liabToggle.addEventListener('click', () => {
+        const isOpen = liabBody.style.maxHeight && liabBody.style.maxHeight !== '0px' && liabBody.style.maxHeight !== '0';
+        liabBody.style.maxHeight = isOpen ? '0' : '700px';
+        if (liabChevron) liabChevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
+    }
+
     ensureMsgEl('payment-msg', 'save-payment');
     ensureMsgEl('liab-msg', 'save-liability');
 
@@ -591,6 +605,8 @@
         return;
       }
 
+      budgetsData = buds; // store for inline edit access
+
       budgetList.innerHTML = buds.map(b => {
         const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
         const cat   = catMap[catId];
@@ -599,22 +615,171 @@
         const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
         const clr   = p >= 100 ? '#ef4444' : p >= 85 ? '#f59e0b' : '#22c55e';
         return `
-          <div style="margin-bottom:1rem">
-            <div style="display:flex;justify-content:space-between;font-size:0.88rem;font-weight:600">
-              <span>${b.label || (cat ? cat.name : 'Budget')}</span>
-              <span>${fmt(spent)} / ${fmt(limit)}</span>
+          <div class="budget-row-wrap">
+            <div style="margin-bottom:0.5rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.88rem;font-weight:600;align-items:center">
+                <span>${b.label || (cat ? cat.name : 'Budget')}</span>
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                  <span>${fmt(spent)} / ${fmt(limit)}</span>
+                  <button class="budget-edit-btn" data-id="${b.id}"
+                    style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;
+                    color:var(--text-secondary);font-size:0.78rem;padding:0.1rem 0.4rem;line-height:1.6">✏️</button>
+                </div>
+              </div>
+              <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
+                ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
+              </div>
+              <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+                <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;transition:width 0.4s"></div>
+              </div>
+              <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
             </div>
-            <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
-              ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
-            </div>
-            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-              <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;transition:width 0.4s"></div>
-            </div>
-            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
+            <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none"></div>
           </div>`;
       }).join('');
+
+      // Wire up pencil buttons
+      budgetList.querySelectorAll('.budget-edit-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          openBudgetEditPanel(btn.dataset.id);
+        });
+      });
     } catch (err) {
       budgetList.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
+    }
+  }
+
+  /* ── Fix 21: Budget inline edit ── */
+  function openBudgetEditPanel(budgetId) {
+    // Toggle: clicking same pencil closes it
+    if (activeBudgetEditId === budgetId) {
+      const panel = document.querySelector(`.budget-edit-panel[data-budget-panel="${budgetId}"]`);
+      if (panel) panel.style.display = 'none';
+      activeBudgetEditId = null;
+      return;
+    }
+    // Close any previously open panel
+    if (activeBudgetEditId) {
+      const prev = document.querySelector(`.budget-edit-panel[data-budget-panel="${activeBudgetEditId}"]`);
+      if (prev) prev.style.display = 'none';
+    }
+    activeBudgetEditId = budgetId;
+
+    const b = budgetsData.find(bud => bud.id === budgetId);
+    const panel = document.querySelector(`.budget-edit-panel[data-budget-panel="${budgetId}"]`);
+    if (!b || !panel) return;
+
+    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+    const catOptions = categories.map(c =>
+      `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.group ? c.group + ' — ' : ''}${c.name}</option>`
+    ).join('');
+
+    panel.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;
+        margin-bottom:1rem;background:rgba(59,130,246,0.03)">
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Label</label>
+            <input type="text" class="be-label" value="${(b.label || '').replace(/"/g, '&quot;')}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Category</label>
+            <select class="be-category" style="font-size:0.85rem;padding:0.35rem 0.5rem">
+              <option value="">— None —</option>${catOptions}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Amount ฿</label>
+            <input type="number" class="be-amount" value="${b.amount || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Period</label>
+            <select class="be-period" style="font-size:0.85rem;padding:0.35rem 0.5rem">
+              <option value="Monthly" ${b.period === 'Monthly' ? 'selected' : ''}>Monthly</option>
+              <option value="Annual"  ${b.period === 'Annual'  ? 'selected' : ''}>Annual</option>
+              <option value="One-time" ${b.period === 'One-time' ? 'selected' : ''}>One-time</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Start Date</label>
+            <input type="date" class="be-start" value="${b.start_date || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">End Date</label>
+            <input type="date" class="be-end" value="${b.end_date || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+          <input type="checkbox" class="be-active" style="width:auto;margin:0"
+            ${b.active !== false ? 'checked' : ''}>
+          <label style="font-size:0.85rem;color:var(--text-secondary);margin:0">Active</label>
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-primary be-save" style="flex:1;font-size:0.85rem;padding:0.4rem">Save</button>
+          <button class="btn btn-outline be-cancel" style="flex:1;font-size:0.85rem;padding:0.4rem">Cancel</button>
+          <button class="btn btn-danger be-delete" style="font-size:0.85rem;padding:0.4rem 0.75rem">Delete</button>
+        </div>
+        <div class="be-msg" style="display:none;font-size:0.82rem;margin-top:0.5rem"></div>
+      </div>`;
+
+    panel.style.display = 'block';
+
+    panel.querySelector('.be-save').addEventListener('click', () => saveBudgetEdit(budgetId, panel));
+    panel.querySelector('.be-cancel').addEventListener('click', () => {
+      panel.style.display = 'none';
+      activeBudgetEditId = null;
+    });
+    panel.querySelector('.be-delete').addEventListener('click', () => deleteBudget(budgetId, panel));
+  }
+
+  async function saveBudgetEdit(budgetId, panel) {
+    const msgEl  = panel.querySelector('.be-msg');
+    const catVal = panel.querySelector('.be-category')?.value;
+    const body   = {
+      label:      panel.querySelector('.be-label')?.value?.trim(),
+      amount:     Number(panel.querySelector('.be-amount')?.value || 0),
+      period:     panel.querySelector('.be-period')?.value,
+      active:     panel.querySelector('.be-active')?.checked
+    };
+    const startVal = panel.querySelector('.be-start')?.value;
+    const endVal   = panel.querySelector('.be-end')?.value;
+    if (startVal) body.start_date = startVal;
+    if (endVal)   body.end_date   = endVal;
+    if (catVal)   body.category_id = [catVal];
+
+    try {
+      await api(`/api/budgets/${budgetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      activeBudgetEditId = null;
+      await loadBudgets();
+      loadBudgetTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
+  }
+
+  async function deleteBudget(budgetId, panel) {
+    if (!confirm('Delete this budget? Cannot be undone.')) return;
+    const msgEl = panel.querySelector('.be-msg');
+    try {
+      await api(`/api/budgets/${budgetId}`, { method: 'DELETE' });
+      activeBudgetEditId = null;
+      await loadBudgets();
+      loadBudgetTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
     }
   }
 
