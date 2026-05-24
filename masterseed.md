@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-24 — Fix A/B/C/D complete; prompts archived to docs/prompts/
+> Last Updated: 2026-05-24 — Fix A/B/C/D/E complete; prompts archived to docs/prompts/
 
 ---
 
@@ -108,7 +108,7 @@ CC reads both + all relevant source files fresh before writing anything.
 | Database | Airtable | chaijohn-core (personal) + Janis Business db (blog push) |
 | Image storage | Cloudinary | Drop zone, collection assets, diary images |
 | AI | Anthropic Claude API | claude-sonnet-4-20250514 — diary assist, drop zone OCR, advisor |
-| KV | Cloudflare KV (CHAIJOHN_KV) | Sessions, PIN hash |
+| KV | Cloudflare KV (CHAIJOHN_KV) | Sessions, PIN hash, cashflow sync point |
 | Charts | Chart.js | CDN loaded — no npm, no build step |
 | Frontend | Vanilla JS + CSS variables | No React, no Vue, no Tailwind, no Bootstrap |
 | Auth | Single PIN (4-6 digits) | SHA-256 + salt, stored in KV |
@@ -206,7 +206,11 @@ functions/
     ├── auth/check.js                    ✅
     ├── transactions.js                  ✅ (GET/POST — PATCH/DELETE check pending)
     ├── categories.js                    ✅
-    ├── debts.js                         ✅ (PATCH for Fix 18/19 pending)
+    ├── debts.js                         ✅
+    ├── liabilities.js                   ✅ (E3 — loan received creates Income tx)
+    ├── liabilities/[id].js              ✅ (E3 — payment creates Expense tx)
+    ├── cashflow-sync.js                 ✅ (E4 — GET/POST KV sync point)
+    ├── admin/cleanup.js                 ✅ (E3 — deletes test liability tx records)
     ├── assets.js                        ✅
     ├── diary.js                         ✅
     ├── utilities.js                     ✅ (ft_note pending Fix 16)
@@ -232,6 +236,7 @@ functions/
 | Fix B | Fix 19 (Liabilities expandable row + payment history) + Fix 22 (Budgets card/group view) | ✅ COMPLETE |
 | Fix C | Fix 14 (Budget meter proportional scale) + Fix 15–17 (Utilities YoY charts + FT note + import script v2) | ✅ COMPLETE |
 | Fix D | D1 Dropzone text files · D2 Diary AI undo · D3 Forecast cashflow · D4 Alert bubbles · D5 Category create · D6 One-time budget + T4 panel | ✅ COMPLETE |
+| Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -243,8 +248,8 @@ functions/
 **Working and confirmed:**
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
-- Dashboard: cashflow forecast T1 (30-day window w/ today line), Expense Pareto T2, Liabilities T3, Budget vs Actual T4 (collapsible), Budget Meters, Risk Simulator, Solution Playroom, Alert chips (priority + dismissible)
-- Entry: Transactions ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅
+- Dashboard: T1 cashflow (30-day, netflow + in-vs-out toggle, KV sync point), T2 Pareto, T3 Liabilities, T4 Budget vs Actual — all four in single top-row grid (2:1:1:1), collapsible panels. Budget Meters (period filter: all/monthly/annual/one-time, annual÷12 normalisation). Risk Simulator, Solution Playroom, Alert chips ✅
+- Entry: Transactions (entity autocomplete datalist) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
 - Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
@@ -273,7 +278,7 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-1. QA Fix D live: confirm text dropzone, AI comparison panel, T1 forecast chart, alert dismissal, new category form, T4 combo chart
+1. QA Fix E live: confirm category create with new group, entity autocomplete, liability cashflow transactions, KV sync balance, in-vs-out toggle, period meter filter, 4-panel layout
 2. Collection module full test + buyer tags
 3. AI Advisor full test + verify financial context loads
 

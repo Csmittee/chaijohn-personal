@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
-> Last updated: 2026-05-25
-> Current highest lesson: L024
+> Last updated: 2026-05-24
+> Current highest lesson: L026
 
 ---
 
@@ -158,6 +158,25 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 
 ---
 
-## FIX E — PENDING
-*Lessons to be added by CC after Fix E execution*
+## FIX E — Category + Liability Cashflow + Dashboard Overhaul (2026-05-24)
+
+### L023 — Liability cashflow direction
+**Problem:** Creating a new liability was triggering a negative (cash-out) transaction, or no transaction at all. Paying a loan also created no matching transaction. Cashflow chart was factually wrong.
+**Rule:** Loan received = cash IN → create `type: 'Income'` transaction. Loan payment = cash OUT → create `type: 'Expense'` transaction. Both use category with `type='Loan'` from Categories table. Both are non-fatal (wrapped in try/catch) so primary Liabilities operation never fails due to tx creation.
+**Tag:** #liabilities #cashflow #transactions
+
+### L024 — Cloudflare KV for lightweight app-state sync
+**Problem:** Needed a persistent "starting balance" anchor for the cashflow chart without creating a new Airtable table for a single value.
+**Rule:** Cloudflare KV (`CHAIJOHN_KV`) is ideal for small app-state values (a single JSON object). Use `env.CHAIJOHN_KV.get/put('cashflow_sync')` in a dedicated `functions/api/cashflow-sync.js` endpoint (GET + POST). No Airtable table needed for single-record state.
+**Tag:** #kv #cloudflare #architecture
+
+### L025 — Chart.js multi-mode view toggle pattern
+**Problem:** T1 chart needed two mutually exclusive render modes (netflow vs in-vs-out) sharing the same canvas and data.
+**Rule:** Store view mode in a module-level state variable (`let t1ViewMode = 'netflow'`). The render function checks the mode and branches: `if (t1ViewMode === 'invsout') { ... } else { ... }`. Toggle buttons set the state then call `renderT1()`. Destroy/recreate chart on each render (standard Chart.js pattern). Never inline mode logic in the toggle handler.
+**Tag:** #chartjs #dashboard #ux
+
+### L026 — Budget meter period normalisation
+**Problem:** Annual budgets (e.g. ฿300,000 travel) shown in a monthly view made all monthly items look negligible (tiny bars) and caused visual distortion.
+**Rule:** For monthly display: `if period === 'Annual' → use amount ÷ 12`. Show badge "Annual" next to label so user knows it's a derived figure. One-time budgets only show if today falls within `start_date`–`end_date`. Filter toggle (All/Monthly/Annual/One-time) lets user isolate categories relevant to their current review.
+**Tag:** #budgets #dashboard #ux
 

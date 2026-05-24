@@ -1,3 +1,5 @@
+✅ COMPLETE — 2026-05-24 — E1 category hierarchy + free-text group via Airtable Meta API, E2 entity autocomplete (datalist), E3 liability cashflow direction fixed (loan=Income, payment=Expense), E4 cashflow KV sync point, E5 in-vs-out view toggle, E6 period-aware budget meters + filter, E7 4-panel top-row layout with collapsible panels. All committed directly to main.
+
 ✅ STATUS: READY FOR CC EXECUTION
 
 # CC_PROMPT_fixE — Category Hierarchy + Liability Cashflow Logic + Dashboard Overhaul + Cashflow Sync

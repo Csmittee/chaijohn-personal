@@ -1,3 +1,5 @@
+✅ COMPLETE — 2026-05-24 — Fix 14 (budget meter proportional scale + group view), Fix 15-17 (Utilities YoY charts, FT note field, import script v2). Executed on feature branch claude/adoring-goodall-oCcbS, merged to main 2026-05-24.
+
 Before writing any code, read these files:
 /docs/LESSONS.md, /docs/DECISIONS.md, /docs/PROGRESS.md
 Summarize what you understand before proceeding.
