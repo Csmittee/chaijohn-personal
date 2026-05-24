@@ -4,12 +4,20 @@
 
   const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
 
-  let categories  = [];
-  let allBudgets  = [];
+  let categories         = [];
+  let allBudgets         = [];
+  let budgetsData        = [];   // loaded budgets for inline edit
+  let activeBudgetEditId = null;
+  let activeLiabDetailId = null;
+  let budgetView         = 'row';
+  let budgetGroup        = 'all';
+  let budgetGroupState   = {};   // groupName → collapsed bool
+  let lastSpendByCat     = {};   // cached for re-render on view/group toggle
   let txType      = 'Expense';
   let txPeriod    = 'daily';
   let txMap       = {};   // record ID → tx fields (Fix 6)
   let elecChart, waterChart;
+  let budgetActiveFilter = 'active';
 
   /* ── API helpers ── */
   async function api(path, opts = {}) {
@@ -64,7 +72,7 @@
 
   async function loadBudgets() {
     try {
-      const res = await api('/api/budgets');
+      const res = await api('/api/budgets?active_only=true');
       allBudgets = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
     } catch { allBudgets = []; }
   }
@@ -375,7 +383,8 @@
         electricity_charge: Number(elecCharge?.value || 0) || undefined,
         water_units:  Number(waterUnits?.value  || 0) || undefined,
         water_charge: Number(waterCharge?.value || 0) || undefined,
-        notes: document.getElementById('util-notes')?.value || ''
+        notes:   document.getElementById('util-notes')?.value || '',
+        ft_note: document.getElementById('util-ft-note')?.value || ''
       };
       Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
       try {
@@ -388,41 +397,165 @@
     });
   }
 
+  let yoyCharts = {};
+  let yoyAllRecords = [];
+
   async function loadUtilityHistory() {
     const tableEl = document.getElementById('util-history-table');
     if (!tableEl) return;
     try {
       const now = new Date();
-      const res = await api(`/api/utilities?year=${now.getFullYear()}`);
-      const records = (res.records || []).map(r => r.fields).slice(0, 12);
+      // Fix 15: fetch all records (no year filter) for YoY charts
+      const [yearRes, allRes] = await Promise.all([
+        api(`/api/utilities?year=${now.getFullYear()}`),
+        api('/api/utilities')
+      ]);
+      const records = (yearRes.records || []).map(r => r.fields).slice(0, 12);
+      yoyAllRecords = (allRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+
       if (records.length === 0) {
         tableEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No utility records yet.</div>';
-        return;
+      } else {
+        // Fix 16: add FT column to table
+        tableEl.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+            <thead><tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:0.25rem">Month</th>
+              <th style="text-align:right">Elec Units</th>
+              <th style="text-align:right">Elec ฿</th>
+              <th style="text-align:right">Water Units</th>
+              <th style="text-align:right">Water ฿</th>
+              <th style="text-align:center">FT</th>
+            </tr></thead>
+            <tbody>${records.map(r => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:0.25rem">${(r.month || '').slice(0, 7)}</td>
+                <td style="text-align:right">${r.electricity_units || '—'}</td>
+                <td style="text-align:right">${r.electricity_charge ? fmt(r.electricity_charge) : '—'}</td>
+                <td style="text-align:right">${r.water_units || '—'}</td>
+                <td style="text-align:right">${r.water_charge ? fmt(r.water_charge) : '—'}</td>
+                <td style="text-align:center">
+                  ${r.ft_note ? `<span title="${r.ft_note.replace(/"/g,'&quot;')}"
+                    style="cursor:help">📝</span>` : ''}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+        const reversed = [...records].reverse();
+        const labels   = reversed.map(r => (r.month || '').slice(0, 7));
+        renderMiniChart('elec-chart',  labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
+        renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
       }
-      tableEl.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
-          <thead><tr style="border-bottom:1px solid var(--border)">
-            <th style="text-align:left;padding:0.25rem">Month</th>
-            <th style="text-align:right">Elec Units</th><th style="text-align:right">Elec ฿</th>
-            <th style="text-align:right">Water Units</th><th style="text-align:right">Water ฿</th>
-          </tr></thead>
-          <tbody>${records.map(r => `
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:0.25rem">${(r.month || '').slice(0, 7)}</td>
-              <td style="text-align:right">${r.electricity_units || '—'}</td>
-              <td style="text-align:right">${r.electricity_charge ? fmt(r.electricity_charge) : '—'}</td>
-              <td style="text-align:right">${r.water_units || '—'}</td>
-              <td style="text-align:right">${r.water_charge ? fmt(r.water_charge) : '—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`;
-      const reversed = [...records].reverse();
-      const labels   = reversed.map(r => (r.month || '').slice(0, 7));
-      renderMiniChart('elec-chart',  labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
-      renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
+
+      // Fix 15: render YoY charts
+      renderYoYCharts(yoyAllRecords);
     } catch (err) {
       tableEl.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
+  }
+
+  /* ── Fix 15: YoY trend charts ── */
+  const YOY_COLORS = { 2023:'#6366f1', 2024:'#22c55e', 2025:'#f59e0b', 2026:'#3b82f6' };
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function renderYoYCharts(records) {
+    if (!records || records.length === 0) return;
+
+    // Build data grouped by year → month(1-12) → value
+    const byYear = {};
+    records.forEach(r => {
+      const d = r.month || '';
+      if (!d) return;
+      const year  = parseInt(d.slice(0, 4));
+      const month = parseInt(d.slice(5, 7));
+      if (!byYear[year]) byYear[year] = {};
+      byYear[year][month] = r;
+    });
+
+    const years = Object.keys(byYear).map(Number).sort();
+    if (years.length === 0) return;
+
+    // Populate year selects
+    const fromSel = document.getElementById('yoy-from-year');
+    const toSel   = document.getElementById('yoy-to-year');
+    if (fromSel && fromSel.options.length === 0) {
+      years.forEach(y => {
+        fromSel.appendChild(new Option(y, y));
+        toSel.appendChild(new Option(y, y));
+      });
+      fromSel.value = years[0];
+      toSel.value   = years[years.length - 1];
+
+      const onRangeChange = () => {
+        const from = parseInt(fromSel.value);
+        const to   = parseInt(toSel.value);
+        if (from > to) return;
+        drawYoYCharts(byYear, years.filter(y => y >= from && y <= to));
+        renderYoYLegend(years.filter(y => y >= from && y <= to));
+      };
+      fromSel.addEventListener('change', onRangeChange);
+      toSel.addEventListener('change', onRangeChange);
+    }
+
+    const from = parseInt(fromSel?.value || years[0]);
+    const to   = parseInt(toSel?.value   || years[years.length - 1]);
+    const activeYears = years.filter(y => y >= from && y <= to);
+    drawYoYCharts(byYear, activeYears);
+    renderYoYLegend(activeYears);
+  }
+
+  function drawYoYCharts(byYear, activeYears) {
+    const charts = [
+      { id: 'yoy-elec-units',  field: 'electricity_units',  label: 'Units' },
+      { id: 'yoy-elec-charge', field: 'electricity_charge', label: '฿' },
+      { id: 'yoy-water-units', field: 'water_units',        label: 'Units' },
+      { id: 'yoy-water-charge',field: 'water_charge',       label: '฿' }
+    ];
+    charts.forEach(cfg => {
+      const canvas = document.getElementById(cfg.id);
+      if (!canvas) return;
+      if (yoyCharts[cfg.id]) yoyCharts[cfg.id].destroy();
+
+      const datasets = activeYears.map(year => {
+        const color = YOY_COLORS[year] || `hsl(${(year % 10) * 36},65%,55%)`;
+        const data  = MONTHS_SHORT.map((_, mi) => {
+          const rec = byYear[year]?.[mi + 1];
+          return rec && rec[cfg.field] !== undefined ? Number(rec[cfg.field]) : null;
+        });
+        return {
+          label: String(year), data, borderColor: color, backgroundColor: color + '22',
+          borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false
+        };
+      });
+
+      yoyCharts[cfg.id] = new Chart(canvas, {
+        type: 'line',
+        data: { labels: MONTHS_SHORT, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: activeYears.length > 1, position: 'bottom',
+              labels: { boxWidth: 10, font: { size: 8 } } }
+          },
+          scales: {
+            x: { ticks: { font: { size: 8 } } },
+            y: { ticks: { font: { size: 8 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+          }
+        }
+      });
+    });
+  }
+
+  function renderYoYLegend(activeYears) {
+    const legendEl = document.getElementById('yoy-legend');
+    if (!legendEl) return;
+    legendEl.innerHTML = activeYears.map(y => {
+      const color = YOY_COLORS[y] || `hsl(${(y % 10) * 36},65%,55%)`;
+      return `<span style="display:flex;align-items:center;gap:0.3rem">
+        <span style="width:14px;height:3px;background:${color};display:inline-block;border-radius:2px"></span>
+        <span>${y}</span>
+      </span>`;
+    }).join('');
   }
 
   function renderMiniChart(canvasId, labels, data, label, color) {
@@ -482,6 +615,18 @@
     const pdateEl = document.getElementById('payment-date');
     if (pdateEl) pdateEl.value = today;
 
+    // Fix 18: collapse/expand "Add New Liability" form
+    const liabToggle  = document.getElementById('liab-form-toggle');
+    const liabBody    = document.getElementById('liab-form-body');
+    const liabChevron = document.getElementById('liab-form-chevron');
+    if (liabToggle && liabBody) {
+      liabToggle.addEventListener('click', () => {
+        const isOpen = liabBody.style.maxHeight && liabBody.style.maxHeight !== '0px' && liabBody.style.maxHeight !== '0';
+        liabBody.style.maxHeight = isOpen ? '0' : '700px';
+        if (liabChevron) liabChevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
+    }
+
     ensureMsgEl('payment-msg', 'save-payment');
     ensureMsgEl('liab-msg', 'save-liability');
 
@@ -532,6 +677,7 @@
     });
   }
 
+  /* ── Fix 19: Liabilities expandable rows ── */
   function renderLiabilitiesList() {
     const table = document.getElementById('active-liabilities-table');
     if (!table) return;
@@ -545,20 +691,239 @@
       const loan = Number(l.loan_size || bal);
       const paidPct = loan > 0 ? Math.round((1 - bal / loan) * 100) : 0;
       return `
-        <div style="border-bottom:1px solid var(--border);padding:0.75rem 0">
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <strong style="font-size:0.95rem">${l.name}</strong>
-            <span style="font-size:0.85rem;color:#ef4444">${fmt(bal)}</span>
+        <div class="liab-row-wrap">
+          <div class="liab-row" data-liab-id="${l.id}"
+            style="border-bottom:1px solid var(--border);padding:0.75rem 0;cursor:pointer;
+            user-select:none;transition:background 0.15s"
+            onmouseover="this.style.background='rgba(59,130,246,0.04)'"
+            onmouseout="this.style.background=''">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <strong style="font-size:0.95rem">${l.name}</strong>
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <span style="font-size:0.85rem;color:#ef4444">${fmt(bal)}</span>
+                <span class="liab-chevron" data-liab-chevron="${l.id}"
+                  style="font-size:0.75rem;color:var(--text-secondary);transition:transform 0.3s;
+                  display:inline-block">▼</span>
+              </div>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
+              ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
+            </div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
+              <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.15rem">${paidPct}% paid off</div>
           </div>
-          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
-            ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
-          </div>
-          <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
-            <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
-          </div>
-          <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.15rem">${paidPct}% paid off</div>
+          <div class="liab-detail-panel" data-liab-panel="${l.id}" style="display:none"></div>
         </div>`;
     }).join('');
+
+    table.querySelectorAll('.liab-row').forEach(row => {
+      row.addEventListener('click', () => openLiabDetailPanel(row.dataset.liabId));
+    });
+  }
+
+  async function openLiabDetailPanel(liabId) {
+    // Toggle: clicking same row closes it
+    if (activeLiabDetailId === liabId) {
+      const panel = document.querySelector(`.liab-detail-panel[data-liab-panel="${liabId}"]`);
+      if (panel) panel.style.display = 'none';
+      const chev = document.querySelector(`[data-liab-chevron="${liabId}"]`);
+      if (chev) chev.style.transform = '';
+      activeLiabDetailId = null;
+      return;
+    }
+    // Close previous
+    if (activeLiabDetailId) {
+      const prev = document.querySelector(`.liab-detail-panel[data-liab-panel="${activeLiabDetailId}"]`);
+      if (prev) prev.style.display = 'none';
+      const prevChev = document.querySelector(`[data-liab-chevron="${activeLiabDetailId}"]`);
+      if (prevChev) prevChev.style.transform = '';
+    }
+    activeLiabDetailId = liabId;
+    const chev = document.querySelector(`[data-liab-chevron="${liabId}"]`);
+    if (chev) chev.style.transform = 'rotate(180deg)';
+
+    const l     = liabilities.find(x => x.id === liabId);
+    const panel = document.querySelector(`.liab-detail-panel[data-liab-panel="${liabId}"]`);
+    if (!l || !panel) return;
+
+    const bal  = Number(l.current_balance || 0);
+    const loan = Number(l.loan_size || bal);
+    const paid = Math.max(0, loan - bal);
+    const paidPct = loan > 0 ? Math.round((paid / loan) * 100) : 0;
+    const balWidth = loan > 0 ? Math.min(100, Math.round((bal / loan) * 100)) : 100;
+
+    panel.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;
+        margin-bottom:0.5rem;background:rgba(59,130,246,0.02)">
+
+        <!-- Section A: Edit Fields -->
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Edit</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Creditor Name</label>
+              <input type="text" class="le-name" value="${(l.name || '').replace(/"/g,'&quot;')}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Creditor Type</label>
+              <select class="le-type" style="font-size:0.85rem;padding:0.3rem 0.5rem">
+                <option value="Bank"   ${l.creditor_type==='Bank'   ?'selected':''}>Bank</option>
+                <option value="Family" ${l.creditor_type==='Family' ?'selected':''}>Family</option>
+                <option value="Friend" ${l.creditor_type==='Friend' ?'selected':''}>Friend</option>
+                <option value="Other"  ${l.creditor_type==='Other'  ?'selected':''}>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Original Amount ฿</label>
+              <input type="number" class="le-loan" value="${l.loan_size || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Current Balance ฿</label>
+              <input type="number" class="le-balance" value="${bal || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Interest Rate %</label>
+              <input type="number" class="le-rate" step="0.01" value="${l.interest_rate || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Monthly Payment ฿</label>
+              <input type="number" class="le-monthly" value="${l.monthly_payment || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Notes</label>
+            <input type="text" class="le-notes" value="${(l.notes || '').replace(/"/g,'&quot;')}"
+              style="font-size:0.85rem;padding:0.3rem 0.5rem">
+          </div>
+          <button class="btn btn-primary le-save" style="font-size:0.85rem;padding:0.35rem 1rem">Save Changes</button>
+          <div class="le-msg" style="display:none;font-size:0.82rem;margin-top:0.4rem"></div>
+        </div>
+
+        <!-- Section B: Balance Comparison Bar -->
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Balance</div>
+          ${bal === 0 ? `
+            <div style="font-size:0.9rem;color:#22c55e;font-weight:600">✅ Fully paid</div>
+          ` : `
+            <div style="margin-bottom:0.4rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.78rem;
+                color:var(--text-secondary);margin-bottom:0.25rem">
+                <span>Original loan</span><span>${fmt(loan)}</span>
+              </div>
+              <div style="height:10px;background:#64748b;border-radius:5px;overflow:hidden">
+                <div style="height:100%;width:100%;background:#64748b;border-radius:5px"></div>
+              </div>
+            </div>
+            <div style="margin-bottom:0.4rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.78rem;
+                color:var(--text-secondary);margin-bottom:0.25rem">
+                <span>Current balance</span><span>${fmt(bal)}</span>
+              </div>
+              <div style="height:10px;background:var(--border);border-radius:5px;
+                overflow:hidden;border:1px dashed var(--border)">
+                <div style="height:100%;width:${balWidth}%;background:var(--color-primary);
+                  border-radius:5px;transition:width 0.4s"></div>
+              </div>
+            </div>
+            <div style="font-size:0.82rem;color:#22c55e;font-weight:500">
+              ${fmt(paid)} paid back (${paidPct}%)
+            </div>
+          `}
+        </div>
+
+        <!-- Section C: Payment History -->
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Payment History</div>
+          <div class="liab-history-list" data-liab-history="${liabId}">
+            <div style="color:var(--text-secondary);font-size:0.85rem">Loading…</div>
+          </div>
+        </div>
+      </div>`;
+
+    panel.style.display = 'block';
+    panel.querySelector('.le-save').addEventListener('click', () => saveLiabEdit(liabId, panel));
+    loadLiabHistory(liabId, panel);
+  }
+
+  async function saveLiabEdit(liabId, panel) {
+    const msgEl = panel.querySelector('.le-msg');
+    const body = {
+      name:            panel.querySelector('.le-name')?.value?.trim(),
+      creditor_type:   panel.querySelector('.le-type')?.value,
+      loan_size:       Number(panel.querySelector('.le-loan')?.value    || 0) || undefined,
+      current_balance: Number(panel.querySelector('.le-balance')?.value || 0),
+      interest_rate:   Number(panel.querySelector('.le-rate')?.value    || 0) || undefined,
+      monthly_payment: Number(panel.querySelector('.le-monthly')?.value || 0) || undefined,
+      notes:           panel.querySelector('.le-notes')?.value || ''
+    };
+    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+    try {
+      await api(`/api/liabilities/${liabId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      activeLiabDetailId = null;
+      loadLiabilityTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
+  }
+
+  async function loadLiabHistory(liabId, panel) {
+    const histEl = panel.querySelector(`.liab-history-list[data-liab-history="${liabId}"]`);
+    if (!histEl) return;
+    try {
+      const res = await api(`/api/liabilities/${liabId}/history`);
+      const payments = res.payments || [];
+      if (payments.length === 0) {
+        histEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No payments recorded yet.</div>';
+        return;
+      }
+      const visible  = payments.slice(0, 10);
+      const overflow = payments.slice(10);
+      histEl.innerHTML = `
+        <div>${visible.map(p => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+            padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+            <span style="color:var(--text-secondary)">${p.date}</span>
+            <span style="font-weight:600;color:#22c55e">${fmt(p.amount)}</span>
+            <span style="color:var(--text-secondary);font-size:0.75rem;flex:1;
+              text-align:right;padding-left:0.5rem">${p.note || ''}</span>
+          </div>`).join('')}</div>
+        ${overflow.length > 0 ? `
+          <div id="liab-hist-more-${liabId}" style="display:none">${overflow.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;
+              padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+              <span style="color:var(--text-secondary)">${p.date}</span>
+              <span style="font-weight:600;color:#22c55e">${fmt(p.amount)}</span>
+              <span style="color:var(--text-secondary);font-size:0.75rem;flex:1;
+                text-align:right;padding-left:0.5rem">${p.note || ''}</span>
+            </div>`).join('')}</div>
+          <button onclick="
+            document.getElementById('liab-hist-more-${liabId}').style.display='block';
+            this.style.display='none'
+          " style="background:none;border:none;cursor:pointer;color:var(--color-primary);
+            font-size:0.82rem;padding:0.4rem 0;font-family:inherit">
+            Show all ${payments.length} payments
+          </button>` : ''}`;
+    } catch (err) {
+      histEl.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">${err.message}</div>`;
+    }
   }
 
   /* ── Budgets ── */
@@ -570,8 +935,9 @@
     const startOfMonth = nowYM + '-01';
 
     try {
+      const budgetUrl = budgetActiveFilter === 'all' ? '/api/budgets?all=true' : '/api/budgets?active_only=true';
       const [budgetRes, txRes] = await Promise.all([
-        api('/api/budgets'),
+        api(budgetUrl),
         api(`/api/transactions?start=${startOfMonth}&limit=500`)
       ]);
       const buds = (budgetRes.records || []).map(r => ({ id: r.id, ...r.fields }));
@@ -591,35 +957,482 @@
         return;
       }
 
-      budgetList.innerHTML = buds.map(b => {
-        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-        const cat   = catMap[catId];
-        const spent = spendByCat[catId] || 0;
-        const limit = Number(b.amount || 0);
-        const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-        const clr   = p >= 100 ? '#ef4444' : p >= 85 ? '#f59e0b' : '#22c55e';
-        return `
-          <div style="margin-bottom:1rem">
-            <div style="display:flex;justify-content:space-between;font-size:0.88rem;font-weight:600">
-              <span>${b.label || (cat ? cat.name : 'Budget')}</span>
-              <span>${fmt(spent)} / ${fmt(limit)}</span>
-            </div>
-            <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
-              ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
-            </div>
-            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-              <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;transition:width 0.4s"></div>
-            </div>
-            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
-          </div>`;
-      }).join('');
+      budgetsData    = buds; // store for inline edit access
+      lastSpendByCat = spendByCat;
+
+      // Render using current view/group state
+      renderBudgetListWithSpend(budgetList, catMap, spendByCat);
     } catch (err) {
       budgetList.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
   }
 
+  /* ── Fix 21: Budget inline edit ── */
+  function openBudgetEditPanel(budgetId) {
+    // Toggle: clicking same pencil closes it
+    if (activeBudgetEditId === budgetId) {
+      const panel = document.querySelector(`.budget-edit-panel[data-budget-panel="${budgetId}"]`);
+      if (panel) panel.style.display = 'none';
+      activeBudgetEditId = null;
+      return;
+    }
+    // Close any previously open panel
+    if (activeBudgetEditId) {
+      const prev = document.querySelector(`.budget-edit-panel[data-budget-panel="${activeBudgetEditId}"]`);
+      if (prev) prev.style.display = 'none';
+    }
+    activeBudgetEditId = budgetId;
+
+    const b = budgetsData.find(bud => bud.id === budgetId);
+    const panel = document.querySelector(`.budget-edit-panel[data-budget-panel="${budgetId}"]`);
+    if (!b || !panel) return;
+
+    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+    const catOptions = categories.map(c =>
+      `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.group ? c.group + ' — ' : ''}${c.name}</option>`
+    ).join('');
+
+    panel.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;
+        margin-bottom:1rem;background:rgba(59,130,246,0.03)">
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Label</label>
+            <input type="text" class="be-label" value="${(b.label || '').replace(/"/g, '&quot;')}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Category</label>
+            <select class="be-category" style="font-size:0.85rem;padding:0.35rem 0.5rem">
+              <option value="">— None —</option>${catOptions}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Amount ฿</label>
+            <input type="number" class="be-amount" value="${b.amount || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Period</label>
+            <select class="be-period" style="font-size:0.85rem;padding:0.35rem 0.5rem">
+              <option value="Monthly" ${b.period === 'Monthly' ? 'selected' : ''}>Monthly</option>
+              <option value="Annual"  ${b.period === 'Annual'  ? 'selected' : ''}>Annual</option>
+              <option value="One-time" ${b.period === 'One-time' ? 'selected' : ''}>One-time</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Start Date</label>
+            <input type="date" class="be-start" value="${b.start_date || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.8rem;color:var(--text-secondary)">End Date</label>
+            <input type="date" class="be-end" value="${b.end_date || ''}"
+              style="font-size:0.85rem;padding:0.35rem 0.5rem">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+          <input type="checkbox" class="be-active" style="width:auto;margin:0"
+            ${b.active !== false ? 'checked' : ''}>
+          <label style="font-size:0.85rem;color:var(--text-secondary);margin:0">Active</label>
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-primary be-save" style="flex:1;font-size:0.85rem;padding:0.4rem">Save</button>
+          <button class="btn btn-outline be-cancel" style="flex:1;font-size:0.85rem;padding:0.4rem">Cancel</button>
+          <button class="btn btn-danger be-delete" style="font-size:0.85rem;padding:0.4rem 0.75rem">Delete</button>
+        </div>
+        <div class="be-msg" style="display:none;font-size:0.82rem;margin-top:0.5rem"></div>
+      </div>`;
+
+    panel.style.display = 'block';
+
+    panel.querySelector('.be-save').addEventListener('click', () => saveBudgetEdit(budgetId, panel));
+    panel.querySelector('.be-cancel').addEventListener('click', () => {
+      panel.style.display = 'none';
+      activeBudgetEditId = null;
+    });
+    panel.querySelector('.be-delete').addEventListener('click', () => deleteBudget(budgetId, panel));
+  }
+
+  async function saveBudgetEdit(budgetId, panel) {
+    const msgEl  = panel.querySelector('.be-msg');
+    const catVal = panel.querySelector('.be-category')?.value;
+    const body   = {
+      label:      panel.querySelector('.be-label')?.value?.trim(),
+      amount:     Number(panel.querySelector('.be-amount')?.value || 0),
+      period:     panel.querySelector('.be-period')?.value,
+      active:     panel.querySelector('.be-active')?.checked
+    };
+    const startVal = panel.querySelector('.be-start')?.value;
+    const endVal   = panel.querySelector('.be-end')?.value;
+    if (startVal) body.start_date = startVal;
+    if (endVal)   body.end_date   = endVal;
+    if (catVal)   body.category_id = [catVal];
+
+    try {
+      await api(`/api/budgets/${budgetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      activeBudgetEditId = null;
+      await loadBudgets();
+      loadBudgetTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
+  }
+
+  async function deleteBudget(budgetId, panel) {
+    if (!confirm('Delete this budget? Cannot be undone.')) return;
+    const msgEl = panel.querySelector('.be-msg');
+    try {
+      await api(`/api/budgets/${budgetId}`, { method: 'DELETE' });
+      activeBudgetEditId = null;
+      await loadBudgets();
+      loadBudgetTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
+  }
+
+  /* ── Fix 22: Budget view/group controls ── */
+  function initBudgetControls() {
+    document.querySelectorAll('[data-budget-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetView = btn.dataset.budgetView;
+        document.querySelectorAll('[data-budget-view]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetView === budgetView));
+        renderBudgetList();
+      });
+    });
+
+    document.querySelectorAll('[data-budget-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetGroup = btn.dataset.budgetGroup;
+        document.querySelectorAll('[data-budget-group]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetGroup === budgetGroup));
+        const actionsEl = document.getElementById('budget-group-actions');
+        if (actionsEl) actionsEl.style.display = budgetGroup === 'byCategory' ? 'flex' : 'none';
+        renderBudgetList();
+      });
+    });
+
+    document.getElementById('budget-expand-all')?.addEventListener('click', () => {
+      budgetGroupState = {};
+      renderBudgetList();
+    });
+    document.getElementById('budget-collapse-all')?.addEventListener('click', () => {
+      Object.keys(getBudgetGroups()).forEach(g => { budgetGroupState[g] = true; });
+      renderBudgetList();
+    });
+
+    // D6A: Active/All filter toggle
+    document.querySelectorAll('[data-budget-active]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetActiveFilter = btn.dataset.budgetActive;
+        document.querySelectorAll('[data-budget-active]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetActive === budgetActiveFilter));
+        loadBudgetTab();
+      });
+    });
+  }
+
+  function getBudgetGroupName(cat) {
+    if (!cat) return 'Other';
+    const n = (cat.name || '').toLowerCase();
+    const g = (cat.group || '').toLowerCase();
+    if (n.includes('car') || g.includes('car')) return 'Car';
+    if (n.includes('family') || n.includes('child') || n.includes('school') || g.includes('family')) return 'Family';
+    if (n.includes('ais') || n.includes('fiber') || n.includes('internet') ||
+        g.includes('basic it') || g.includes('basic_it')) return 'Basic IT';
+    if (n.includes('anthropic') || n.includes('claude') ||
+        g.includes('bus it') || g.includes('bus_it') || g.includes('business it')) return 'Bus IT';
+    if (n.includes('investment') || g.includes('investment')) return 'Investment';
+    if (n.includes('business') || g.includes('business')) return 'Business';
+    if (n.includes('personal') || n.includes('coffee') || n.includes('cigarette') ||
+        n.includes('food') || g.includes('personal')) return 'Personal';
+    return 'Other';
+  }
+
+  function getBudgetGroups() {
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+    const groups = {};
+    budgetsData.forEach(b => {
+      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+      const cat   = catMap[catId];
+      const grp   = getBudgetGroupName(cat);
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(b);
+    });
+    return groups;
+  }
+
+  // Re-render budget list with current view/group state (uses cached budgetsData)
+  function renderBudgetList() {
+    const budgetList = document.getElementById('budgets-list');
+    if (!budgetList || budgetsData.length === 0) return;
+
+    const now           = new Date();
+    const startOfMonth  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const catMap        = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    // Recompute spendByCat from cached allBudgets data isn't available here
+    // We'll use a stored spendByCat from the last loadBudgetTab call
+    renderBudgetListWithSpend(budgetList, catMap, lastSpendByCat);
+  }
+
+  function renderBudgetListWithSpend(budgetList, catMap, spendByCat) {
+    if (budgetGroup === 'byCategory') {
+      renderBudgetGrouped(budgetList, catMap, spendByCat);
+    } else if (budgetView === 'card') {
+      renderBudgetCards(budgetList, budgetsData, catMap, spendByCat);
+    } else {
+      renderBudgetRows(budgetList, budgetsData, catMap, spendByCat);
+    }
+  }
+
+  function budgetRowHTML(b, cat, spent, limit, p, clr) {
+    return `
+      <div class="budget-row-wrap">
+        <div style="margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.88rem;
+            font-weight:600;align-items:center">
+            <span>${b.label || (cat ? cat.name : 'Budget')}</span>
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <span>${fmt(spent)} / ${fmt(limit)}</span>
+              <button class="budget-edit-btn" data-id="${b.id}"
+                style="background:none;border:1px solid var(--border);border-radius:4px;
+                cursor:pointer;color:var(--text-secondary);font-size:0.78rem;
+                padding:0.1rem 0.4rem;line-height:1.6">✏️</button>
+            </div>
+          </div>
+          <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
+            ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
+          </div>
+          <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;
+              transition:width 0.4s"></div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
+        </div>
+        <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none"></div>
+      </div>`;
+  }
+
+  function budgetCardHTML(b, cat, spent, limit, p, clr) {
+    return `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);
+        padding:0.9rem;background:var(--bg-card);position:relative">
+        <button class="budget-edit-btn" data-id="${b.id}"
+          style="position:absolute;top:0.6rem;right:0.6rem;background:none;
+          border:1px solid var(--border);border-radius:4px;cursor:pointer;
+          color:var(--text-secondary);font-size:0.75rem;padding:0.1rem 0.35rem;
+          line-height:1.6">✏️</button>
+        <div style="font-weight:700;font-size:0.9rem;padding-right:2rem;margin-bottom:0.4rem">
+          ${b.label || (cat ? cat.name : 'Budget')}
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem;flex-wrap:wrap">
+          ${cat ? `<span class="badge badge-primary" style="font-size:0.7rem">${cat.name}</span>` : ''}
+          <span class="badge badge-gray" style="font-size:0.7rem">${b.period || 'Monthly'}</span>
+        </div>
+        <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-bottom:0.4rem">
+          <div style="height:100%;width:${p}%;background:${clr};border-radius:5px;transition:width 0.4s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:0.78rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)}</span>
+          <span style="font-size:1.1rem;font-weight:700;color:${clr}">${p}%</span>
+        </div>
+        <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none;
+          margin-top:0.5rem"></div>
+      </div>`;
+  }
+
+  function renderBudgetRows(container, buds, catMap, spendByCat) {
+    container.innerHTML = buds.map(b => {
+      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+      const cat   = catMap[catId];
+      const spent = spendByCat[catId] || 0;
+      const limit = Number(b.amount || 0);
+      const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+      const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+      return budgetRowHTML(b, cat, spent, limit, p, clr);
+    }).join('');
+    wireBudgetEditBtns(container);
+  }
+
+  function renderBudgetCards(container, buds, catMap, spendByCat) {
+    container.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
+        ${buds.map(b => {
+          const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+          const cat   = catMap[catId];
+          const spent = spendByCat[catId] || 0;
+          const limit = Number(b.amount || 0);
+          const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+          const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+          return budgetCardHTML(b, cat, spent, limit, p, clr);
+        }).join('')}
+      </div>`;
+    wireBudgetEditBtns(container);
+  }
+
+  function renderBudgetGrouped(container, catMap, spendByCat) {
+    const groupOrder = ['Car','Family','Basic IT','Bus IT','Personal','Business','Investment','Other'];
+    const groups = getBudgetGroups();
+
+    let html = '';
+    groupOrder.forEach(grpName => {
+      const grpBuds = groups[grpName];
+      if (!grpBuds || grpBuds.length === 0) return;
+
+      const totalBudget = grpBuds.reduce((s, b) => s + Number(b.amount || 0), 0);
+      const totalSpent  = grpBuds.reduce((s, b) => {
+        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+        return s + (spendByCat[catId] || 0);
+      }, 0);
+      const grpPct = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+      const grpClr = grpPct >= 100 ? '#ef4444' : grpPct >= 80 ? '#f59e0b' : '#22c55e';
+      const collapsed = !!budgetGroupState[grpName];
+
+      html += `
+        <div style="margin-bottom:0.75rem">
+          <div class="budget-group-header" data-grp="${grpName}"
+            style="display:flex;align-items:center;justify-content:space-between;
+            padding:0.6rem 0.75rem;background:rgba(59,130,246,0.06);border-radius:var(--radius);
+            cursor:pointer;user-select:none;border:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex:1;min-width:0">
+              <strong style="font-size:0.88rem">${grpName}</strong>
+              <span class="badge badge-gray" style="font-size:0.72rem">${grpBuds.length}</span>
+              <span style="font-size:0.78rem;color:var(--text-secondary)">
+                ${fmt(totalSpent)} / ${fmt(totalBudget)}
+              </span>
+              <div style="flex:1;max-width:80px;height:6px;background:var(--border);
+                border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${grpPct}%;background:${grpClr};border-radius:3px"></div>
+              </div>
+              <span style="font-size:0.78rem;color:${grpClr};font-weight:600">${grpPct}%</span>
+            </div>
+            <span data-grp-chevron="${grpName}"
+              style="transition:transform 0.3s;display:inline-block;color:var(--text-secondary);
+              font-size:0.75rem;margin-left:0.5rem;
+              transform:${collapsed ? 'rotate(-90deg)' : ''}">▼</span>
+          </div>
+          <div data-grp-body="${grpName}"
+            style="overflow:hidden;${collapsed ? 'display:none' : ''}">
+            <div style="padding-top:0.5rem">
+              ${budgetView === 'card'
+                ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
+                    ${grpBuds.map(b => {
+                      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+                      const cat   = catMap[catId];
+                      const spent = spendByCat[catId] || 0;
+                      const limit = Number(b.amount || 0);
+                      const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
+                      const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+                      return budgetCardHTML(b, cat, spent, limit, p, clr);
+                    }).join('')}
+                  </div>`
+                : grpBuds.map(b => {
+                    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+                    const cat   = catMap[catId];
+                    const spent = spendByCat[catId] || 0;
+                    const limit = Number(b.amount || 0);
+                    const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
+                    const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+                    return budgetRowHTML(b, cat, spent, limit, p, clr);
+                  }).join('')}
+            </div>
+          </div>
+        </div>`;
+    });
+
+    // Any groups not in groupOrder
+    Object.keys(groups).forEach(grpName => {
+      if (!groupOrder.includes(grpName)) {
+        const grpBuds = groups[grpName];
+        // render as Other
+      }
+    });
+
+    container.innerHTML = html;
+
+    // Wire group header toggles
+    container.querySelectorAll('.budget-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const grp  = header.dataset.grp;
+        const body = container.querySelector(`[data-grp-body="${grp}"]`);
+        const chev = container.querySelector(`[data-grp-chevron="${grp}"]`);
+        const wasCollapsed = !!budgetGroupState[grp];
+        budgetGroupState[grp] = !wasCollapsed;
+        if (body) body.style.display = wasCollapsed ? '' : 'none';
+        if (chev) chev.style.transform = wasCollapsed ? '' : 'rotate(-90deg)';
+      });
+    });
+
+    wireBudgetEditBtns(container);
+  }
+
+  function wireBudgetEditBtns(container) {
+    container.querySelectorAll('.budget-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openBudgetEditPanel(btn.dataset.id);
+      });
+    });
+  }
+
+  /* ── D5: Category create form ── */
+  function initCategoryForm() {
+    const toggle  = document.getElementById('cat-form-toggle');
+    const body    = document.getElementById('cat-form-body');
+    const chevron = document.getElementById('cat-form-chevron');
+    if (toggle && body) {
+      toggle.addEventListener('click', () => {
+        const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
+        body.style.maxHeight = isOpen ? '0' : '400px';
+        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
+    }
+
+    ensureMsgEl('cat-msg', 'save-category');
+
+    document.getElementById('save-category')?.addEventListener('click', async () => {
+      const name  = document.getElementById('cat-name')?.value?.trim();
+      const type  = document.getElementById('cat-type')?.value || 'Expense';
+      const group = document.getElementById('cat-group')?.value?.trim() || '';
+      if (!name) return alert('Category name is required');
+      const payload = { name, type, active: true };
+      if (group) payload.group = group;
+      try {
+        await api('/api/categories', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showMsg('cat-msg', 'Category added!');
+        document.getElementById('cat-name').value  = '';
+        document.getElementById('cat-group').value = '';
+        await loadCategories();
+      } catch (err) {
+        showMsg('cat-msg', err.message, false);
+      }
+    });
+  }
+
   function initBudgetForm() {
     ensureMsgEl('budget-msg', 'save-budget');
+
+    // D6A: show one-time note when period = One-time
+    document.getElementById('budget-period')?.addEventListener('change', function () {
+      const note = document.getElementById('budget-onetime-note');
+      if (note) note.style.display = this.value === 'One-time' ? 'block' : 'none';
+    });
     document.getElementById('save-budget')?.addEventListener('click', async () => {
       const label      = document.getElementById('budget-label')?.value?.trim();
       const categoryId = document.getElementById('budget-category')?.value;
@@ -668,6 +1481,8 @@
     initTransactionForm();
     initUtilityForm();
     initLiabilityForm();
+    initBudgetControls();
+    initCategoryForm();
     initBudgetForm();
     loadTransactions().catch(console.error);
   });

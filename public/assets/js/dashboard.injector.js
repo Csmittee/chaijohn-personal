@@ -10,9 +10,14 @@
   let budgets = [];
   let liabilities = [];
   let categories = [];
-  let t1Chart, t2Chart, t3Chart, playroomChart;
+  let t1Chart, t2Chart, t3Chart, t4Chart, playroomChart;
   let t2DrillGroup = null;
   let playroomBudgetId = null;
+  let meterView = 'all';
+  let meterGroupState = {};
+  let t4Range = '1m';
+  let t4Expanded = false;
+  let dismissedAlerts = new Set();
 
   /* ── Date helpers ── */
   function rangeStart(range) {
@@ -54,6 +59,11 @@
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return last - now.getDate();
   }
+  function dateOffset(base, days) {
+    const d = new Date(base);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  }
 
   /* ── API ── */
   async function api(path) {
@@ -83,6 +93,7 @@
     renderT3();
     renderMeters(nowYM);
     buildPlayroomCategoryOptions();
+    if (t4Expanded) renderBudgetPanel(t4Range);
   }
 
   /* ── Helpers ── */
@@ -99,148 +110,362 @@
     return map;
   }
 
-  /* ── Fix 1: Alert chips ── */
-  function renderAlerts(nowYM) {
+  /* ── D4: Smart Alert chips ── */
+  function renderAlerts(nowYM, showAll) {
     const strip = document.getElementById('alert-strip');
     if (!strip) return;
-    const chips = [];
 
+    const redChips = [], amberChips = [], blueChips = [];
     const nowExpenses = txData.filter(t => toYM(t.date) === nowYM && t.type === 'Expense');
     const spendByCat  = groupSum(nowExpenses, t => linkedId(t.category_id));
 
+    // RED: budget over 100%
     budgets.forEach(b => {
       if (!b.active) return;
       const catId = linkedId(b.category_id);
       const spent = spendByCat[catId] || 0;
       const p = pct(spent, b.amount);
       const label = b.label || 'Budget';
-      if (p >= 100) chips.push({ cls: 'danger', text: `⚠ ${label} over budget (${p}%)` });
-      else if (p >= 85) chips.push({ cls: 'warn',  text: `⚠ ${label} at ${p}%` });
+      if (p >= 100) {
+        const id = `budget-over-${b.id}`;
+        if (!dismissedAlerts.has(id)) redChips.push({ id, text: `⚠ ${label} over budget (${p}%)` });
+      }
     });
 
+    // RED: liability payment due (active, balance > 0, monthly_payment > 0)
     liabilities.forEach(l => {
       if (!l.active) return;
       const bal = Number(l.current_balance || 0);
-      if (bal > 0) chips.push({ cls: 'info', text: `💳 ${l.name}: ${fmt(bal)} balance` });
+      const pmt = Number(l.monthly_payment || 0);
+      if (bal > 0 && pmt > 0) {
+        const id = `liab-due-${l.id}`;
+        if (!dismissedAlerts.has(id)) {
+          redChips.push({ id, text: `💳 ${l.name} payment due ${fmt(pmt)}` });
+        }
+      }
     });
 
-    const nowAll = txData.filter(t => toYM(t.date) === nowYM);
-    const mIncome  = nowAll.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount || 0), 0);
-    const mExpense = nowAll.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount || 0), 0);
-    if (mExpense > mIncome && mIncome > 0)
-      chips.push({ cls: 'danger', text: `↓ Negative cash flow (${fmt(mIncome - mExpense)})` });
+    // AMBER: budget 80–100%
+    budgets.forEach(b => {
+      if (!b.active) return;
+      const catId = linkedId(b.category_id);
+      const spent = spendByCat[catId] || 0;
+      const p = pct(spent, b.amount);
+      const label = b.label || 'Budget';
+      if (p >= 80 && p < 100) {
+        const id = `budget-warn-${b.id}`;
+        if (!dismissedAlerts.has(id)) amberChips.push({ id, text: `〜 ${label} at ${p}% of budget` });
+      }
+    });
 
-    strip.innerHTML = chips.map(c => `<span class="alert-chip ${c.cls}">${c.text}</span>`).join('');
+    // BLUE: total debt summary
+    const activeLiabs = liabilities.filter(l => l.active && Number(l.current_balance || 0) > 0);
+    if (activeLiabs.length > 0) {
+      const totalDebt = activeLiabs.reduce((s, l) => s + Number(l.current_balance || 0), 0);
+      const id = `total-debt-${nowYM}`;
+      if (!dismissedAlerts.has(id)) {
+        blueChips.push({ id, text: `🏦 Total debt ${fmt(totalDebt)} across ${activeLiabs.length} loan${activeLiabs.length > 1 ? 's' : ''}` });
+      }
+    }
+
+    const allChips = [...redChips, ...amberChips, ...blueChips];
+    const visible  = showAll ? allChips : allChips.slice(0, 6);
+    const overflow = showAll ? 0 : allChips.length - 6;
+
+    function chipHtml(c, cls) {
+      return `<span class="alert-chip ${cls}" style="display:inline-flex;align-items:center;gap:0.25rem">
+        ${c.text}
+        <button class="alert-dismiss" data-alert-id="${c.id}"
+          style="background:none;border:none;cursor:pointer;color:inherit;font-size:0.8rem;
+          padding:0 0 0 0.15rem;line-height:1;opacity:0.65;font-family:inherit">×</button>
+      </span>`;
+    }
+
+    let html = visible.map(c => {
+      const cls = redChips.some(r => r.id === c.id) ? 'danger'
+        : amberChips.some(a => a.id === c.id) ? 'warn' : 'info';
+      return chipHtml(c, cls);
+    }).join('');
+
+    if (overflow > 0) {
+      html += `<button id="alert-show-more" class="alert-chip"
+        style="background:rgba(100,116,139,0.15);color:var(--text-secondary);
+        border:none;cursor:pointer;font-size:0.78rem;font-weight:600;
+        padding:0.35rem 0.85rem;border-radius:999px;font-family:inherit">+${overflow} more</button>`;
+    }
+
+    strip.innerHTML = html;
+
+    strip.querySelectorAll('.alert-dismiss').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        dismissedAlerts.add(btn.dataset.alertId);
+        renderAlerts(nowYM, showAll);
+      });
+    });
+
+    document.getElementById('alert-show-more')?.addEventListener('click', () => {
+      renderAlerts(nowYM, true);
+    });
   }
 
-  /* ── Fix 2: T1 Cash Flow — daily + balance line ── */
+  /* ── D3: T1 Cash Flow with centered window + forecast ── */
   function renderT1(startDate) {
     const canvas = document.getElementById('t1-chart');
     if (!canvas) return;
     if (t1Chart) t1Chart.destroy();
-
     if (activeRange === '1m') {
-      renderT1Daily(canvas);
+      renderT1DailyForecast(canvas);
     } else {
-      renderT1Monthly(canvas, startDate);
+      renderT1MonthlyForecast(canvas, startDate);
     }
   }
 
-  function renderT1Daily(canvas) {
+  function renderT1DailyForecast(canvas) {
     const subtitle = document.getElementById('t1-subtitle');
-    if (subtitle) subtitle.textContent = 'Daily income / expense + running balance';
+    if (subtitle) subtitle.textContent = 'Daily cash flow + 15-day forecast';
 
-    const days = daysInMonth();
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    // 15 past days (including today) + 15 future days
+    const pastDays = [];
+    for (let i = 14; i >= 0; i--) pastDays.push(dateOffset(todayStr, -i));
+    const futureDays = [];
+    for (let i = 1; i <= 15; i++) futureDays.push(dateOffset(todayStr, i));
+    const allDays = [...pastDays, ...futureDays];
+
+    // Actual data from txData for past days
     const incByDay = {}, expByDay = {};
     txData.forEach(t => {
-      if (!days.includes(t.date)) return;
+      if (!pastDays.includes(t.date)) return;
       const amt = Number(t.amount || 0);
       if (t.type === 'Income')  incByDay[t.date]  = (incByDay[t.date]  || 0) + amt;
       else if (t.type === 'Expense') expByDay[t.date] = (expByDay[t.date] || 0) + amt;
     });
 
-    let running = 0;
-    const balData = days.map(d => {
-      running += (incByDay[d] || 0) - (expByDay[d] || 0);
-      return running;
+    // Compute daily averages from past data for forecast
+    const totalInc = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
+    const totalExp = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
+    const avgDailyInc = totalInc / Math.max(1, pastDays.length);
+    const avgDailyExp = totalExp / Math.max(1, pastDays.length);
+
+    // Balance running totals
+    let runBal = 0;
+    const balPast = pastDays.map(d => {
+      runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
+      return runBal;
     });
+    // Forecast balance continues from today's balance
+    const balForecast = [balPast[balPast.length - 1]]; // bridge at today
+    futureDays.forEach(() => {
+      balForecast.push(balForecast[balForecast.length - 1] + avgDailyInc - avgDailyExp);
+    });
+
+    const labels = allDays.map(d => d.slice(5)); // MM-DD
+
+    // today line plugin — draws at index 14.5 (between past and future)
+    const todayIdx = 14;
+    const todayLinePlugin = {
+      id: 'todayLine',
+      afterDraw(chart) {
+        const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
+        if (!x) return;
+        const xLeft  = x.getPixelForValue(todayIdx);
+        const xRight = x.getPixelForValue(todayIdx + 1);
+        const xPos   = (xLeft + xRight) / 2;
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.setLineDash([5, 3]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xPos, top);
+        ctx.lineTo(xPos, bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = '9px system-ui';
+        ctx.fillText('Today', xPos + 3, top + 10);
+        ctx.restore();
+      }
+    };
 
     t1Chart = new Chart(canvas, {
       type: 'bar',
       data: {
-        labels: days.map(d => d.slice(8)),
+        labels,
         datasets: [
-          { label: 'Income',  data: days.map(d => incByDay[d] || 0),
+          { label: 'Income',  data: [...pastDays.map(d => incByDay[d] || 0), ...new Array(15).fill(null)],
             backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 2 },
-          { label: 'Expense', data: days.map(d => expByDay[d] || 0),
+          { label: 'Expense', data: [...pastDays.map(d => expByDay[d] || 0), ...new Array(15).fill(null)],
             backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 2 },
-          { label: 'Balance', data: balData, type: 'line',
-            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1,
-            tension: 0.3, yAxisID: 'y2',
-            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } }
+          { label: '~ Inc Forecast', data: [...new Array(15).fill(null), ...futureDays.map(() => avgDailyInc)],
+            backgroundColor: 'rgba(34,197,94,0.25)', borderRadius: 2 },
+          { label: '~ Exp Forecast', data: [...new Array(15).fill(null), ...futureDays.map(() => avgDailyExp)],
+            backgroundColor: 'rgba(239,68,68,0.25)', borderRadius: 2 },
+          { label: 'Balance', data: [...balPast, ...new Array(15).fill(null)], type: 'line',
+            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3, yAxisID: 'y2',
+            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
+          { label: '~ Bal Forecast',
+            // bridge: 14 nulls, then bridge value at today (index 14), then 15 forecast values
+            data: [...new Array(14).fill(null), ...balForecast],
+            type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0,
+            borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 10, font: { size: 9 },
+              filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const isForecast = ctx.dataset.label.startsWith('~ ');
+                const prefix = isForecast ? '~ Est: ' : '';
+                const v = Math.round(ctx.raw || 0);
+                return `${prefix}${ctx.dataset.label.replace('~ ', '')}: ฿${v.toLocaleString()}`;
+              },
+              afterBody: ctx => {
+                const isForecast = ctx[0] && ctx[0].dataset.label.startsWith('~ ');
+                return isForecast ? ['Estimated — based on 15-day average'] : [];
+              }
+            }
+          }
+        },
         scales: {
           x:  { ticks: { font: { size: 9 } } },
           y:  { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
           y2: { position: 'right', grid: { drawOnChartArea: false },
                 ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
         }
-      }
+      },
+      plugins: [todayLinePlugin]
     });
   }
 
-  function renderT1Monthly(canvas, startDate) {
+  function renderT1MonthlyForecast(canvas, startDate) {
     const subtitle = document.getElementById('t1-subtitle');
-    if (subtitle) subtitle.textContent = 'Monthly income / expense + cumulative balance';
-
-    const nowYM  = currentYM();
+    const nowYM   = currentYM();
     const startYM = startDate.slice(0, 7);
-    const months = monthsBetween(startYM, nowYM);
+
+    // How many months in the active range
+    let forecastMonths;
+    if (activeRange === '3m')  forecastMonths = 1;
+    else if (activeRange === '6m')  forecastMonths = 3;
+    else forecastMonths = 6;
+
+    const pastMonths   = monthsBetween(startYM, nowYM);
+    const futureMonths = [];
+    let [fy, fm] = nowYM.split('-').map(Number);
+    for (let i = 0; i < forecastMonths; i++) {
+      fm++; if (fm > 12) { fm = 1; fy++; }
+      futureMonths.push(`${fy}-${String(fm).padStart(2, '0')}`);
+    }
+    const allMonths = [...pastMonths, ...futureMonths];
+
+    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month forecast`;
 
     const incByM = {}, expByM = {};
     txData.forEach(t => {
       const ym = toYM(t.date);
-      if (!months.includes(ym)) return;
+      if (!pastMonths.includes(ym)) return;
       const amt = Number(t.amount || 0);
       if (t.type === 'Income')  incByM[ym] = (incByM[ym] || 0) + amt;
       else if (t.type === 'Expense') expByM[ym] = (expByM[ym] || 0) + amt;
     });
 
+    // 3-month average for forecast
+    const recentMonths = pastMonths.slice(-3);
+    const avgInc = recentMonths.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentMonths.length);
+    const avgExp = recentMonths.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentMonths.length);
+
+    // Running balance
     let running = 0;
-    const balData = months.map(m => {
+    const balPast = pastMonths.map(m => {
       running += (incByM[m] || 0) - (expByM[m] || 0);
       return running;
     });
+    const balForecast = [balPast[balPast.length - 1]];
+    futureMonths.forEach(() => {
+      balForecast.push(balForecast[balForecast.length - 1] + avgInc - avgExp);
+    });
+
+    const todayIdx = pastMonths.length - 1;
+    const todayLinePlugin = {
+      id: 'todayLine',
+      afterDraw(chart) {
+        const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
+        if (!x) return;
+        const xLeft  = x.getPixelForValue(todayIdx);
+        const xRight = x.getPixelForValue(todayIdx + 1);
+        const xPos   = (xLeft + xRight) / 2;
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.setLineDash([5, 3]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xPos, top);
+        ctx.lineTo(xPos, bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = '9px system-ui';
+        ctx.fillText('Now', xPos + 3, top + 10);
+        ctx.restore();
+      }
+    };
+
+    const nPast = pastMonths.length;
 
     t1Chart = new Chart(canvas, {
       type: 'bar',
       data: {
-        labels: months.map(monthLabel),
+        labels: allMonths.map(monthLabel),
         datasets: [
-          { label: 'Income',  data: months.map(m => incByM[m] || 0),
+          { label: 'Income',  data: [...pastMonths.map(m => incByM[m] || 0), ...new Array(forecastMonths).fill(null)],
             backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
-          { label: 'Expense', data: months.map(m => expByM[m] || 0),
+          { label: 'Expense', data: [...pastMonths.map(m => expByM[m] || 0), ...new Array(forecastMonths).fill(null)],
             backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 },
-          { label: 'Balance', data: balData, type: 'line',
-            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3,
-            tension: 0.3, yAxisID: 'y2',
-            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } }
+          { label: '~ Inc Forecast', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => avgInc)],
+            backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 3 },
+          { label: '~ Exp Forecast', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => avgExp)],
+            backgroundColor: 'rgba(239,68,68,0.28)', borderRadius: 3 },
+          { label: 'Balance', data: [...balPast, ...new Array(forecastMonths).fill(null)], type: 'line',
+            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y2',
+            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
+          { label: '~ Bal Forecast',
+            data: [...new Array(nPast - 1).fill(null), ...balForecast],
+            type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 1,
+            borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 10, font: { size: 9 },
+              filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' }
+          },
+          tooltip: {
+            callbacks: {
+              afterBody: ctx => {
+                const isForecast = ctx[0] && ctx[0].dataset.label.startsWith('~ ');
+                return isForecast ? ['Estimated — based on 3-month average'] : [];
+              }
+            }
+          }
+        },
         scales: {
           x:  { ticks: { font: { size: 9 } } },
           y:  { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
           y2: { position: 'right', grid: { drawOnChartArea: false },
                 ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
         }
-      }
+      },
+      plugins: [todayLinePlugin]
     });
   }
 
@@ -252,15 +477,12 @@
 
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
-
-    const expenses = txData.filter(t => t.type === 'Expense');
-
-    const backBtn  = document.getElementById('t2-back-btn');
-    const subtitle = document.getElementById('t2-subtitle');
+    const expenses  = txData.filter(t => t.type === 'Expense');
+    const backBtn   = document.getElementById('t2-back-btn');
+    const subtitle  = document.getElementById('t2-subtitle');
 
     if (t2DrillGroup) {
-      // Drill: categories within a group
-      if (backBtn)  { backBtn.classList.remove('hidden'); }
+      if (backBtn) backBtn.classList.remove('hidden');
       if (subtitle) subtitle.textContent = t2DrillGroup;
 
       const sumByCat = {};
@@ -271,20 +493,17 @@
         sumByCat[catId] = (sumByCat[catId] || 0) + Number(t.amount || 0);
       });
       const sorted = Object.entries(sumByCat).sort((a, b) => b[1] - a[1]);
-
       t2Chart = new Chart(canvas, {
         type: 'bar',
         data: {
           labels: sorted.map(([id]) => catMap[id]?.name || id),
           datasets: [{ data: sorted.map(([, v]) => v),
-            backgroundColor: sorted.map((_, i) => `hsl(${200 + i * 25},60%,55%)`),
-            borderRadius: 3 }]
+            backgroundColor: sorted.map((_, i) => `hsl(${200 + i * 25},60%,55%)`), borderRadius: 3 }]
         },
         options: t2ChartOptions()
       });
     } else {
-      // Group-level
-      if (backBtn)  { backBtn.classList.add('hidden'); }
+      if (backBtn) backBtn.classList.add('hidden');
       if (subtitle) subtitle.textContent = 'By group — click to drill in';
 
       const sumByGroup = {};
@@ -294,22 +513,17 @@
         sumByGroup[grp] = (sumByGroup[grp] || 0) + Number(t.amount || 0);
       });
       const sorted = Object.entries(sumByGroup).sort((a, b) => b[1] - a[1]);
-
       t2Chart = new Chart(canvas, {
         type: 'bar',
         data: {
           labels: sorted.map(([g]) => g),
           datasets: [{ data: sorted.map(([, v]) => v),
-            backgroundColor: sorted.map((_, i) => `hsl(${i * 30},65%,55%)`),
-            borderRadius: 3 }]
+            backgroundColor: sorted.map((_, i) => `hsl(${i * 30},65%,55%)`), borderRadius: 3 }]
         },
         options: {
           ...t2ChartOptions(),
           onClick: (evt, elements) => {
-            if (elements.length > 0) {
-              t2DrillGroup = sorted[elements[0].index][0];
-              renderT2();
-            }
+            if (elements.length > 0) { t2DrillGroup = sorted[elements[0].index][0]; renderT2(); }
           }
         }
       });
@@ -318,8 +532,7 @@
 
   function t2ChartOptions() {
     return {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
@@ -353,8 +566,7 @@
       data: {
         labels: active.map(l => l.name || l.id),
         datasets: [{ data: active.map(l => Number(l.current_balance || 0)),
-          backgroundColor: active.map((_, i) => `hsl(${10 + i * 40},70%,55%)`),
-          borderRadius: 4 }]
+          backgroundColor: active.map((_, i) => `hsl(${10 + i * 40},70%,55%)`), borderRadius: 4 }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -367,7 +579,121 @@
     });
   }
 
-  /* ── Budget meters (unchanged logic) ── */
+  /* ── D6B: Budget vs Actual panel ── */
+  function renderBudgetPanel(range) {
+    const canvas = document.getElementById('t4-chart');
+    if (!canvas) return;
+    if (t4Chart) t4Chart.destroy();
+
+    const nowYM = currentYM();
+    const now   = new Date();
+
+    let months;
+    if (range === '1m')  months = [nowYM];
+    else if (range === '3m')  months = monthsBetween(rangeStart('3m').slice(0, 7), nowYM);
+    else if (range === '6m')  months = monthsBetween(rangeStart('6m').slice(0, 7), nowYM);
+    else months = monthsBetween(rangeStart('12m').slice(0, 7), nowYM);
+
+    const budgetByMonth = {};
+    months.forEach(ym => { budgetByMonth[ym] = 0; });
+
+    budgets.forEach(b => {
+      if (!b.active) return;
+      const limit = Number(b.amount || 0);
+      if (b.period === 'One-time') {
+        months.forEach(ym => {
+          const [y, m] = ym.split('-').map(Number);
+          const ymStart = ym + '-01';
+          const ymEnd   = new Date(y, m, 0).toISOString().split('T')[0];
+          const start   = b.start_date || '1900-01-01';
+          const end     = b.end_date   || '9999-12-31';
+          if (start <= ymEnd && end >= ymStart) budgetByMonth[ym] += limit;
+        });
+      } else if (b.period === 'Annual') {
+        months.forEach(ym => { budgetByMonth[ym] += limit / 12; });
+      } else {
+        months.forEach(ym => { budgetByMonth[ym] += limit; });
+      }
+    });
+
+    const actualByMonth = {};
+    months.forEach(ym => { actualByMonth[ym] = 0; });
+    txData.forEach(t => {
+      if (t.type !== 'Expense') return;
+      const ym = toYM(t.date);
+      if (months.includes(ym)) actualByMonth[ym] += Number(t.amount || 0);
+    });
+
+    let cumBudget = 0, cumActual = 0;
+    const runBudget = months.map(ym => { cumBudget += budgetByMonth[ym]; return Math.round(cumBudget); });
+    const runActual = months.map(ym => { cumActual += actualByMonth[ym]; return Math.round(cumActual); });
+
+    const budgetAmts = months.map(ym => Math.round(budgetByMonth[ym]));
+    const actualAmts = months.map(ym => Math.round(actualByMonth[ym]));
+    const barColors  = actualAmts.map((a, i) => a > budgetAmts[i] ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)');
+
+    t4Chart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: months.map(monthLabel),
+        datasets: [
+          { label: 'Budget', data: budgetAmts, backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 3, order: 2 },
+          { label: 'Actual', data: actualAmts, backgroundColor: barColors, borderRadius: 3, order: 3 },
+          { label: 'Running Budget', data: runBudget, type: 'line',
+            borderColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.3,
+            fill: false, order: 1, yAxisID: 'y2' },
+          { label: 'Running Actual', data: runActual, type: 'line',
+            borderColor: '#8b5cf6', borderWidth: 2, pointRadius: 2, tension: 0.3,
+            fill: false, order: 0, yAxisID: 'y2' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+        scales: {
+          x:  { ticks: { font: { size: 9 } } },
+          y:  { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
+          y2: { position: 'right', grid: { drawOnChartArea: false },
+                ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+        }
+      }
+    });
+
+    const totalBudgeted = budgetAmts.reduce((s, v) => s + v, 0);
+    const totalActual   = actualAmts.reduce((s, v) => s + v, 0);
+    const variance      = totalBudgeted - totalActual;
+    const pctVar        = totalBudgeted > 0 ? Math.round(Math.abs(variance) / totalBudgeted * 100) : 0;
+    const summaryEl     = document.getElementById('t4-summary');
+    if (summaryEl) {
+      summaryEl.textContent = `Total budgeted: ${fmt(totalBudgeted)} | Total spent: ${fmt(totalActual)} | Variance: ${fmt(Math.abs(variance))} (${pctVar}% ${variance >= 0 ? 'under' : 'over'})`;
+    }
+  }
+
+  function initBudgetPanel() {
+    const toggle = document.getElementById('t4-toggle');
+    const body   = document.getElementById('t4-body');
+    const chev   = document.getElementById('t4-chevron');
+    if (toggle && body) {
+      toggle.addEventListener('click', () => {
+        t4Expanded = !t4Expanded;
+        body.style.maxHeight = t4Expanded ? '400px' : '0';
+        body.style.overflow  = t4Expanded ? 'visible' : 'hidden';
+        if (chev) chev.style.transform = t4Expanded ? 'rotate(180deg)' : '';
+        if (t4Expanded) renderBudgetPanel(t4Range);
+      });
+    }
+
+    document.querySelectorAll('[data-t4-range]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        t4Range = btn.dataset.t4Range;
+        document.querySelectorAll('[data-t4-range]').forEach(b =>
+          b.classList.toggle('active', b.dataset.t4Range === t4Range));
+        if (t4Expanded) renderBudgetPanel(t4Range);
+      });
+    });
+  }
+
+  /* ── Fix 14: Budget meters with proportional scale ── */
   function renderMeters(nowYM) {
     const grid = document.getElementById('meters-grid');
     if (!grid) return;
@@ -383,29 +709,153 @@
       return;
     }
 
-    const withPct = active.map(b => {
+    const withData = active.map(b => {
       const catId = linkedId(b.category_id);
-      const spent  = spendByCat[catId] || 0;
-      const limit  = Number(b.amount || 0);
-      return { b, catId, spent, limit, p: pct(spent, limit) };
-    }).sort((a, b) => b.p - a.p);
+      const cat   = catMap[catId] || {};
+      const spent = spendByCat[catId] || 0;
+      const limit = Number(b.amount || 0);
+      const label = b.label || cat.name || 'Budget';
+      return { b, catId, cat, spent, limit, p: pct(spent, limit), label };
+    });
 
-    grid.innerHTML = withPct.map(({ b, catId, spent, limit, p }) => {
-      const cat     = catMap[catId] || {};
-      const cls     = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
-      const display = Math.min(p, 100);
-      const label   = b.label || cat.name || 'Budget';
+    if (meterView === 'group') {
+      renderMeterGroupView(grid, withData);
+    } else {
+      renderMeterAllView(grid, withData);
+    }
+  }
+
+  function renderMeterAllView(grid, withData) {
+    grid.style.cssText = 'margin-bottom:1rem';
+    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
+    const sorted    = [...withData].sort((a, b) => b.limit - a.limit);
+
+    grid.innerHTML = sorted.map(({ cat, spent, limit, p, label }) => {
+      const containerPct = Math.max(5, Math.round((limit / maxAmount) * 100));
+      const fillPct      = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+      const cls          = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
       return `
-        <div class="meter-card">
-          <div class="meter-label">${cat.group || ''}</div>
-          <div class="meter-name">${label}</div>
-          <div class="meter-bar-bg"><div class="meter-bar-fill ${cls}" style="width:${display}%"></div></div>
-          <div class="meter-nums"><span>${fmt(spent)}</span><span>${p}% / ${fmt(limit)}</span></div>
+        <div style="margin-bottom:0.65rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
+            <span style="font-size:0.82rem;font-weight:600">${label}${cat.group
+              ? ` <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400">— ${cat.group}</span>`
+              : ''}</span>
+            <span style="font-size:0.73rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)} · ${p}%</span>
+          </div>
+          <div style="width:${containerPct}%;min-width:8%">
+            <div class="meter-bar-bg" style="height:10px">
+              <div class="meter-bar-fill ${cls}" style="width:${fillPct}%"></div>
+            </div>
+          </div>
         </div>`;
     }).join('');
   }
 
-  /* ── Fix 5: Solution Playroom — user-controlled ── */
+  function renderMeterGroupView(grid, withData) {
+    grid.style.cssText = 'margin-bottom:1rem';
+    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
+
+    const groups = {};
+    withData.forEach(item => {
+      const grp = item.cat.group || 'Other';
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(item);
+    });
+
+    const sortedGroups = Object.entries(groups)
+      .map(([name, items]) => ({
+        name, items,
+        totalBudget: items.reduce((s, x) => s + x.limit, 0),
+        totalSpent:  items.reduce((s, x) => s + x.spent, 0)
+      }))
+      .sort((a, b) => b.totalBudget - a.totalBudget);
+
+    let html = '';
+    sortedGroups.forEach(({ name, items, totalBudget, totalSpent }) => {
+      const grpPct       = pct(totalSpent, totalBudget);
+      const grpCls       = grpPct >= 100 ? 'over' : grpPct >= 85 ? 'warn' : 'ok';
+      const containerPct = Math.max(5, Math.round((totalBudget / maxAmount) * 100));
+      const fillPct      = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+      const expanded     = meterGroupState[name] !== false;
+
+      const innerHtml = items.sort((a, b) => b.limit - a.limit).map(item => {
+        const itemCPct = Math.max(5, Math.round((item.limit / maxAmount) * 100));
+        const itemFPct = item.limit > 0 ? Math.min(100, Math.round((item.spent / item.limit) * 100)) : 0;
+        const itemCls  = item.p >= 100 ? 'over' : item.p >= 85 ? 'warn' : 'ok';
+        return `
+          <div style="margin-bottom:0.5rem;padding-left:0.75rem">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
+              <span style="font-size:0.78rem">${item.label}</span>
+              <span style="font-size:0.7rem;color:var(--text-secondary)">
+                ${fmt(item.spent)} / ${fmt(item.limit)} · ${item.p}%
+              </span>
+            </div>
+            <div style="width:${itemCPct}%;min-width:8%">
+              <div class="meter-bar-bg" style="height:8px">
+                <div class="meter-bar-fill ${itemCls}" style="width:${itemFPct}%"></div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      html += `
+        <div style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="meter-group-header" data-grp="${name}"
+            style="display:flex;align-items:center;padding:0.6rem 0.75rem;cursor:pointer;
+            user-select:none;background:rgba(59,130,246,0.05);
+            border-radius:${expanded ? 'var(--radius) var(--radius) 0 0' : 'var(--radius)'}">
+            <span style="font-size:0.85rem;font-weight:700;flex:0 0 auto;min-width:90px">${name}</span>
+            <div style="flex:1;margin:0 0.75rem">
+              <div style="width:${containerPct}%;min-width:30px">
+                <div class="meter-bar-bg" style="height:8px">
+                  <div class="meter-bar-fill ${grpCls}" style="width:${fillPct}%"></div>
+                </div>
+              </div>
+            </div>
+            <span style="font-size:0.75rem;color:var(--text-secondary);flex:0 0 auto;white-space:nowrap">
+              ${fmt(totalSpent)} / ${fmt(totalBudget)} · ${grpPct}%
+            </span>
+            <span data-grp-chev="${name}"
+              style="margin-left:0.5rem;font-size:0.7rem;color:var(--text-secondary);
+              transition:transform 0.3s;display:inline-block;
+              ${expanded ? '' : 'transform:rotate(-90deg)'}">▼</span>
+          </div>
+          <div data-grp-body="${name}" style="padding-top:0.5rem;padding-bottom:0.5rem;
+            ${expanded ? '' : 'display:none'}">
+            ${innerHtml}
+          </div>
+        </div>`;
+    });
+
+    grid.innerHTML = html;
+
+    grid.querySelectorAll('.meter-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const grp       = header.dataset.grp;
+        const wasExpanded = meterGroupState[grp] !== false;
+        meterGroupState[grp] = !wasExpanded;
+        const body = grid.querySelector(`[data-grp-body="${grp}"]`);
+        const chev = grid.querySelector(`[data-grp-chev="${grp}"]`);
+        if (body) body.style.display = wasExpanded ? 'none' : '';
+        if (chev) chev.style.transform = wasExpanded ? 'rotate(-90deg)' : '';
+        header.style.borderRadius = wasExpanded
+          ? 'var(--radius)' : 'var(--radius) var(--radius) 0 0';
+      });
+    });
+  }
+
+  function initMeterToggle() {
+    document.querySelectorAll('[data-meter-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        meterView = btn.dataset.meterView;
+        document.querySelectorAll('[data-meter-view]').forEach(b =>
+          b.classList.toggle('active', b.dataset.meterView === meterView));
+        renderMeters(currentYM());
+      });
+    });
+  }
+
+  /* ── Fix 5: Solution Playroom ── */
   function buildPlayroomCategoryOptions() {
     const sel = document.getElementById('playroom-cat-select');
     if (!sel) return;
@@ -433,16 +883,13 @@
 
     sel?.addEventListener('change', async () => {
       const catId = sel.value;
-      if (!catId) {
-        document.getElementById('playroom-content').style.display = 'none';
-        return;
-      }
+      if (!catId) { document.getElementById('playroom-content').style.display = 'none'; return; }
       await renderPlayroomChart(catId);
     });
 
     function updateImpact() {
       if (!impact) return;
-      const budget   = Number(budIn?.value || 0);
+      const budget    = Number(budIn?.value || 0);
       const projected = Number(projIn?.value || 0);
       if (!budget && !projected) { impact.style.display = 'none'; return; }
       const diff = projected - budget;
@@ -467,7 +914,7 @@
       if (!playroomBudgetId) return;
       const newAmt = Number(budIn?.value || 0);
       if (!newAmt) return;
-      if (msgEl) { msgEl.style.display = 'none'; }
+      if (msgEl) msgEl.style.display = 'none';
       try {
         await fetch(`/api/budgets/${playroomBudgetId}`, {
           method: 'PATCH', credentials: 'same-origin',
@@ -475,7 +922,6 @@
           body: JSON.stringify({ amount: newAmt })
         });
         if (msgEl) { msgEl.textContent = 'Budget saved!'; msgEl.style.color = '#22c55e'; msgEl.style.display = 'block'; }
-        // Refresh dashboard data
         await loadAll();
       } catch (e) {
         if (msgEl) { msgEl.textContent = 'Save failed'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
@@ -492,7 +938,6 @@
     if (!content || !canvas) return;
     content.style.display = 'none';
 
-    // 6-month range
     const now = new Date();
     const start6m = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split('T')[0];
     const months  = monthsBetween(start6m.slice(0, 7), currentYM());
@@ -503,16 +948,13 @@
       txRes = await txRes.json();
     } catch { return; }
 
-    const tx6m = (txRes.records || []).map(r => r.fields)
-      .filter(t => linkedId(t.category_id) === catId);
-
+    const tx6m = (txRes.records || []).map(r => r.fields).filter(t => linkedId(t.category_id) === catId);
     const spendByM = {};
     tx6m.forEach(t => {
       const ym = toYM(t.date);
       spendByM[ym] = (spendByM[ym] || 0) + Number(t.amount || 0);
     });
 
-    // Find budget for this category
     const budget = budgets.find(b => linkedId(b.category_id) === catId);
     playroomBudgetId = budget?.id || null;
     const budAmt = Number(budget?.amount || 0);
@@ -529,9 +971,9 @@
           { label: 'Actual', data: months.map(m => spendByM[m] || 0),
             backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 3 },
           ...(budAmt ? [{
-            label: 'Budget', data: months.map(() => budAmt),
-            type: 'line', borderColor: '#f59e0b', borderWidth: 2,
-            borderDash: [4, 3], pointRadius: 0, fill: false
+            label: 'Budget', data: months.map(() => budAmt), type: 'line',
+            borderColor: '#f59e0b', borderWidth: 2, borderDash: [4, 3],
+            pointRadius: 0, fill: false
           }] : [])
         ]
       },
@@ -548,7 +990,7 @@
     content.style.display = 'block';
   }
 
-  /* ── Part 3: Risk Simulator — cash position ── */
+  /* ── Risk Simulator ── */
   function runCashSim() {
     const bank   = Number(document.getElementById('sim-bank')?.value  || 0);
     const cash   = Number(document.getElementById('sim-cash')?.value  || 0);
@@ -557,19 +999,15 @@
 
     const nowYM = currentYM();
     const totalLiquid = bank + cash;
-
     const nowTx = txData.filter(t => toYM(t.date) === nowYM);
-    const alreadySpent = nowTx.filter(t => t.type === 'Expense')
-      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const alreadySpent = nowTx.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount || 0), 0);
 
-    // Categories paid this month (have a transaction)
     const catsPaidThisMonth = new Set();
     nowTx.filter(t => t.type === 'Expense').forEach(t => {
       const cid = linkedId(t.category_id);
       if (cid) catsPaidThisMonth.add(cid);
     });
 
-    // FP-FV and FP-VV budgets = fixed commitments
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
@@ -588,10 +1026,9 @@
       return { label: b.label || catMap[catId]?.name || '?', amt, paid };
     }).sort((a, b) => (a.paid ? 1 : -1) - (b.paid ? 1 : -1));
 
-    // Variable estimate: avg daily spend × days left
-    const daysLeft = daysLeftInMonth();
-    const daysGone = new Date().getDate();
-    const avgDaily = daysGone > 0 ? alreadySpent / daysGone : 0;
+    const daysLeft  = daysLeftInMonth();
+    const daysGone  = new Date().getDate();
+    const avgDaily  = daysGone > 0 ? alreadySpent / daysGone : 0;
     const varEstimate = Math.round(avgDaily * daysLeft);
 
     const projectedBalance = totalLiquid - fixedDue - varEstimate;
@@ -610,9 +1047,7 @@
         Total liquid: <span class="big">${fmt(totalLiquid)}</span>
       </div>
       <div style="margin-bottom:0.25rem">Already spent this month: <strong>${fmt(alreadySpent)}</strong></div>
-      <div style="margin-top:0.75rem;margin-bottom:0.25rem;font-weight:600;font-size:0.85rem">
-        Fixed commitments this month:
-      </div>
+      <div style="margin-top:0.75rem;margin-bottom:0.25rem;font-weight:600;font-size:0.85rem">Fixed commitments this month:</div>
       ${rowsHtml || '<div style="font-size:0.82rem;color:var(--text-secondary)">No FP budgets found</div>'}
       <div style="margin-top:0.5rem;display:flex;justify-content:space-between;font-size:0.85rem">
         <span>Still due: <strong style="color:#ef4444">${fmt(fixedDue)}</strong></span>
@@ -665,14 +1100,14 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('.period-btn[data-range]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        activeRange    = btn.dataset.range;
-        t2DrillGroup   = null;
+        activeRange  = btn.dataset.range;
+        t2DrillGroup = null;
         loadAll().catch(console.error);
       });
     });
   }
 
-  /* ── Modal / Panel ── */
+  /* ── Modals ── */
   function initModals() {
     const simBackdrop = document.getElementById('sim-backdrop');
     document.getElementById('open-simulator')?.addEventListener('click', () => simBackdrop?.classList.add('open'));
@@ -700,8 +1135,10 @@
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', () => {
     initPeriodButtons();
+    initMeterToggle();
     initModals();
     initPlayroom();
+    initBudgetPanel();
     loadAll().catch(err => console.error('Dashboard load failed:', err));
   });
 })();

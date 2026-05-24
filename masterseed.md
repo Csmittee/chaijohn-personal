@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-24 — Workflow upgraded to CC-era model; fixing A/B/C queued
+> Last Updated: 2026-05-24 — Fix A/B/C/D complete; prompts archived to docs/prompts/
 
 ---
 
@@ -228,9 +228,10 @@ functions/
 |---|---|---|
 | Phase 0 | Full initial build — all 5 modules in one CC pass | ✅ COMPLETE |
 | Phase 1–4 | LESSONS.md + Dashboard fixes 1–8 + Risk Simulator + Diary fixes 9–13 | ✅ COMPLETE |
-| Fix A | Fix 18 (Liabilities collapse form) + Fix 21 (Budgets inline edit) | 🔴 QUEUED |
-| Fix B | Fix 19 (Liabilities expandable row + payment history) + Fix 22 (Budgets card/group view) | 🔴 QUEUED |
-| Fix C | Fix 14 (Budget meter proportional scale) + Fix 15–17 (Utilities YoY charts + FT note + import script v2) | 🔴 QUEUED |
+| Fix A | Fix 18 (Liabilities collapse form) + Fix 21 (Budgets inline edit) | ✅ COMPLETE |
+| Fix B | Fix 19 (Liabilities expandable row + payment history) + Fix 22 (Budgets card/group view) | ✅ COMPLETE |
+| Fix C | Fix 14 (Budget meter proportional scale) + Fix 15–17 (Utilities YoY charts + FT note + import script v2) | ✅ COMPLETE |
+| Fix D | D1 Dropzone text files · D2 Diary AI undo · D3 Forecast cashflow · D4 Alert bubbles · D5 Category create · D6 One-time budget + T4 panel | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -242,21 +243,15 @@ functions/
 **Working and confirmed:**
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
-- Dashboard: cashflow charts T1/T2/T3, Budget Meters, Risk Simulator, Solution Playroom, Alert chips
-- Entry: Transactions ✅, Utilities ✅, Liabilities (display only — edit pending), Budgets (display only — edit/card pending)
-- Diary: list + editor + preview + AI assist + type filters ✅
-- Drop Zone: upload + AI extract ✅, Approve → Airtable ✅
+- Dashboard: cashflow forecast T1 (30-day window w/ today line), Expense Pareto T2, Liabilities T3, Budget vs Actual T4 (collapsible), Budget Meters, Risk Simulator, Solution Playroom, Alert chips (priority + dismissible)
+- Entry: Transactions ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅
+- Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
+- Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
 
-**Broken / pending:**
-- Fix 18: Liabilities "Add New" form needs collapse panel
-- Fix 19: Liability row expand → edit fields + balance bar + payment history
-- Fix 21: Budget rows need inline edit (pencil icon)
-- Fix 22: Budget card view + group by category
-- Fix 14: Dashboard budget meters need proportional scale + group toggle
-- Fix 15–17: Utilities YoY trend charts + FT note field + improved import script
-- Collection: untested
-- AI Advisor: untested
+**Pending / untested:**
+- Collection module: built, not tested end-to-end
+- AI Advisor: built, not tested end-to-end
 
 ---
 
@@ -277,12 +272,12 @@ Every CC session must preserve:
 
 ## ROADMAP
 
-**Immediate (next 12 hours):**
-1. Fix A → Fix B → Fix C (in sequence, QA each before next)
-
-**After fixing:**
+**Immediate (next):**
+1. QA Fix D live: confirm text dropzone, AI comparison panel, T1 forecast chart, alert dismissal, new category form, T4 combo chart
 2. Collection module full test + buyer tags
 3. AI Advisor full test + verify financial context loads
+
+**After that:**
 4. Diary → social push (FB/IG) with image capability
 
 **Medium term:**

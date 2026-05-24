@@ -120,6 +120,12 @@
           <label for="util-notes">Notes</label>
           <textarea id="util-notes" rows="2"></textarea>
         </div>
+        <!-- Fix 16: FT note field -->
+        <div class="form-group">
+          <label for="util-ft-note">FT Note (factor / technical)</label>
+          <textarea id="util-ft-note" rows="2"
+            placeholder="e.g. Rate changed 3.50→4.20 baht/unit, meter replaced, estimated reading"></textarea>
+        </div>
         <button class="btn btn-primary w-full" id="save-util">Save Utilities</button>
       </div>
 
@@ -134,6 +140,55 @@
           </div>
           <div class="chart-container" style="height:140px">
             <canvas id="water-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Fix 15: Year-over-Year Trend Charts -->
+        <div id="yoy-section" style="margin-top:1.5rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+            <span class="section-title" style="font-size:0.9rem">Year-over-Year Trends</span>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;
+              color:var(--text-secondary)">
+              <span>From</span>
+              <select id="yoy-from-year"
+                style="width:auto;padding:0.2rem 0.5rem;font-size:0.82rem"></select>
+              <span>to</span>
+              <select id="yoy-to-year"
+                style="width:auto;padding:0.2rem 0.5rem;font-size:0.82rem"></select>
+            </div>
+          </div>
+          <div id="yoy-legend" style="display:flex;gap:1rem;flex-wrap:wrap;
+            margin-bottom:0.75rem;font-size:0.78rem"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);
+                margin-bottom:0.2rem;font-weight:500">Electricity Units</div>
+              <div class="chart-container" style="height:160px">
+                <canvas id="yoy-elec-units"></canvas>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);
+                margin-bottom:0.2rem;font-weight:500">Electricity Charge ฿</div>
+              <div class="chart-container" style="height:160px">
+                <canvas id="yoy-elec-charge"></canvas>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);
+                margin-bottom:0.2rem;font-weight:500">Water Units</div>
+              <div class="chart-container" style="height:160px">
+                <canvas id="yoy-water-units"></canvas>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-secondary);
+                margin-bottom:0.2rem;font-weight:500">Water Charge ฿</div>
+              <div class="chart-container" style="height:160px">
+                <canvas id="yoy-water-charge"></canvas>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -169,57 +224,65 @@
         <button class="btn btn-success w-full" id="save-payment">Log Payment</button>
       </div>
 
-      <!-- Add new liability -->
+      <!-- Add new liability (collapsible) -->
       <div class="card" style="margin-bottom:1rem">
-        <div class="section-header">
-          <span class="section-title">Add New Liability</span>
+        <button id="liab-form-toggle"
+          style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;
+          display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+          <span class="section-title">＋ Add New Liability</span>
+          <span id="liab-form-chevron"
+            style="transition:transform 0.3s ease;display:inline-block;color:var(--text-secondary);font-size:0.85rem">▼</span>
+        </button>
+        <div id="liab-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+          <div style="padding-top:1rem">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-name">Liability Name</label>
+                <input type="text" id="liab-name" placeholder="Bank / Person / Card">
+              </div>
+              <div class="form-group">
+                <label for="liab-creditor-type">Creditor Type</label>
+                <select id="liab-creditor-type">
+                  <option value="Bank">Bank</option>
+                  <option value="Family">Family</option>
+                  <option value="Friend">Friend</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-loan-size">Loan Size (฿)</label>
+                <input type="number" id="liab-loan-size" placeholder="Original loan amount">
+              </div>
+              <div class="form-group">
+                <label for="liab-balance">Current Balance (฿)</label>
+                <input type="number" id="liab-balance" placeholder="Remaining balance">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-rate">Interest Rate (% p.a.)</label>
+                <input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5">
+              </div>
+              <div class="form-group">
+                <label for="liab-monthly">Monthly Payment (฿)</label>
+                <input type="number" id="liab-monthly" placeholder="฿">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="liab-start">Start Date</label>
+                <input type="date" id="liab-start">
+              </div>
+              <div class="form-group">
+                <label for="liab-notes">Notes</label>
+                <input type="text" id="liab-notes" placeholder="Optional notes">
+              </div>
+            </div>
+            <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
+          </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-name">Liability Name</label>
-            <input type="text" id="liab-name" placeholder="Bank / Person / Card">
-          </div>
-          <div class="form-group">
-            <label for="liab-creditor-type">Creditor Type</label>
-            <select id="liab-creditor-type">
-              <option value="Bank">Bank</option>
-              <option value="Family">Family</option>
-              <option value="Friend">Friend</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-loan-size">Loan Size (฿)</label>
-            <input type="number" id="liab-loan-size" placeholder="Original loan amount">
-          </div>
-          <div class="form-group">
-            <label for="liab-balance">Current Balance (฿)</label>
-            <input type="number" id="liab-balance" placeholder="Remaining balance">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-rate">Interest Rate (% p.a.)</label>
-            <input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5">
-          </div>
-          <div class="form-group">
-            <label for="liab-monthly">Monthly Payment (฿)</label>
-            <input type="number" id="liab-monthly" placeholder="฿">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="liab-start">Start Date</label>
-            <input type="date" id="liab-start">
-          </div>
-          <div class="form-group">
-            <label for="liab-notes">Notes</label>
-            <input type="text" id="liab-notes" placeholder="Optional notes">
-          </div>
-        </div>
-        <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
       </div>
 
       <!-- Active liabilities list -->
@@ -233,6 +296,42 @@
 
     <!-- ── Budgets Tab ── -->
     <div class="tab-panel" id="budgets-tab">
+
+      <!-- New Category (collapsible) -->
+      <div class="card" style="margin-bottom:1rem">
+        <button id="cat-form-toggle"
+          style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;
+          display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+          <span class="section-title">＋ New Category</span>
+          <span id="cat-form-chevron"
+            style="transition:transform 0.3s ease;display:inline-block;
+            color:var(--text-secondary);font-size:0.85rem">▼</span>
+        </button>
+        <div id="cat-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+          <div style="padding-top:1rem">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="cat-name">Name</label>
+                <input type="text" id="cat-name" placeholder="Category name">
+              </div>
+              <div class="form-group">
+                <label for="cat-type">Type</label>
+                <select id="cat-type">
+                  <option value="Expense">Expense</option>
+                  <option value="Earn">Earn</option>
+                  <option value="Loan">Loan</option>
+                  <option value="Investment">Investment</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cat-group">Group (optional)</label>
+              <input type="text" id="cat-group" placeholder="e.g. Personal, Business">
+            </div>
+            <button class="btn btn-primary w-full" id="save-category">Add Category</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Create budget form -->
       <div class="card" style="margin-bottom:1rem">
@@ -263,6 +362,12 @@
             </select>
           </div>
         </div>
+        <div id="budget-onetime-note" style="display:none;font-size:0.8rem;color:var(--text-secondary);
+          padding:0.5rem 0.75rem;background:rgba(245,158,11,0.08);border-radius:var(--radius);
+          margin-bottom:0.75rem;border:1px solid rgba(245,158,11,0.25)">
+          ℹ️ One-time budgets are only shown when today falls within the Start–End date range.
+          Set both dates for it to appear in your active budget list.
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label for="budget-start">Start Date</label>
@@ -280,6 +385,33 @@
       <div class="card">
         <div class="section-header">
           <span class="section-title">Active Budgets</span>
+        </div>
+        <!-- Fix 22: view + group control bar -->
+        <div id="budget-control-bar"
+          style="display:flex;justify-content:space-between;align-items:center;
+          margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-view="row">≡ Row</button>
+              <button class="period-btn" data-budget-view="card">⊞ Card</button>
+            </div>
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-group="all">All</button>
+              <button class="period-btn" data-budget-group="byCategory">By Category</button>
+            </div>
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-active="active">Active</button>
+              <button class="period-btn" data-budget-active="all">All incl. past</button>
+            </div>
+          </div>
+          <div id="budget-group-actions" style="display:none;gap:0.75rem;align-items:center">
+            <button id="budget-expand-all"
+              style="background:none;border:none;cursor:pointer;font-size:0.82rem;
+              color:var(--color-primary);font-family:inherit;padding:0">Expand all</button>
+            <button id="budget-collapse-all"
+              style="background:none;border:none;cursor:pointer;font-size:0.82rem;
+              color:var(--color-primary);font-family:inherit;padding:0">Collapse all</button>
+          </div>
         </div>
         <div id="budgets-list"></div>
       </div>

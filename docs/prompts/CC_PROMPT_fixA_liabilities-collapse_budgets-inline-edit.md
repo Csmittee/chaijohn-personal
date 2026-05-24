@@ -1,3 +1,5 @@
+# ✅ COMPLETE — archived 2026-05-24
+
 Before writing any code, read these files:
 /docs/LESSONS.md, /docs/DECISIONS.md, /docs/PROGRESS.md
 Summarize what you understand before proceeding.

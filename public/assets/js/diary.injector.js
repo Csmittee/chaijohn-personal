@@ -35,9 +35,10 @@ let allEntries = [];
 let currentEntryId = null;
 let activeTypeFilter = '';
 let isPreviewMode = false;
-let originalState = null;   // snapshot when entry loaded — used by Cancel
-let lastAssistType = null;  // last AI type clicked — routes "Use this" to correct field
-let currentImageUrl = '';   // cloudinary URL for current entry
+let originalState = null;    // snapshot when entry loaded — used by Cancel
+let lastAssistType = null;   // last AI type clicked — routes "Use this" to correct field
+let currentImageUrl = '';    // cloudinary URL for current entry
+let aiPreviousContent = null; // stored for undo after Apply & Replace
 
 /* ─── Show/hide context-sensitive buttons ─── */
 function setEditorButtons(hasExisting) {
@@ -114,6 +115,26 @@ function updateImageDisplay() {
   } else {
     wrap.style.display = 'none';
   }
+}
+
+/* ─── AI comparison panel helpers ─── */
+function showAiComparison(aiText) {
+  const panel   = document.getElementById('ai-comparison-panel');
+  const textEl  = document.getElementById('ai-comp-text');
+  if (!panel || !textEl) return;
+  textEl.textContent = aiText;
+  panel.classList.remove('hidden');
+}
+
+function hideAiComparison() {
+  const panel = document.getElementById('ai-comparison-panel');
+  if (panel) panel.classList.add('hidden');
+}
+
+function clearAiUndo() {
+  aiPreviousContent = null;
+  const undoBtn = document.getElementById('ai-undo-btn');
+  if (undoBtn) undoBtn.classList.add('hidden');
 }
 
 /* ─── Cancel: revert to last saved state ─── */
@@ -235,6 +256,8 @@ function clearEditor() {
   currentEntryId = null;
   originalState = null;
   currentImageUrl = '';
+  clearAiUndo();
+  hideAiComparison();
 
   ['entry-date', 'entry-title', 'entry-content', 'entry-tags', 'entry-concept'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -329,6 +352,8 @@ async function saveEntry() {
       if (!currentEntryId && data.record) currentEntryId = data.record.id || data.id;
       originalState = captureState();     // refresh snapshot after successful save
       setEditorButtons(!!currentEntryId);
+      clearAiUndo();
+      hideAiComparison();
       await loadEntryList();
     } else {
       var d = await res.json().catch(function () { return {}; });
@@ -549,7 +574,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* "Use this" — routes to tags field or content field depending on last assist type */
+  /* "Use this" — tags: apply directly; content: show comparison panel */
   if (useResultBtn) {
     useResultBtn.addEventListener('click', function () {
       var out         = document.getElementById('ai-assist-output');
@@ -562,16 +587,56 @@ document.addEventListener('DOMContentLoaded', function () {
         var tagsEl = document.getElementById('entry-tags');
         if (tagsEl) { tagsEl.value = out.textContent.trim(); closeAiModal(); showFlash('Tags applied!'); }
       } else {
-        var contentEl = document.getElementById('entry-content');
-        if (contentEl) {
-          contentEl.value = out.textContent;
-          closeAiModal();
-          if (isPreviewMode) setEditMode();
-          showFlash('Applied to content!');
-        }
+        // Show comparison panel instead of replacing directly
+        var aiText = out.textContent.trim();
+        closeAiModal();
+        showAiComparison(aiText);
+        if (isPreviewMode) setEditMode();
       }
     });
   }
+
+  /* AI comparison panel buttons */
+  document.getElementById('ai-comp-dismiss')?.addEventListener('click', function () {
+    hideAiComparison();
+  });
+
+  document.getElementById('ai-comp-keep')?.addEventListener('click', function () {
+    hideAiComparison();
+    showFlash('Original kept');
+  });
+
+  document.getElementById('ai-comp-replace')?.addEventListener('click', function () {
+    var contentEl = document.getElementById('entry-content');
+    var compText  = document.getElementById('ai-comp-text');
+    if (!contentEl || !compText) return;
+    aiPreviousContent = contentEl.value;
+    contentEl.value = compText.textContent;
+    hideAiComparison();
+    // Show undo button
+    var undoBtn = document.getElementById('ai-undo-btn');
+    if (undoBtn) undoBtn.classList.remove('hidden');
+    showFlash('Applied to content!');
+  });
+
+  document.getElementById('ai-comp-append')?.addEventListener('click', function () {
+    var contentEl = document.getElementById('entry-content');
+    var compText  = document.getElementById('ai-comp-text');
+    if (!contentEl || !compText) return;
+    var separator = contentEl.value.trim() ? '\n\n---\n\n' : '';
+    contentEl.value = contentEl.value + separator + compText.textContent;
+    hideAiComparison();
+    showFlash('Appended to content!');
+  });
+
+  /* Undo button — shown only after Apply & Replace */
+  document.getElementById('ai-undo-btn')?.addEventListener('click', function () {
+    var contentEl = document.getElementById('entry-content');
+    if (!contentEl || aiPreviousContent === null) return;
+    contentEl.value = aiPreviousContent;
+    clearAiUndo();
+    showFlash('Content restored');
+  });
 
   setEditMode();
   clearEditor();
