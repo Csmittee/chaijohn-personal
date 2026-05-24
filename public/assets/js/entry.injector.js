@@ -17,6 +17,7 @@
   let txPeriod    = 'daily';
   let txMap       = {};   // record ID → tx fields (Fix 6)
   let elecChart, waterChart;
+  let budgetActiveFilter = 'active';
 
   /* ── API helpers ── */
   async function api(path, opts = {}) {
@@ -71,7 +72,7 @@
 
   async function loadBudgets() {
     try {
-      const res = await api('/api/budgets');
+      const res = await api('/api/budgets?active_only=true');
       allBudgets = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
     } catch { allBudgets = []; }
   }
@@ -934,8 +935,9 @@
     const startOfMonth = nowYM + '-01';
 
     try {
+      const budgetUrl = budgetActiveFilter === 'all' ? '/api/budgets?all=true' : '/api/budgets?active_only=true';
       const [budgetRes, txRes] = await Promise.all([
-        api('/api/budgets'),
+        api(budgetUrl),
         api(`/api/transactions?start=${startOfMonth}&limit=500`)
       ]);
       const buds = (budgetRes.records || []).map(r => ({ id: r.id, ...r.fields }));
@@ -1127,6 +1129,16 @@
     document.getElementById('budget-collapse-all')?.addEventListener('click', () => {
       Object.keys(getBudgetGroups()).forEach(g => { budgetGroupState[g] = true; });
       renderBudgetList();
+    });
+
+    // D6A: Active/All filter toggle
+    document.querySelectorAll('[data-budget-active]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetActiveFilter = btn.dataset.budgetActive;
+        document.querySelectorAll('[data-budget-active]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetActive === budgetActiveFilter));
+        loadBudgetTab();
+      });
     });
   }
 
@@ -1376,8 +1388,51 @@
     });
   }
 
+  /* ── D5: Category create form ── */
+  function initCategoryForm() {
+    const toggle  = document.getElementById('cat-form-toggle');
+    const body    = document.getElementById('cat-form-body');
+    const chevron = document.getElementById('cat-form-chevron');
+    if (toggle && body) {
+      toggle.addEventListener('click', () => {
+        const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
+        body.style.maxHeight = isOpen ? '0' : '400px';
+        if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+      });
+    }
+
+    ensureMsgEl('cat-msg', 'save-category');
+
+    document.getElementById('save-category')?.addEventListener('click', async () => {
+      const name  = document.getElementById('cat-name')?.value?.trim();
+      const type  = document.getElementById('cat-type')?.value || 'Expense';
+      const group = document.getElementById('cat-group')?.value?.trim() || '';
+      if (!name) return alert('Category name is required');
+      const payload = { name, type, active: true };
+      if (group) payload.group = group;
+      try {
+        await api('/api/categories', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        showMsg('cat-msg', 'Category added!');
+        document.getElementById('cat-name').value  = '';
+        document.getElementById('cat-group').value = '';
+        await loadCategories();
+      } catch (err) {
+        showMsg('cat-msg', err.message, false);
+      }
+    });
+  }
+
   function initBudgetForm() {
     ensureMsgEl('budget-msg', 'save-budget');
+
+    // D6A: show one-time note when period = One-time
+    document.getElementById('budget-period')?.addEventListener('change', function () {
+      const note = document.getElementById('budget-onetime-note');
+      if (note) note.style.display = this.value === 'One-time' ? 'block' : 'none';
+    });
     document.getElementById('save-budget')?.addEventListener('click', async () => {
       const label      = document.getElementById('budget-label')?.value?.trim();
       const categoryId = document.getElementById('budget-category')?.value;
@@ -1427,6 +1482,7 @@
     initUtilityForm();
     initLiabilityForm();
     initBudgetControls();
+    initCategoryForm();
     initBudgetForm();
     loadTransactions().catch(console.error);
   });

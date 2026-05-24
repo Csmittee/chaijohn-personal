@@ -136,8 +136,31 @@
             </div>
 
             <!-- AI Assist trigger -->
-            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem">
+            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem;
+              display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
               <button class="btn btn-outline btn-sm" id="ai-assist-btn">✨ AI Assist</button>
+              <button class="btn btn-sm btn-warning hidden" id="ai-undo-btn"
+                title="Undo last AI replace">↩ Undo AI</button>
+            </div>
+
+            <!-- AI Comparison Panel (shown after AI returns result, before user applies) -->
+            <div id="ai-comparison-panel" class="hidden"
+              style="border:1px solid var(--color-primary,#3b82f6);border-radius:var(--radius);
+              padding:1rem;margin-top:1rem;background:rgba(59,130,246,0.04)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+                <span style="font-weight:600;font-size:0.88rem">✨ AI Suggestion</span>
+                <button class="btn btn-sm btn-outline" id="ai-comp-dismiss">✕ Dismiss</button>
+              </div>
+              <div id="ai-comp-text"
+                style="background:var(--bg-page,#f8fafc);border-radius:var(--radius);
+                padding:0.75rem;font-size:0.88rem;line-height:1.6;
+                max-height:200px;overflow-y:auto;white-space:pre-wrap;
+                margin-bottom:0.75rem;border:1px solid var(--border)"></div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button class="btn btn-sm btn-outline" id="ai-comp-keep">↩ Keep Original</button>
+                <button class="btn btn-sm btn-primary" id="ai-comp-replace">✓ Apply &amp; Replace</button>
+                <button class="btn btn-sm btn-success" id="ai-comp-append">⊕ Append</button>
+              </div>
             </div>
           </div>
 

@@ -158,6 +158,30 @@
       <div style="color:var(--text-secondary);font-size:0.9rem">Loading meters…</div>
     </div>
 
+    <!-- T4: Budget vs Actual (collapsible) -->
+    <div class="card" style="margin-bottom:1rem;padding:1rem">
+      <button id="t4-toggle"
+        style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;
+        display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+        <span class="section-title">T4 — Budget vs Actual</span>
+        <span id="t4-chevron"
+          style="transition:transform 0.3s ease;display:inline-block;
+          color:var(--text-secondary);font-size:0.85rem">▼</span>
+      </button>
+      <div id="t4-body" style="overflow:hidden;max-height:0;transition:max-height 0.4s ease">
+        <div style="padding-top:1rem">
+          <div class="period-toggle" style="margin-bottom:0.75rem">
+            <button class="period-btn active" data-t4-range="1m">This Month</button>
+            <button class="period-btn" data-t4-range="3m">3 Months</button>
+            <button class="period-btn" data-t4-range="6m">6 Months</button>
+            <button class="period-btn" data-t4-range="12m">12 Months</button>
+          </div>
+          <div id="t4-summary" style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem"></div>
+          <div style="height:200px"><canvas id="t4-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- ── Risk Simulator Modal ── -->

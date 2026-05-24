@@ -47,8 +47,13 @@ export async function onRequestPost(context) {
       break;
 
     case 'Diary':
+    case 'Idea':
+    case 'Project':
       targetTable = 'Diary';
       if (!recordFields.date) recordFields.date = today;
+      if (!recordFields.entry_type) {
+        recordFields.entry_type = suggested_type === 'Idea' ? 'Idea' : suggested_type === 'Project' ? 'Project' : 'Story';
+      }
       break;
 
     case 'Quote':

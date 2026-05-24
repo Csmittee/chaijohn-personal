@@ -6,10 +6,16 @@ const TABLE = 'Budgets';
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
-  const all = url.searchParams.get('all') === 'true';
+  const all        = url.searchParams.get('all')         === 'true';
+  const activeOnly = url.searchParams.get('active_only') === 'true';
 
   let filterByFormula;
-  if (!all) {
+  if (all) {
+    filterByFormula = undefined;
+  } else if (activeOnly) {
+    const today = new Date().toISOString().split('T')[0];
+    filterByFormula = `AND({active}=TRUE(),OR({period}!="One-time",AND(OR({start_date}="",{start_date}<="${today}"),OR({end_date}="",{end_date}>="${today}"))))`;
+  } else {
     filterByFormula = `{active}=TRUE()`;
   }
 

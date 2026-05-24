@@ -297,6 +297,42 @@
     <!-- ── Budgets Tab ── -->
     <div class="tab-panel" id="budgets-tab">
 
+      <!-- New Category (collapsible) -->
+      <div class="card" style="margin-bottom:1rem">
+        <button id="cat-form-toggle"
+          style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;
+          display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+          <span class="section-title">＋ New Category</span>
+          <span id="cat-form-chevron"
+            style="transition:transform 0.3s ease;display:inline-block;
+            color:var(--text-secondary);font-size:0.85rem">▼</span>
+        </button>
+        <div id="cat-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+          <div style="padding-top:1rem">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="cat-name">Name</label>
+                <input type="text" id="cat-name" placeholder="Category name">
+              </div>
+              <div class="form-group">
+                <label for="cat-type">Type</label>
+                <select id="cat-type">
+                  <option value="Expense">Expense</option>
+                  <option value="Earn">Earn</option>
+                  <option value="Loan">Loan</option>
+                  <option value="Investment">Investment</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cat-group">Group (optional)</label>
+              <input type="text" id="cat-group" placeholder="e.g. Personal, Business">
+            </div>
+            <button class="btn btn-primary w-full" id="save-category">Add Category</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Create budget form -->
       <div class="card" style="margin-bottom:1rem">
         <div class="section-header">
@@ -325,6 +361,12 @@
               <option value="One-time">One-time</option>
             </select>
           </div>
+        </div>
+        <div id="budget-onetime-note" style="display:none;font-size:0.8rem;color:var(--text-secondary);
+          padding:0.5rem 0.75rem;background:rgba(245,158,11,0.08);border-radius:var(--radius);
+          margin-bottom:0.75rem;border:1px solid rgba(245,158,11,0.25)">
+          ℹ️ One-time budgets are only shown when today falls within the Start–End date range.
+          Set both dates for it to appear in your active budget list.
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -356,6 +398,10 @@
             <div class="period-toggle">
               <button class="period-btn active" data-budget-group="all">All</button>
               <button class="period-btn" data-budget-group="byCategory">By Category</button>
+            </div>
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-active="active">Active</button>
+              <button class="period-btn" data-budget-active="all">All incl. past</button>
             </div>
           </div>
           <div id="budget-group-actions" style="display:none;gap:0.75rem;align-items:center">

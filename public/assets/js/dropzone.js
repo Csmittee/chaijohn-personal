@@ -1,10 +1,10 @@
 /**
  * dropzone.js — Floating Drop Zone panel injected on every protected page.
- * Handles drag-and-drop of receipts/photos → Cloudinary upload → AI extraction → review cards.
+ * Handles drag-and-drop of receipts/photos/text → AI extraction → review cards.
  * Does NOT handle auth — auth.js handles that separately.
  */
 (function () {
-  /* ─── Utility helpers (self-contained, no dependency on other scripts) ─── */
+  /* ─── Utility helpers ─── */
   function formatThb(amount) {
     if (amount === null || amount === undefined || isNaN(amount)) return '฿—';
     const n = Math.round(Number(amount));
@@ -28,6 +28,15 @@
     setTimeout(function () { if (el.parentNode) el.remove(); }, 3000);
   }
 
+  function isTextFile(file) {
+    return file.type === 'text/plain' || file.type === 'text/markdown' ||
+      file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.md');
+  }
+
+  function isImageOrPdf(file) {
+    return file.type.startsWith('image/') || file.type === 'application/pdf';
+  }
+
   /* ─── State ─── */
   let pendingCount = 0;
 
@@ -37,9 +46,7 @@
     badge.textContent = pendingCount;
     badge.style.display = pendingCount > 0 ? 'flex' : 'none';
     const approveAll = document.getElementById('dz-approve-all');
-    if (approveAll) {
-      approveAll.style.display = pendingCount >= 2 ? 'block' : 'none';
-    }
+    if (approveAll) approveAll.style.display = pendingCount >= 2 ? 'block' : 'none';
   }
 
   /* ─── Inject keyframe CSS ─── */
@@ -208,9 +215,7 @@
 }
 .dz-field-row input:focus,
 .dz-field-row select:focus,
-.dz-field-row textarea:focus {
-  border-color: var(--color-primary, #3b82f6);
-}
+.dz-field-row textarea:focus { border-color: var(--color-primary, #3b82f6); }
 .dz-btn { border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.15s; padding: 0.3rem 0.75rem; font-size: 0.78rem; }
 .dz-btn:hover { opacity: 0.85; }
 .dz-btn:disabled { opacity: 0.5; cursor: default; }
@@ -225,7 +230,7 @@
 
   /* ─── Build the panel HTML and inject into body ─── */
   function injectHtml() {
-    if (document.getElementById('dz-wrapper')) return; // already injected
+    if (document.getElementById('dz-wrapper')) return;
 
     const today = new Date();
     const dateStr = today.toLocaleDateString('en-US', {
@@ -249,9 +254,10 @@
   <div class="dz-body" id="dz-body">
     <button id="dz-approve-all" class="dz-btn dz-btn-success dz-w-full" style="margin-bottom:0.5rem">✅ Approve All</button>
     <div id="dz-drop-area" class="dz-drop-area" role="button" tabindex="0" aria-label="Drop files here or click to select">
-      <div>📎 Drag slips, photos, notes, quotes — anything</div>
-      <div style="font-size:0.75rem;margin-top:0.5rem;opacity:0.7">or click to select files</div>
-      <input type="file" id="dz-file-input" accept="image/*,application/pdf" multiple style="display:none">
+      <div>📎 Drag slips, photos, text files, quotes — anything</div>
+      <div style="font-size:0.75rem;margin-top:0.35rem;opacity:0.7">Images, PDF, .txt, .md supported</div>
+      <div style="font-size:0.75rem;margin-top:0.2rem;opacity:0.5">or click to select files</div>
+      <input type="file" id="dz-file-input" accept="image/*,application/pdf,text/plain,text/markdown,.txt,.md" multiple style="display:none">
     </div>
     <div id="dz-cards-container"></div>
   </div>
@@ -294,9 +300,10 @@
       ].join('');
     }
 
-    if (type === 'diary' || type === 'blog' || type === 'note') {
-      const entryTypes = ['Note', 'Blog', 'Reflection', 'Idea'];
-      const etOptions = entryTypes.map(et => `<option value="${et}"${(prefilled.entry_type || 'Note') === et ? ' selected' : ''}>${et}</option>`).join('');
+    if (type === 'diary' || type === 'blog' || type === 'note' || type === 'idea' || type === 'project') {
+      const entryTypes = ['Story', 'Idea', 'Blog', 'Project', 'Skill'];
+      const defaultEt = type === 'idea' ? 'Idea' : type === 'project' ? 'Project' : (prefilled.entry_type || 'Story');
+      const etOptions = entryTypes.map(et => `<option value="${et}"${defaultEt === et ? ' selected' : ''}>${et}</option>`).join('');
       return [
         field('Title', `<input type="text" name="title" value="${escHtml(prefilled.title || '')}" placeholder="Entry title">`),
         field('Type', `<select name="entry_type">${etOptions}</select>`),
@@ -309,7 +316,7 @@
       const moodTags = ['Motivational', 'Wisdom', 'Funny', 'Sad', 'Other'];
       const mtOptions = moodTags.map(mt => `<option value="${mt}"${(prefilled.mood_tag || 'Motivational') === mt ? ' selected' : ''}>${mt}</option>`).join('');
       return [
-        field('Quote Text', `<textarea name="text" rows="3" placeholder="The quote...">${escHtml(prefilled.text || '')}</textarea>`),
+        field('Quote Text', `<textarea name="text" rows="3" placeholder="The quote...">${escHtml(prefilled.content || prefilled.text || '')}</textarea>`),
         field('Author', `<input type="text" name="author" value="${escHtml(prefilled.author || '')}" placeholder="Who said it?">`),
         field('Source', `<input type="text" name="source" value="${escHtml(prefilled.source || '')}" placeholder="Book, speech, etc.">`),
         field('Mood Tag', `<select name="mood_tag">${mtOptions}</select>`)
@@ -317,7 +324,7 @@
     }
 
     // Fallback
-    return field('Description', `<input type="text" name="description" value="${escHtml(prefilled.description || '')}" placeholder="Describe this item...">`);
+    return field('Description', `<input type="text" name="description" value="${escHtml(prefilled.description || prefilled.content || '')}" placeholder="Describe this item...">`);
   }
 
   function escHtml(str) {
@@ -338,7 +345,7 @@
   }
 
   /* ─── Build a full review card ─── */
-  function buildReviewCard(queueId, cloudinaryUrl, aiResult) {
+  function buildReviewCard(queueId, cloudinaryUrl, aiResult, fileType) {
     aiResult = aiResult || {};
     const suggestedType = aiResult.suggested_type || 'Unknown';
     const prefilled = aiResult.prefilled || {};
@@ -349,9 +356,14 @@
     card.dataset.queueId = queueId;
     card.dataset.suggestedType = suggestedType;
 
-    const thumbHtml = cloudinaryUrl
-      ? `<img src="${cloudinaryUrl}" class="dz-thumb" onerror="this.style.display='none'" alt="Uploaded preview" loading="lazy">`
-      : `<div class="dz-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:rgba(255,255,255,0.05);border-radius:6px">📄</div>`;
+    let thumbHtml;
+    if (fileType === 'text') {
+      thumbHtml = `<div class="dz-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:rgba(59,130,246,0.1);border-radius:6px;border:1px solid rgba(59,130,246,0.2)">📝</div>`;
+    } else if (cloudinaryUrl) {
+      thumbHtml = `<img src="${cloudinaryUrl}" class="dz-thumb" onerror="this.style.display='none'" alt="Uploaded preview" loading="lazy">`;
+    } else {
+      thumbHtml = `<div class="dz-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:rgba(255,255,255,0.05);border-radius:6px">📄</div>`;
+    }
 
     const desc = escHtml(aiResult.description || 'AI analysis complete');
     const typeBadge = `<span style="display:inline-block;background:rgba(59,130,246,0.2);color:#60a5fa;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:600;margin-top:0.2rem">${escHtml(suggestedType)}</span>`;
@@ -429,7 +441,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Rejected' })
       });
-    } catch (e) { /* ignore — remove card anyway */ }
+    } catch (e) { /* ignore */ }
     pendingCount = Math.max(0, pendingCount - 1);
     updateBadge();
     if (card.parentNode) {
@@ -440,10 +452,72 @@
     }
   }
 
-  /* ─── Process one uploaded file ─── */
+  /* ─── Process a text file (D1 new flow) ─── */
+  async function processTextFile(file) {
+    const container = document.getElementById('dz-cards-container');
+    if (!container) return;
+
+    const spinner = buildSpinnerCard(file.name);
+    container.insertBefore(spinner, container.firstChild);
+
+    let queueId = null;
+    let aiResult = {};
+
+    try {
+      const textContent = await new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function (e) { resolve(e.target.result); };
+        reader.onerror = function () { reject(new Error('Failed to read file')); };
+        reader.readAsText(file);
+      });
+
+      const dzRes = await fetch('/api/dropzone', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text_content: textContent,
+          filename: file.name,
+          mime_type: file.type || 'text/plain'
+        })
+      });
+
+      if (dzRes.ok) {
+        const dzData = await dzRes.json();
+        queueId  = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+        aiResult = dzData.ai_result || {};
+      } else {
+        queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        aiResult = { suggested_type: 'Diary', description: 'Could not analyze — please fill manually', prefilled: {} };
+      }
+    } catch (e) {
+      if (spinner.parentNode) spinner.remove();
+      showFlash('Failed to process ' + file.name + ': ' + e.message, 'error');
+      return;
+    }
+
+    if (spinner.parentNode) spinner.remove();
+    const card = buildReviewCard(queueId, null, aiResult, 'text');
+    container.insertBefore(card, container.firstChild);
+    pendingCount++;
+    updateBadge();
+  }
+
+  /* ─── Process one uploaded image/PDF file ─── */
   async function processFile(file) {
     const container = document.getElementById('dz-cards-container');
     if (!container) return;
+
+    // Reject unsupported types
+    if (!isImageOrPdf(file) && !isTextFile(file)) {
+      showFlash('File type not supported: ' + file.name, 'error');
+      return;
+    }
+
+    // Route text files to text flow
+    if (isTextFile(file)) {
+      return processTextFile(file);
+    }
 
     const spinner = buildSpinnerCard(file.name);
     container.insertBefore(spinner, container.firstChild);
@@ -453,7 +527,6 @@
     let aiResult = {};
 
     try {
-      // Step 1: Upload image to Cloudinary via server
       const yyyymm = new Date().toISOString().slice(0, 7).replace('-', '');
       const formData = new FormData();
       formData.append('file', file);
@@ -463,7 +536,6 @@
         method: 'POST',
         credentials: 'same-origin',
         body: formData
-        // No Content-Type header — let browser set multipart boundary
       });
 
       if (!uploadRes.ok) {
@@ -474,25 +546,19 @@
       const uploadData = await uploadRes.json();
       cloudinaryUrl = uploadData.url || uploadData.secure_url || '';
 
-      // Step 2: AI extraction via dropzone endpoint
       const dzRes = await fetch('/api/dropzone', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cloudinary_url: cloudinaryUrl,
-          filename: file.name,
-          mime_type: file.type
-        })
+        body: JSON.stringify({ cloudinary_url: cloudinaryUrl, filename: file.name, mime_type: file.type })
       });
 
       if (dzRes.ok) {
         const dzData = await dzRes.json();
-        queueId = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+        queueId  = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
         aiResult = dzData.ai_result || {};
       } else {
-        // AI failed — create a local queue ID and show blank form
-        queueId = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         aiResult = { suggested_type: 'Transaction', description: 'Could not analyze — please fill manually', prefilled: {} };
       }
     } catch (e) {
@@ -501,10 +567,8 @@
       return;
     }
 
-    // Replace spinner with review card
     if (spinner.parentNode) spinner.remove();
-
-    const card = buildReviewCard(queueId, cloudinaryUrl, aiResult);
+    const card = buildReviewCard(queueId, cloudinaryUrl, aiResult, 'image');
     container.insertBefore(card, container.firstChild);
     pendingCount++;
     updateBadge();
@@ -512,21 +576,19 @@
 
   /* ─── Wire up all event listeners ─── */
   function wireEvents() {
-    const toggleBtn = document.getElementById('dropzone-toggle-btn');
-    const panel = document.getElementById('dropzone-panel');
-    const dropArea = document.getElementById('dz-drop-area');
-    const fileInput = document.getElementById('dz-file-input');
-    const container = document.getElementById('dz-cards-container');
+    const toggleBtn  = document.getElementById('dropzone-toggle-btn');
+    const panel      = document.getElementById('dropzone-panel');
+    const dropArea   = document.getElementById('dz-drop-area');
+    const fileInput  = document.getElementById('dz-file-input');
+    const container  = document.getElementById('dz-cards-container');
     const approveAllBtn = document.getElementById('dz-approve-all');
 
     if (!toggleBtn || !panel) return;
 
-    // Toggle panel open / close
     toggleBtn.addEventListener('click', function () {
       panel.classList.toggle('open');
     });
 
-    // Drop area: click → trigger file input
     if (dropArea) {
       dropArea.addEventListener('click', function (e) {
         if (e.target !== fileInput) fileInput.click();
@@ -534,21 +596,15 @@
       dropArea.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
       });
-
-      // Drag events
       dropArea.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         dropArea.classList.add('drag-over');
       });
       dropArea.addEventListener('dragleave', function (e) {
-        if (!dropArea.contains(e.relatedTarget)) {
-          dropArea.classList.remove('drag-over');
-        }
+        if (!dropArea.contains(e.relatedTarget)) dropArea.classList.remove('drag-over');
       });
       dropArea.addEventListener('drop', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         dropArea.classList.remove('drag-over');
         if (e.dataTransfer && e.dataTransfer.files) {
           Array.from(e.dataTransfer.files).forEach(processFile);
@@ -556,7 +612,6 @@
       });
     }
 
-    // Also accept drops on the whole panel
     if (panel) {
       panel.addEventListener('dragover', function (e) { e.preventDefault(); });
       panel.addEventListener('drop', function (e) {
@@ -567,43 +622,35 @@
       });
     }
 
-    // File input change
     if (fileInput) {
       fileInput.addEventListener('change', function () {
         if (!this.files || !this.files.length) return;
         Array.from(this.files).forEach(processFile);
-        this.value = ''; // reset so same file can be re-selected
+        this.value = '';
       });
     }
 
-    // Approve / Reject buttons — event delegation
     if (container) {
       container.addEventListener('click', async function (e) {
         const approveBtn = e.target.closest('.dz-approve');
-        const rejectBtn = e.target.closest('.dz-reject');
+        const rejectBtn  = e.target.closest('.dz-reject');
 
         if (approveBtn && !approveBtn.disabled) {
           const card = approveBtn.closest('.dz-review-card');
           if (!card) return;
           approveBtn.disabled = true;
           const ok = await approveCard(card);
-          if (!ok) {
-            approveBtn.disabled = false;
-          } else {
-            showFlash('Approved!');
-          }
+          if (!ok) approveBtn.disabled = false;
+          else showFlash('Approved!');
         }
 
         if (rejectBtn) {
           const card = rejectBtn.closest('.dz-review-card');
-          if (card) {
-            await rejectCard(card);
-          }
+          if (card) await rejectCard(card);
         }
       });
     }
 
-    // Approve All button
     if (approveAllBtn) {
       approveAllBtn.addEventListener('click', async function () {
         approveAllBtn.disabled = true;
@@ -624,7 +671,6 @@
 
   /* ─── Initialize ─── */
   document.addEventListener('DOMContentLoaded', function () {
-    // Only inject on protected pages (not login or setup)
     const path = window.location.pathname;
     const isLoginPage = path === '/' || path === '/index.html' || path.endsWith('/index.html');
     const isSetupPage = path === '/setup.html' || path.endsWith('/setup.html');
