@@ -146,8 +146,15 @@
     </div>
 
     <!-- Budget Meters -->
-    <div class="section-title" style="margin-bottom:0.5rem">Budget Meters — Current Month</div>
-    <div class="meters-grid" id="meters-grid">
+    <div style="display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem">
+      <div class="section-title">Budget Meters — Current Month</div>
+      <div class="period-toggle">
+        <button class="period-btn active" data-meter-view="all">All</button>
+        <button class="period-btn" data-meter-view="group">By Group</button>
+      </div>
+    </div>
+    <div id="meters-grid" style="margin-bottom:1rem">
       <div style="color:var(--text-secondary);font-size:0.9rem">Loading meters…</div>
     </div>
 

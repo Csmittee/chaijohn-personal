@@ -382,7 +382,8 @@
         electricity_charge: Number(elecCharge?.value || 0) || undefined,
         water_units:  Number(waterUnits?.value  || 0) || undefined,
         water_charge: Number(waterCharge?.value || 0) || undefined,
-        notes: document.getElementById('util-notes')?.value || ''
+        notes:   document.getElementById('util-notes')?.value || '',
+        ft_note: document.getElementById('util-ft-note')?.value || ''
       };
       Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
       try {
@@ -395,41 +396,165 @@
     });
   }
 
+  let yoyCharts = {};
+  let yoyAllRecords = [];
+
   async function loadUtilityHistory() {
     const tableEl = document.getElementById('util-history-table');
     if (!tableEl) return;
     try {
       const now = new Date();
-      const res = await api(`/api/utilities?year=${now.getFullYear()}`);
-      const records = (res.records || []).map(r => r.fields).slice(0, 12);
+      // Fix 15: fetch all records (no year filter) for YoY charts
+      const [yearRes, allRes] = await Promise.all([
+        api(`/api/utilities?year=${now.getFullYear()}`),
+        api('/api/utilities')
+      ]);
+      const records = (yearRes.records || []).map(r => r.fields).slice(0, 12);
+      yoyAllRecords = (allRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+
       if (records.length === 0) {
         tableEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No utility records yet.</div>';
-        return;
+      } else {
+        // Fix 16: add FT column to table
+        tableEl.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+            <thead><tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:0.25rem">Month</th>
+              <th style="text-align:right">Elec Units</th>
+              <th style="text-align:right">Elec ฿</th>
+              <th style="text-align:right">Water Units</th>
+              <th style="text-align:right">Water ฿</th>
+              <th style="text-align:center">FT</th>
+            </tr></thead>
+            <tbody>${records.map(r => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:0.25rem">${(r.month || '').slice(0, 7)}</td>
+                <td style="text-align:right">${r.electricity_units || '—'}</td>
+                <td style="text-align:right">${r.electricity_charge ? fmt(r.electricity_charge) : '—'}</td>
+                <td style="text-align:right">${r.water_units || '—'}</td>
+                <td style="text-align:right">${r.water_charge ? fmt(r.water_charge) : '—'}</td>
+                <td style="text-align:center">
+                  ${r.ft_note ? `<span title="${r.ft_note.replace(/"/g,'&quot;')}"
+                    style="cursor:help">📝</span>` : ''}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+        const reversed = [...records].reverse();
+        const labels   = reversed.map(r => (r.month || '').slice(0, 7));
+        renderMiniChart('elec-chart',  labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
+        renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
       }
-      tableEl.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
-          <thead><tr style="border-bottom:1px solid var(--border)">
-            <th style="text-align:left;padding:0.25rem">Month</th>
-            <th style="text-align:right">Elec Units</th><th style="text-align:right">Elec ฿</th>
-            <th style="text-align:right">Water Units</th><th style="text-align:right">Water ฿</th>
-          </tr></thead>
-          <tbody>${records.map(r => `
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:0.25rem">${(r.month || '').slice(0, 7)}</td>
-              <td style="text-align:right">${r.electricity_units || '—'}</td>
-              <td style="text-align:right">${r.electricity_charge ? fmt(r.electricity_charge) : '—'}</td>
-              <td style="text-align:right">${r.water_units || '—'}</td>
-              <td style="text-align:right">${r.water_charge ? fmt(r.water_charge) : '—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`;
-      const reversed = [...records].reverse();
-      const labels   = reversed.map(r => (r.month || '').slice(0, 7));
-      renderMiniChart('elec-chart',  labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
-      renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
+
+      // Fix 15: render YoY charts
+      renderYoYCharts(yoyAllRecords);
     } catch (err) {
       tableEl.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
+  }
+
+  /* ── Fix 15: YoY trend charts ── */
+  const YOY_COLORS = { 2023:'#6366f1', 2024:'#22c55e', 2025:'#f59e0b', 2026:'#3b82f6' };
+  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function renderYoYCharts(records) {
+    if (!records || records.length === 0) return;
+
+    // Build data grouped by year → month(1-12) → value
+    const byYear = {};
+    records.forEach(r => {
+      const d = r.month || '';
+      if (!d) return;
+      const year  = parseInt(d.slice(0, 4));
+      const month = parseInt(d.slice(5, 7));
+      if (!byYear[year]) byYear[year] = {};
+      byYear[year][month] = r;
+    });
+
+    const years = Object.keys(byYear).map(Number).sort();
+    if (years.length === 0) return;
+
+    // Populate year selects
+    const fromSel = document.getElementById('yoy-from-year');
+    const toSel   = document.getElementById('yoy-to-year');
+    if (fromSel && fromSel.options.length === 0) {
+      years.forEach(y => {
+        fromSel.appendChild(new Option(y, y));
+        toSel.appendChild(new Option(y, y));
+      });
+      fromSel.value = years[0];
+      toSel.value   = years[years.length - 1];
+
+      const onRangeChange = () => {
+        const from = parseInt(fromSel.value);
+        const to   = parseInt(toSel.value);
+        if (from > to) return;
+        drawYoYCharts(byYear, years.filter(y => y >= from && y <= to));
+        renderYoYLegend(years.filter(y => y >= from && y <= to));
+      };
+      fromSel.addEventListener('change', onRangeChange);
+      toSel.addEventListener('change', onRangeChange);
+    }
+
+    const from = parseInt(fromSel?.value || years[0]);
+    const to   = parseInt(toSel?.value   || years[years.length - 1]);
+    const activeYears = years.filter(y => y >= from && y <= to);
+    drawYoYCharts(byYear, activeYears);
+    renderYoYLegend(activeYears);
+  }
+
+  function drawYoYCharts(byYear, activeYears) {
+    const charts = [
+      { id: 'yoy-elec-units',  field: 'electricity_units',  label: 'Units' },
+      { id: 'yoy-elec-charge', field: 'electricity_charge', label: '฿' },
+      { id: 'yoy-water-units', field: 'water_units',        label: 'Units' },
+      { id: 'yoy-water-charge',field: 'water_charge',       label: '฿' }
+    ];
+    charts.forEach(cfg => {
+      const canvas = document.getElementById(cfg.id);
+      if (!canvas) return;
+      if (yoyCharts[cfg.id]) yoyCharts[cfg.id].destroy();
+
+      const datasets = activeYears.map(year => {
+        const color = YOY_COLORS[year] || `hsl(${(year % 10) * 36},65%,55%)`;
+        const data  = MONTHS_SHORT.map((_, mi) => {
+          const rec = byYear[year]?.[mi + 1];
+          return rec && rec[cfg.field] !== undefined ? Number(rec[cfg.field]) : null;
+        });
+        return {
+          label: String(year), data, borderColor: color, backgroundColor: color + '22',
+          borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false
+        };
+      });
+
+      yoyCharts[cfg.id] = new Chart(canvas, {
+        type: 'line',
+        data: { labels: MONTHS_SHORT, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: activeYears.length > 1, position: 'bottom',
+              labels: { boxWidth: 10, font: { size: 8 } } }
+          },
+          scales: {
+            x: { ticks: { font: { size: 8 } } },
+            y: { ticks: { font: { size: 8 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+          }
+        }
+      });
+    });
+  }
+
+  function renderYoYLegend(activeYears) {
+    const legendEl = document.getElementById('yoy-legend');
+    if (!legendEl) return;
+    legendEl.innerHTML = activeYears.map(y => {
+      const color = YOY_COLORS[y] || `hsl(${(y % 10) * 36},65%,55%)`;
+      return `<span style="display:flex;align-items:center;gap:0.3rem">
+        <span style="width:14px;height:3px;background:${color};display:inline-block;border-radius:2px"></span>
+        <span>${y}</span>
+      </span>`;
+    }).join('');
   }
 
   function renderMiniChart(canvasId, labels, data, label, color) {

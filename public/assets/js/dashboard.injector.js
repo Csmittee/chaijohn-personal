@@ -13,6 +13,8 @@
   let t1Chart, t2Chart, t3Chart, playroomChart;
   let t2DrillGroup = null;
   let playroomBudgetId = null;
+  let meterView = 'all';
+  let meterGroupState = {}; // groupName → false means collapsed
 
   /* ── Date helpers ── */
   function rangeStart(range) {
@@ -367,7 +369,7 @@
     });
   }
 
-  /* ── Budget meters (unchanged logic) ── */
+  /* ── Fix 14: Budget meters with proportional scale ── */
   function renderMeters(nowYM) {
     const grid = document.getElementById('meters-grid');
     if (!grid) return;
@@ -383,26 +385,150 @@
       return;
     }
 
-    const withPct = active.map(b => {
+    const withData = active.map(b => {
       const catId = linkedId(b.category_id);
-      const spent  = spendByCat[catId] || 0;
-      const limit  = Number(b.amount || 0);
-      return { b, catId, spent, limit, p: pct(spent, limit) };
-    }).sort((a, b) => b.p - a.p);
+      const cat   = catMap[catId] || {};
+      const spent = spendByCat[catId] || 0;
+      const limit = Number(b.amount || 0);
+      const label = b.label || cat.name || 'Budget';
+      return { b, catId, cat, spent, limit, p: pct(spent, limit), label };
+    });
 
-    grid.innerHTML = withPct.map(({ b, catId, spent, limit, p }) => {
-      const cat     = catMap[catId] || {};
-      const cls     = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
-      const display = Math.min(p, 100);
-      const label   = b.label || cat.name || 'Budget';
+    if (meterView === 'group') {
+      renderMeterGroupView(grid, withData);
+    } else {
+      renderMeterAllView(grid, withData);
+    }
+  }
+
+  function renderMeterAllView(grid, withData) {
+    grid.style.cssText = 'margin-bottom:1rem';
+    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
+    const sorted    = [...withData].sort((a, b) => b.limit - a.limit);
+
+    grid.innerHTML = sorted.map(({ cat, spent, limit, p, label }) => {
+      const containerPct = Math.max(5, Math.round((limit / maxAmount) * 100));
+      const fillPct      = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+      const cls          = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
       return `
-        <div class="meter-card">
-          <div class="meter-label">${cat.group || ''}</div>
-          <div class="meter-name">${label}</div>
-          <div class="meter-bar-bg"><div class="meter-bar-fill ${cls}" style="width:${display}%"></div></div>
-          <div class="meter-nums"><span>${fmt(spent)}</span><span>${p}% / ${fmt(limit)}</span></div>
+        <div style="margin-bottom:0.65rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
+            <span style="font-size:0.82rem;font-weight:600">${label}${cat.group
+              ? ` <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400">— ${cat.group}</span>`
+              : ''}</span>
+            <span style="font-size:0.73rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)} · ${p}%</span>
+          </div>
+          <div style="width:${containerPct}%;min-width:8%">
+            <div class="meter-bar-bg" style="height:10px">
+              <div class="meter-bar-fill ${cls}" style="width:${fillPct}%"></div>
+            </div>
+          </div>
         </div>`;
     }).join('');
+  }
+
+  function renderMeterGroupView(grid, withData) {
+    grid.style.cssText = 'margin-bottom:1rem';
+    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
+
+    const groups = {};
+    withData.forEach(item => {
+      const grp = item.cat.group || 'Other';
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(item);
+    });
+
+    const sortedGroups = Object.entries(groups)
+      .map(([name, items]) => ({
+        name, items,
+        totalBudget: items.reduce((s, x) => s + x.limit, 0),
+        totalSpent:  items.reduce((s, x) => s + x.spent, 0)
+      }))
+      .sort((a, b) => b.totalBudget - a.totalBudget);
+
+    let html = '';
+    sortedGroups.forEach(({ name, items, totalBudget, totalSpent }) => {
+      const grpPct       = pct(totalSpent, totalBudget);
+      const grpCls       = grpPct >= 100 ? 'over' : grpPct >= 85 ? 'warn' : 'ok';
+      const containerPct = Math.max(5, Math.round((totalBudget / maxAmount) * 100));
+      const fillPct      = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+      const expanded     = meterGroupState[name] !== false;
+
+      const innerHtml = items.sort((a, b) => b.limit - a.limit).map(item => {
+        const itemCPct  = Math.max(5, Math.round((item.limit / maxAmount) * 100));
+        const itemFPct  = item.limit > 0 ? Math.min(100, Math.round((item.spent / item.limit) * 100)) : 0;
+        const itemCls   = item.p >= 100 ? 'over' : item.p >= 85 ? 'warn' : 'ok';
+        return `
+          <div style="margin-bottom:0.5rem;padding-left:0.75rem">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
+              <span style="font-size:0.78rem">${item.label}</span>
+              <span style="font-size:0.7rem;color:var(--text-secondary)">
+                ${fmt(item.spent)} / ${fmt(item.limit)} · ${item.p}%
+              </span>
+            </div>
+            <div style="width:${itemCPct}%;min-width:8%">
+              <div class="meter-bar-bg" style="height:8px">
+                <div class="meter-bar-fill ${itemCls}" style="width:${itemFPct}%"></div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      html += `
+        <div style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="meter-group-header" data-grp="${name}"
+            style="display:flex;align-items:center;padding:0.6rem 0.75rem;cursor:pointer;
+            user-select:none;background:rgba(59,130,246,0.05);
+            border-radius:${expanded ? 'var(--radius) var(--radius) 0 0' : 'var(--radius)'}">
+            <span style="font-size:0.85rem;font-weight:700;flex:0 0 auto;min-width:90px">${name}</span>
+            <div style="flex:1;margin:0 0.75rem">
+              <div style="width:${containerPct}%;min-width:30px">
+                <div class="meter-bar-bg" style="height:8px">
+                  <div class="meter-bar-fill ${grpCls}" style="width:${fillPct}%"></div>
+                </div>
+              </div>
+            </div>
+            <span style="font-size:0.75rem;color:var(--text-secondary);flex:0 0 auto;white-space:nowrap">
+              ${fmt(totalSpent)} / ${fmt(totalBudget)} · ${grpPct}%
+            </span>
+            <span data-grp-chev="${name}"
+              style="margin-left:0.5rem;font-size:0.7rem;color:var(--text-secondary);
+              transition:transform 0.3s;display:inline-block;
+              ${expanded ? '' : 'transform:rotate(-90deg)'}">▼</span>
+          </div>
+          <div data-grp-body="${name}" style="padding-top:0.5rem;padding-bottom:0.5rem;
+            ${expanded ? '' : 'display:none'}">
+            ${innerHtml}
+          </div>
+        </div>`;
+    });
+
+    grid.innerHTML = html;
+
+    grid.querySelectorAll('.meter-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const grp  = header.dataset.grp;
+        const wasExpanded = meterGroupState[grp] !== false;
+        meterGroupState[grp] = !wasExpanded;
+        const body = grid.querySelector(`[data-grp-body="${grp}"]`);
+        const chev = grid.querySelector(`[data-grp-chev="${grp}"]`);
+        if (body) body.style.display = wasExpanded ? 'none' : '';
+        if (chev) chev.style.transform = wasExpanded ? 'rotate(-90deg)' : '';
+        header.style.borderRadius = wasExpanded
+          ? 'var(--radius)' : 'var(--radius) var(--radius) 0 0';
+      });
+    });
+  }
+
+  function initMeterToggle() {
+    document.querySelectorAll('[data-meter-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        meterView = btn.dataset.meterView;
+        document.querySelectorAll('[data-meter-view]').forEach(b =>
+          b.classList.toggle('active', b.dataset.meterView === meterView));
+        renderMeters(currentYM());
+      });
+    });
   }
 
   /* ── Fix 5: Solution Playroom — user-controlled ── */
@@ -700,6 +826,7 @@
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', () => {
     initPeriodButtons();
+    initMeterToggle();
     initModals();
     initPlayroom();
     loadAll().catch(err => console.error('Dashboard load failed:', err));
