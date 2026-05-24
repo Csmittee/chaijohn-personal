@@ -3,10 +3,44 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Categories';
 
+async function ensureGroupChoice(apiKey, groupValue) {
+  try {
+    const metaRes = await fetch(`https://api.airtable.com/v0/meta/bases/${BASE_ID}/tables`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (!metaRes.ok) return;
+    const meta = await metaRes.json();
+    const table = (meta.tables || []).find(t => t.name === TABLE);
+    if (!table) return;
+    const groupField = (table.fields || []).find(f => f.name === 'group');
+    if (!groupField || !groupField.options) return;
+    const existingChoices = groupField.options.choices || [];
+    const alreadyExists = existingChoices.some(
+      c => c.name.toLowerCase() === groupValue.toLowerCase()
+    );
+    if (alreadyExists) return;
+    await fetch(
+      `https://api.airtable.com/v0/meta/bases/${BASE_ID}/tables/${table.id}/fields/${groupField.id}`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          options: {
+            choices: [
+              ...existingChoices.map(c => ({ id: c.id, name: c.name, color: c.color })),
+              { name: groupValue }
+            ]
+          }
+        })
+      }
+    );
+  } catch { /* best-effort */ }
+}
+
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
-  const type = url.searchParams.get('type');   // Earn | Expense | Loan | Investment
+  const type = url.searchParams.get('type');
   const group = url.searchParams.get('group');
   const activeOnly = url.searchParams.get('active') !== 'false';
 
@@ -49,6 +83,10 @@ export async function onRequestPost(context) {
 
   const validTypes = ['Earn', 'Expense', 'Loan', 'Investment'];
   if (!validTypes.includes(type)) return errorResponse(`type must be one of: ${validTypes.join(', ')}`);
+
+  if (body.group) {
+    await ensureGroupChoice(env.AIRTABLE_API_KEY, body.group);
+  }
 
   const fields = {
     name,

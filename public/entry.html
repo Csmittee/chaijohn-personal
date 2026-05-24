@@ -57,7 +57,8 @@
           </div>
           <div class="form-group">
             <label for="tx-entity">Entity / Person / Platform</label>
-            <input type="text" id="tx-entity" placeholder="Who or where">
+            <input type="text" id="tx-entity" list="entity-suggestions" placeholder="Who or where">
+            <datalist id="entity-suggestions"></datalist>
           </div>
         </div>
         <div class="form-row">
@@ -311,22 +312,36 @@
           <div style="padding-top:1rem">
             <div class="form-row">
               <div class="form-group">
-                <label for="cat-name">Name</label>
-                <input type="text" id="cat-name" placeholder="Category name">
+                <label for="cat-name">Expense / Income Item Name</label>
+                <input type="text" id="cat-name" placeholder="e.g. Dog food, My gym, Grab taxi">
               </div>
               <div class="form-group">
-                <label for="cat-type">Type</label>
+                <label for="cat-type">Flow Type</label>
                 <select id="cat-type">
                   <option value="Expense">Expense</option>
                   <option value="Earn">Earn</option>
-                  <option value="Loan">Loan</option>
                   <option value="Investment">Investment</option>
+                  <option value="Loan">Loan</option>
                 </select>
               </div>
             </div>
             <div class="form-group">
-              <label for="cat-group">Group (optional)</label>
-              <input type="text" id="cat-group" placeholder="e.g. Personal, Business">
+              <label for="cat-group">Category (group it belongs to)</label>
+              <input type="text" id="cat-group" placeholder="e.g. Family, Personal, Car — type existing or new">
+              <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:0.2rem">
+                Existing: Basic Living · Car · Personal · Basic IT · Bus IT · Family · Business · Investment · Per-earn · Bus-earn
+              </div>
+            </div>
+            <div class="form-group" id="cat-expense-type-group" style="display:none">
+              <label for="cat-expense-type">Expense Type</label>
+              <select id="cat-expense-type">
+                <option value="">— Select (optional) —</option>
+                <option value="FP-FV" title="Fixed Pattern, Fixed Value — same amount each cycle">FP-FV (Fixed timing, Fixed amount)</option>
+                <option value="FP-VV" title="Fixed Pattern, Variable Value — same timing, different amount">FP-VV (Fixed timing, Variable amount)</option>
+                <option value="VP-FV" title="Variable Pattern, Fixed Value — irregular timing, fixed amount">VP-FV (Variable timing, Fixed amount)</option>
+                <option value="VP-VV" title="Variable Pattern, Variable Value — irregular and variable">VP-VV (Variable timing, Variable amount)</option>
+                <option value="Surprise" title="Unexpected expense — no pattern">Surprise</option>
+              </select>
             </div>
             <button class="btn btn-primary w-full" id="save-category">Add Category</button>
           </div>

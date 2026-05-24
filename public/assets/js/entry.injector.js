@@ -194,6 +194,7 @@
         document.getElementById('tx-description').value = '';
         document.getElementById('tx-note').value = '';
         loadTransactions();
+        loadEntitySuggestions();
         // Refresh budget bar
         if (categoryId) updateBudgetBar(categoryId);
       } catch (err) {
@@ -1388,7 +1389,7 @@
     });
   }
 
-  /* ── D5: Category create form ── */
+  /* ── E1+D5: Category create form ── */
   function initCategoryForm() {
     const toggle  = document.getElementById('cat-form-toggle');
     const body    = document.getElementById('cat-form-body');
@@ -1396,20 +1397,28 @@
     if (toggle && body) {
       toggle.addEventListener('click', () => {
         const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
-        body.style.maxHeight = isOpen ? '0' : '400px';
+        body.style.maxHeight = isOpen ? '0' : '600px';
         if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
       });
     }
 
+    // Show/hide expense_type field based on flow type
+    document.getElementById('cat-type')?.addEventListener('change', function () {
+      const etGroup = document.getElementById('cat-expense-type-group');
+      if (etGroup) etGroup.style.display = this.value === 'Expense' ? 'block' : 'none';
+    });
+
     ensureMsgEl('cat-msg', 'save-category');
 
     document.getElementById('save-category')?.addEventListener('click', async () => {
-      const name  = document.getElementById('cat-name')?.value?.trim();
-      const type  = document.getElementById('cat-type')?.value || 'Expense';
-      const group = document.getElementById('cat-group')?.value?.trim() || '';
-      if (!name) return alert('Category name is required');
-      const payload = { name, type, active: true };
-      if (group) payload.group = group;
+      const name        = document.getElementById('cat-name')?.value?.trim();
+      const type        = document.getElementById('cat-type')?.value || 'Expense';
+      const group       = document.getElementById('cat-group')?.value?.trim() || '';
+      const expenseType = document.getElementById('cat-expense-type')?.value || '';
+      if (!name) return alert('Item name is required');
+      if (!group) return alert('Category group is required');
+      const payload = { name, type, group, active: true };
+      if (expenseType) payload.expense_type = expenseType;
       try {
         await api('/api/categories', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1418,11 +1427,31 @@
         showMsg('cat-msg', 'Category added!');
         document.getElementById('cat-name').value  = '';
         document.getElementById('cat-group').value = '';
+        const etSel = document.getElementById('cat-expense-type');
+        if (etSel) etSel.value = '';
         await loadCategories();
       } catch (err) {
         showMsg('cat-msg', err.message, false);
       }
     });
+  }
+
+  /* ── E2: Entity autocomplete ── */
+  async function loadEntitySuggestions() {
+    try {
+      const res = await api('/api/transactions?limit=500');
+      const records = (res.records || []).map(r => r.fields || r);
+      const freq = {};
+      records.forEach(r => {
+        const e = (r.entity || '').trim();
+        if (e) freq[e] = (freq[e] || 0) + 1;
+      });
+      const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(([e]) => e);
+      const dl = document.getElementById('entity-suggestions');
+      if (dl) {
+        dl.innerHTML = sorted.map(e => `<option value="${e.replace(/"/g, '&quot;')}">`).join('');
+      }
+    } catch { /* non-fatal */ }
   }
 
   function initBudgetForm() {
@@ -1485,5 +1514,6 @@
     initCategoryForm();
     initBudgetForm();
     loadTransactions().catch(console.error);
+    loadEntitySuggestions().catch(console.error);
   });
 })();
