@@ -289,6 +289,29 @@
         <div class="section-header">
           <span class="section-title">Active Budgets</span>
         </div>
+        <!-- Fix 22: view + group control bar -->
+        <div id="budget-control-bar"
+          style="display:flex;justify-content:space-between;align-items:center;
+          margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-view="row">≡ Row</button>
+              <button class="period-btn" data-budget-view="card">⊞ Card</button>
+            </div>
+            <div class="period-toggle">
+              <button class="period-btn active" data-budget-group="all">All</button>
+              <button class="period-btn" data-budget-group="byCategory">By Category</button>
+            </div>
+          </div>
+          <div id="budget-group-actions" style="display:none;gap:0.75rem;align-items:center">
+            <button id="budget-expand-all"
+              style="background:none;border:none;cursor:pointer;font-size:0.82rem;
+              color:var(--color-primary);font-family:inherit;padding:0">Expand all</button>
+            <button id="budget-collapse-all"
+              style="background:none;border:none;cursor:pointer;font-size:0.82rem;
+              color:var(--color-primary);font-family:inherit;padding:0">Collapse all</button>
+          </div>
+        </div>
         <div id="budgets-list"></div>
       </div>
     </div>

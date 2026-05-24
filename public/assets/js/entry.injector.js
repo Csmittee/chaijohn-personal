@@ -4,10 +4,15 @@
 
   const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
 
-  let categories        = [];
-  let allBudgets        = [];
-  let budgetsData       = [];   // loaded budgets for inline edit
+  let categories         = [];
+  let allBudgets         = [];
+  let budgetsData        = [];   // loaded budgets for inline edit
   let activeBudgetEditId = null;
+  let activeLiabDetailId = null;
+  let budgetView         = 'row';
+  let budgetGroup        = 'all';
+  let budgetGroupState   = {};   // groupName → collapsed bool
+  let lastSpendByCat     = {};   // cached for re-render on view/group toggle
   let txType      = 'Expense';
   let txPeriod    = 'daily';
   let txMap       = {};   // record ID → tx fields (Fix 6)
@@ -546,6 +551,7 @@
     });
   }
 
+  /* ── Fix 19: Liabilities expandable rows ── */
   function renderLiabilitiesList() {
     const table = document.getElementById('active-liabilities-table');
     if (!table) return;
@@ -559,20 +565,239 @@
       const loan = Number(l.loan_size || bal);
       const paidPct = loan > 0 ? Math.round((1 - bal / loan) * 100) : 0;
       return `
-        <div style="border-bottom:1px solid var(--border);padding:0.75rem 0">
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <strong style="font-size:0.95rem">${l.name}</strong>
-            <span style="font-size:0.85rem;color:#ef4444">${fmt(bal)}</span>
+        <div class="liab-row-wrap">
+          <div class="liab-row" data-liab-id="${l.id}"
+            style="border-bottom:1px solid var(--border);padding:0.75rem 0;cursor:pointer;
+            user-select:none;transition:background 0.15s"
+            onmouseover="this.style.background='rgba(59,130,246,0.04)'"
+            onmouseout="this.style.background=''">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <strong style="font-size:0.95rem">${l.name}</strong>
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <span style="font-size:0.85rem;color:#ef4444">${fmt(bal)}</span>
+                <span class="liab-chevron" data-liab-chevron="${l.id}"
+                  style="font-size:0.75rem;color:var(--text-secondary);transition:transform 0.3s;
+                  display:inline-block">▼</span>
+              </div>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
+              ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
+            </div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
+              <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.15rem">${paidPct}% paid off</div>
           </div>
-          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
-            ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
-          </div>
-          <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
-            <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
-          </div>
-          <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.15rem">${paidPct}% paid off</div>
+          <div class="liab-detail-panel" data-liab-panel="${l.id}" style="display:none"></div>
         </div>`;
     }).join('');
+
+    table.querySelectorAll('.liab-row').forEach(row => {
+      row.addEventListener('click', () => openLiabDetailPanel(row.dataset.liabId));
+    });
+  }
+
+  async function openLiabDetailPanel(liabId) {
+    // Toggle: clicking same row closes it
+    if (activeLiabDetailId === liabId) {
+      const panel = document.querySelector(`.liab-detail-panel[data-liab-panel="${liabId}"]`);
+      if (panel) panel.style.display = 'none';
+      const chev = document.querySelector(`[data-liab-chevron="${liabId}"]`);
+      if (chev) chev.style.transform = '';
+      activeLiabDetailId = null;
+      return;
+    }
+    // Close previous
+    if (activeLiabDetailId) {
+      const prev = document.querySelector(`.liab-detail-panel[data-liab-panel="${activeLiabDetailId}"]`);
+      if (prev) prev.style.display = 'none';
+      const prevChev = document.querySelector(`[data-liab-chevron="${activeLiabDetailId}"]`);
+      if (prevChev) prevChev.style.transform = '';
+    }
+    activeLiabDetailId = liabId;
+    const chev = document.querySelector(`[data-liab-chevron="${liabId}"]`);
+    if (chev) chev.style.transform = 'rotate(180deg)';
+
+    const l     = liabilities.find(x => x.id === liabId);
+    const panel = document.querySelector(`.liab-detail-panel[data-liab-panel="${liabId}"]`);
+    if (!l || !panel) return;
+
+    const bal  = Number(l.current_balance || 0);
+    const loan = Number(l.loan_size || bal);
+    const paid = Math.max(0, loan - bal);
+    const paidPct = loan > 0 ? Math.round((paid / loan) * 100) : 0;
+    const balWidth = loan > 0 ? Math.min(100, Math.round((bal / loan) * 100)) : 100;
+
+    panel.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;
+        margin-bottom:0.5rem;background:rgba(59,130,246,0.02)">
+
+        <!-- Section A: Edit Fields -->
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Edit</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Creditor Name</label>
+              <input type="text" class="le-name" value="${(l.name || '').replace(/"/g,'&quot;')}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Creditor Type</label>
+              <select class="le-type" style="font-size:0.85rem;padding:0.3rem 0.5rem">
+                <option value="Bank"   ${l.creditor_type==='Bank'   ?'selected':''}>Bank</option>
+                <option value="Family" ${l.creditor_type==='Family' ?'selected':''}>Family</option>
+                <option value="Friend" ${l.creditor_type==='Friend' ?'selected':''}>Friend</option>
+                <option value="Other"  ${l.creditor_type==='Other'  ?'selected':''}>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Original Amount ฿</label>
+              <input type="number" class="le-loan" value="${l.loan_size || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Current Balance ฿</label>
+              <input type="number" class="le-balance" value="${bal || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Interest Rate %</label>
+              <input type="number" class="le-rate" step="0.01" value="${l.interest_rate || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Monthly Payment ฿</label>
+              <input type="number" class="le-monthly" value="${l.monthly_payment || ''}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.78rem;color:var(--text-secondary)">Notes</label>
+            <input type="text" class="le-notes" value="${(l.notes || '').replace(/"/g,'&quot;')}"
+              style="font-size:0.85rem;padding:0.3rem 0.5rem">
+          </div>
+          <button class="btn btn-primary le-save" style="font-size:0.85rem;padding:0.35rem 1rem">Save Changes</button>
+          <div class="le-msg" style="display:none;font-size:0.82rem;margin-top:0.4rem"></div>
+        </div>
+
+        <!-- Section B: Balance Comparison Bar -->
+        <div style="margin-bottom:1.25rem">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Balance</div>
+          ${bal === 0 ? `
+            <div style="font-size:0.9rem;color:#22c55e;font-weight:600">✅ Fully paid</div>
+          ` : `
+            <div style="margin-bottom:0.4rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.78rem;
+                color:var(--text-secondary);margin-bottom:0.25rem">
+                <span>Original loan</span><span>${fmt(loan)}</span>
+              </div>
+              <div style="height:10px;background:#64748b;border-radius:5px;overflow:hidden">
+                <div style="height:100%;width:100%;background:#64748b;border-radius:5px"></div>
+              </div>
+            </div>
+            <div style="margin-bottom:0.4rem">
+              <div style="display:flex;justify-content:space-between;font-size:0.78rem;
+                color:var(--text-secondary);margin-bottom:0.25rem">
+                <span>Current balance</span><span>${fmt(bal)}</span>
+              </div>
+              <div style="height:10px;background:var(--border);border-radius:5px;
+                overflow:hidden;border:1px dashed var(--border)">
+                <div style="height:100%;width:${balWidth}%;background:var(--color-primary);
+                  border-radius:5px;transition:width 0.4s"></div>
+              </div>
+            </div>
+            <div style="font-size:0.82rem;color:#22c55e;font-weight:500">
+              ${fmt(paid)} paid back (${paidPct}%)
+            </div>
+          `}
+        </div>
+
+        <!-- Section C: Payment History -->
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
+            margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Payment History</div>
+          <div class="liab-history-list" data-liab-history="${liabId}">
+            <div style="color:var(--text-secondary);font-size:0.85rem">Loading…</div>
+          </div>
+        </div>
+      </div>`;
+
+    panel.style.display = 'block';
+    panel.querySelector('.le-save').addEventListener('click', () => saveLiabEdit(liabId, panel));
+    loadLiabHistory(liabId, panel);
+  }
+
+  async function saveLiabEdit(liabId, panel) {
+    const msgEl = panel.querySelector('.le-msg');
+    const body = {
+      name:            panel.querySelector('.le-name')?.value?.trim(),
+      creditor_type:   panel.querySelector('.le-type')?.value,
+      loan_size:       Number(panel.querySelector('.le-loan')?.value    || 0) || undefined,
+      current_balance: Number(panel.querySelector('.le-balance')?.value || 0),
+      interest_rate:   Number(panel.querySelector('.le-rate')?.value    || 0) || undefined,
+      monthly_payment: Number(panel.querySelector('.le-monthly')?.value || 0) || undefined,
+      notes:           panel.querySelector('.le-notes')?.value || ''
+    };
+    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+    try {
+      await api(`/api/liabilities/${liabId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      activeLiabDetailId = null;
+      loadLiabilityTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
+  }
+
+  async function loadLiabHistory(liabId, panel) {
+    const histEl = panel.querySelector(`.liab-history-list[data-liab-history="${liabId}"]`);
+    if (!histEl) return;
+    try {
+      const res = await api(`/api/liabilities/${liabId}/history`);
+      const payments = res.payments || [];
+      if (payments.length === 0) {
+        histEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No payments recorded yet.</div>';
+        return;
+      }
+      const visible  = payments.slice(0, 10);
+      const overflow = payments.slice(10);
+      histEl.innerHTML = `
+        <div>${visible.map(p => `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+            padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+            <span style="color:var(--text-secondary)">${p.date}</span>
+            <span style="font-weight:600;color:#22c55e">${fmt(p.amount)}</span>
+            <span style="color:var(--text-secondary);font-size:0.75rem;flex:1;
+              text-align:right;padding-left:0.5rem">${p.note || ''}</span>
+          </div>`).join('')}</div>
+        ${overflow.length > 0 ? `
+          <div id="liab-hist-more-${liabId}" style="display:none">${overflow.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;
+              padding:0.3rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+              <span style="color:var(--text-secondary)">${p.date}</span>
+              <span style="font-weight:600;color:#22c55e">${fmt(p.amount)}</span>
+              <span style="color:var(--text-secondary);font-size:0.75rem;flex:1;
+                text-align:right;padding-left:0.5rem">${p.note || ''}</span>
+            </div>`).join('')}</div>
+          <button onclick="
+            document.getElementById('liab-hist-more-${liabId}').style.display='block';
+            this.style.display='none'
+          " style="background:none;border:none;cursor:pointer;color:var(--color-primary);
+            font-size:0.82rem;padding:0.4rem 0;font-family:inherit">
+            Show all ${payments.length} payments
+          </button>` : ''}`;
+    } catch (err) {
+      histEl.innerHTML = `<div style="color:#ef4444;font-size:0.82rem">${err.message}</div>`;
+    }
   }
 
   /* ── Budgets ── */
@@ -605,46 +830,11 @@
         return;
       }
 
-      budgetsData = buds; // store for inline edit access
+      budgetsData    = buds; // store for inline edit access
+      lastSpendByCat = spendByCat;
 
-      budgetList.innerHTML = buds.map(b => {
-        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-        const cat   = catMap[catId];
-        const spent = spendByCat[catId] || 0;
-        const limit = Number(b.amount || 0);
-        const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-        const clr   = p >= 100 ? '#ef4444' : p >= 85 ? '#f59e0b' : '#22c55e';
-        return `
-          <div class="budget-row-wrap">
-            <div style="margin-bottom:0.5rem">
-              <div style="display:flex;justify-content:space-between;font-size:0.88rem;font-weight:600;align-items:center">
-                <span>${b.label || (cat ? cat.name : 'Budget')}</span>
-                <div style="display:flex;align-items:center;gap:0.5rem">
-                  <span>${fmt(spent)} / ${fmt(limit)}</span>
-                  <button class="budget-edit-btn" data-id="${b.id}"
-                    style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;
-                    color:var(--text-secondary);font-size:0.78rem;padding:0.1rem 0.4rem;line-height:1.6">✏️</button>
-                </div>
-              </div>
-              <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
-                ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
-              </div>
-              <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-                <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;transition:width 0.4s"></div>
-              </div>
-              <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
-            </div>
-            <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none"></div>
-          </div>`;
-      }).join('');
-
-      // Wire up pencil buttons
-      budgetList.querySelectorAll('.budget-edit-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-          e.stopPropagation();
-          openBudgetEditPanel(btn.dataset.id);
-        });
-      });
+      // Render using current view/group state
+      renderBudgetListWithSpend(budgetList, catMap, spendByCat);
     } catch (err) {
       budgetList.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
@@ -783,6 +973,284 @@
     }
   }
 
+  /* ── Fix 22: Budget view/group controls ── */
+  function initBudgetControls() {
+    document.querySelectorAll('[data-budget-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetView = btn.dataset.budgetView;
+        document.querySelectorAll('[data-budget-view]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetView === budgetView));
+        renderBudgetList();
+      });
+    });
+
+    document.querySelectorAll('[data-budget-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        budgetGroup = btn.dataset.budgetGroup;
+        document.querySelectorAll('[data-budget-group]').forEach(b =>
+          b.classList.toggle('active', b.dataset.budgetGroup === budgetGroup));
+        const actionsEl = document.getElementById('budget-group-actions');
+        if (actionsEl) actionsEl.style.display = budgetGroup === 'byCategory' ? 'flex' : 'none';
+        renderBudgetList();
+      });
+    });
+
+    document.getElementById('budget-expand-all')?.addEventListener('click', () => {
+      budgetGroupState = {};
+      renderBudgetList();
+    });
+    document.getElementById('budget-collapse-all')?.addEventListener('click', () => {
+      Object.keys(getBudgetGroups()).forEach(g => { budgetGroupState[g] = true; });
+      renderBudgetList();
+    });
+  }
+
+  function getBudgetGroupName(cat) {
+    if (!cat) return 'Other';
+    const n = (cat.name || '').toLowerCase();
+    const g = (cat.group || '').toLowerCase();
+    if (n.includes('car') || g.includes('car')) return 'Car';
+    if (n.includes('family') || n.includes('child') || n.includes('school') || g.includes('family')) return 'Family';
+    if (n.includes('ais') || n.includes('fiber') || n.includes('internet') ||
+        g.includes('basic it') || g.includes('basic_it')) return 'Basic IT';
+    if (n.includes('anthropic') || n.includes('claude') ||
+        g.includes('bus it') || g.includes('bus_it') || g.includes('business it')) return 'Bus IT';
+    if (n.includes('investment') || g.includes('investment')) return 'Investment';
+    if (n.includes('business') || g.includes('business')) return 'Business';
+    if (n.includes('personal') || n.includes('coffee') || n.includes('cigarette') ||
+        n.includes('food') || g.includes('personal')) return 'Personal';
+    return 'Other';
+  }
+
+  function getBudgetGroups() {
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+    const groups = {};
+    budgetsData.forEach(b => {
+      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+      const cat   = catMap[catId];
+      const grp   = getBudgetGroupName(cat);
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(b);
+    });
+    return groups;
+  }
+
+  // Re-render budget list with current view/group state (uses cached budgetsData)
+  function renderBudgetList() {
+    const budgetList = document.getElementById('budgets-list');
+    if (!budgetList || budgetsData.length === 0) return;
+
+    const now           = new Date();
+    const startOfMonth  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const catMap        = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    // Recompute spendByCat from cached allBudgets data isn't available here
+    // We'll use a stored spendByCat from the last loadBudgetTab call
+    renderBudgetListWithSpend(budgetList, catMap, lastSpendByCat);
+  }
+
+  function renderBudgetListWithSpend(budgetList, catMap, spendByCat) {
+    if (budgetGroup === 'byCategory') {
+      renderBudgetGrouped(budgetList, catMap, spendByCat);
+    } else if (budgetView === 'card') {
+      renderBudgetCards(budgetList, budgetsData, catMap, spendByCat);
+    } else {
+      renderBudgetRows(budgetList, budgetsData, catMap, spendByCat);
+    }
+  }
+
+  function budgetRowHTML(b, cat, spent, limit, p, clr) {
+    return `
+      <div class="budget-row-wrap">
+        <div style="margin-bottom:0.5rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.88rem;
+            font-weight:600;align-items:center">
+            <span>${b.label || (cat ? cat.name : 'Budget')}</span>
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <span>${fmt(spent)} / ${fmt(limit)}</span>
+              <button class="budget-edit-btn" data-id="${b.id}"
+                style="background:none;border:1px solid var(--border);border-radius:4px;
+                cursor:pointer;color:var(--text-secondary);font-size:0.78rem;
+                padding:0.1rem 0.4rem;line-height:1.6">✏️</button>
+            </div>
+          </div>
+          <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
+            ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
+          </div>
+          <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;
+              transition:width 0.4s"></div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem">${p}% used</div>
+        </div>
+        <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none"></div>
+      </div>`;
+  }
+
+  function budgetCardHTML(b, cat, spent, limit, p, clr) {
+    return `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);
+        padding:0.9rem;background:var(--bg-card);position:relative">
+        <button class="budget-edit-btn" data-id="${b.id}"
+          style="position:absolute;top:0.6rem;right:0.6rem;background:none;
+          border:1px solid var(--border);border-radius:4px;cursor:pointer;
+          color:var(--text-secondary);font-size:0.75rem;padding:0.1rem 0.35rem;
+          line-height:1.6">✏️</button>
+        <div style="font-weight:700;font-size:0.9rem;padding-right:2rem;margin-bottom:0.4rem">
+          ${b.label || (cat ? cat.name : 'Budget')}
+        </div>
+        <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem;flex-wrap:wrap">
+          ${cat ? `<span class="badge badge-primary" style="font-size:0.7rem">${cat.name}</span>` : ''}
+          <span class="badge badge-gray" style="font-size:0.7rem">${b.period || 'Monthly'}</span>
+        </div>
+        <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-bottom:0.4rem">
+          <div style="height:100%;width:${p}%;background:${clr};border-radius:5px;transition:width 0.4s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:0.78rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)}</span>
+          <span style="font-size:1.1rem;font-weight:700;color:${clr}">${p}%</span>
+        </div>
+        <div class="budget-edit-panel" data-budget-panel="${b.id}" style="display:none;
+          margin-top:0.5rem"></div>
+      </div>`;
+  }
+
+  function renderBudgetRows(container, buds, catMap, spendByCat) {
+    container.innerHTML = buds.map(b => {
+      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+      const cat   = catMap[catId];
+      const spent = spendByCat[catId] || 0;
+      const limit = Number(b.amount || 0);
+      const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+      const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+      return budgetRowHTML(b, cat, spent, limit, p, clr);
+    }).join('');
+    wireBudgetEditBtns(container);
+  }
+
+  function renderBudgetCards(container, buds, catMap, spendByCat) {
+    container.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
+        ${buds.map(b => {
+          const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+          const cat   = catMap[catId];
+          const spent = spendByCat[catId] || 0;
+          const limit = Number(b.amount || 0);
+          const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+          const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+          return budgetCardHTML(b, cat, spent, limit, p, clr);
+        }).join('')}
+      </div>`;
+    wireBudgetEditBtns(container);
+  }
+
+  function renderBudgetGrouped(container, catMap, spendByCat) {
+    const groupOrder = ['Car','Family','Basic IT','Bus IT','Personal','Business','Investment','Other'];
+    const groups = getBudgetGroups();
+
+    let html = '';
+    groupOrder.forEach(grpName => {
+      const grpBuds = groups[grpName];
+      if (!grpBuds || grpBuds.length === 0) return;
+
+      const totalBudget = grpBuds.reduce((s, b) => s + Number(b.amount || 0), 0);
+      const totalSpent  = grpBuds.reduce((s, b) => {
+        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+        return s + (spendByCat[catId] || 0);
+      }, 0);
+      const grpPct = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
+      const grpClr = grpPct >= 100 ? '#ef4444' : grpPct >= 80 ? '#f59e0b' : '#22c55e';
+      const collapsed = !!budgetGroupState[grpName];
+
+      html += `
+        <div style="margin-bottom:0.75rem">
+          <div class="budget-group-header" data-grp="${grpName}"
+            style="display:flex;align-items:center;justify-content:space-between;
+            padding:0.6rem 0.75rem;background:rgba(59,130,246,0.06);border-radius:var(--radius);
+            cursor:pointer;user-select:none;border:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex:1;min-width:0">
+              <strong style="font-size:0.88rem">${grpName}</strong>
+              <span class="badge badge-gray" style="font-size:0.72rem">${grpBuds.length}</span>
+              <span style="font-size:0.78rem;color:var(--text-secondary)">
+                ${fmt(totalSpent)} / ${fmt(totalBudget)}
+              </span>
+              <div style="flex:1;max-width:80px;height:6px;background:var(--border);
+                border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${grpPct}%;background:${grpClr};border-radius:3px"></div>
+              </div>
+              <span style="font-size:0.78rem;color:${grpClr};font-weight:600">${grpPct}%</span>
+            </div>
+            <span data-grp-chevron="${grpName}"
+              style="transition:transform 0.3s;display:inline-block;color:var(--text-secondary);
+              font-size:0.75rem;margin-left:0.5rem;
+              transform:${collapsed ? 'rotate(-90deg)' : ''}">▼</span>
+          </div>
+          <div data-grp-body="${grpName}"
+            style="overflow:hidden;${collapsed ? 'display:none' : ''}">
+            <div style="padding-top:0.5rem">
+              ${budgetView === 'card'
+                ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
+                    ${grpBuds.map(b => {
+                      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+                      const cat   = catMap[catId];
+                      const spent = spendByCat[catId] || 0;
+                      const limit = Number(b.amount || 0);
+                      const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
+                      const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+                      return budgetCardHTML(b, cat, spent, limit, p, clr);
+                    }).join('')}
+                  </div>`
+                : grpBuds.map(b => {
+                    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+                    const cat   = catMap[catId];
+                    const spent = spendByCat[catId] || 0;
+                    const limit = Number(b.amount || 0);
+                    const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
+                    const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+                    return budgetRowHTML(b, cat, spent, limit, p, clr);
+                  }).join('')}
+            </div>
+          </div>
+        </div>`;
+    });
+
+    // Any groups not in groupOrder
+    Object.keys(groups).forEach(grpName => {
+      if (!groupOrder.includes(grpName)) {
+        const grpBuds = groups[grpName];
+        // render as Other
+      }
+    });
+
+    container.innerHTML = html;
+
+    // Wire group header toggles
+    container.querySelectorAll('.budget-group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const grp  = header.dataset.grp;
+        const body = container.querySelector(`[data-grp-body="${grp}"]`);
+        const chev = container.querySelector(`[data-grp-chevron="${grp}"]`);
+        const wasCollapsed = !!budgetGroupState[grp];
+        budgetGroupState[grp] = !wasCollapsed;
+        if (body) body.style.display = wasCollapsed ? '' : 'none';
+        if (chev) chev.style.transform = wasCollapsed ? '' : 'rotate(-90deg)';
+      });
+    });
+
+    wireBudgetEditBtns(container);
+  }
+
+  function wireBudgetEditBtns(container) {
+    container.querySelectorAll('.budget-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openBudgetEditPanel(btn.dataset.id);
+      });
+    });
+  }
+
   function initBudgetForm() {
     ensureMsgEl('budget-msg', 'save-budget');
     document.getElementById('save-budget')?.addEventListener('click', async () => {
@@ -833,6 +1301,7 @@
     initTransactionForm();
     initUtilityForm();
     initLiabilityForm();
+    initBudgetControls();
     initBudgetForm();
     loadTransactions().catch(console.error);
   });
