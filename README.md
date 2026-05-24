@@ -1,4 +1,4 @@
- # Chaijohn Dashboard
+  # Chaijohn Dashboard
 
 A private personal financial diary and command center for one Thai entrepreneur in Rayong, Thailand.
 
