@@ -15,9 +15,12 @@
   let playroomBudgetId = null;
   let meterView = 'all';
   let meterGroupState = {};
+  let meterPeriodFilter = 'all';  // E6
   let t4Range = '1m';
-  let t4Expanded = false;
   let dismissedAlerts = new Set();
+  let syncPoint = null;            // E4: { amount, date, note }
+  let t1ViewMode = 'netflow';      // E5: 'netflow' | 'invsout'
+  let panelCollapsed = {};         // E7: panel id → bool
 
   /* ── Date helpers ── */
   function rangeStart(range) {
@@ -66,10 +69,30 @@
   }
 
   /* ── API ── */
-  async function api(path) {
-    const r = await fetch(path, { credentials: 'same-origin' });
+  async function api(path, opts) {
+    const r = await fetch(path, { credentials: 'same-origin', ...opts });
     if (!r.ok) throw new Error(`API error ${r.status}`);
     return r.json();
+  }
+
+  /* ── E4: Load sync point ── */
+  async function loadSyncPoint() {
+    try {
+      const res = await api('/api/cashflow-sync');
+      syncPoint = res.syncPoint || null;
+      updateSyncInfo();
+    } catch { syncPoint = null; }
+  }
+
+  function updateSyncInfo() {
+    const el = document.getElementById('sync-info');
+    if (!el) return;
+    if (syncPoint) {
+      const d = new Date(syncPoint.date + 'T00:00:00').toLocaleDateString('en', { day: 'numeric', month: 'short' });
+      el.textContent = `📍 ${fmt(syncPoint.amount)} on ${d}`;
+    } else {
+      el.textContent = '';
+    }
   }
 
   /* ── Load all data ── */
@@ -91,9 +114,9 @@
     renderT1(start);
     renderT2();
     renderT3();
+    renderBudgetPanel(t4Range);
     renderMeters(nowYM);
     buildPlayroomCategoryOptions();
-    if (t4Expanded) renderBudgetPanel(t4Range);
   }
 
   /* ── Helpers ── */
@@ -119,7 +142,6 @@
     const nowExpenses = txData.filter(t => toYM(t.date) === nowYM && t.type === 'Expense');
     const spendByCat  = groupSum(nowExpenses, t => linkedId(t.category_id));
 
-    // RED: budget over 100%
     budgets.forEach(b => {
       if (!b.active) return;
       const catId = linkedId(b.category_id);
@@ -132,7 +154,6 @@
       }
     });
 
-    // RED: liability payment due (active, balance > 0, monthly_payment > 0)
     liabilities.forEach(l => {
       if (!l.active) return;
       const bal = Number(l.current_balance || 0);
@@ -145,7 +166,6 @@
       }
     });
 
-    // AMBER: budget 80–100%
     budgets.forEach(b => {
       if (!b.active) return;
       const catId = linkedId(b.category_id);
@@ -158,7 +178,6 @@
       }
     });
 
-    // BLUE: total debt summary
     const activeLiabs = liabilities.filter(l => l.active && Number(l.current_balance || 0) > 0);
     if (activeLiabs.length > 0) {
       const totalDebt = activeLiabs.reduce((s, l) => s + Number(l.current_balance || 0), 0);
@@ -209,7 +228,7 @@
     });
   }
 
-  /* ── D3: T1 Cash Flow with centered window + forecast ── */
+  /* ── D3: T1 Cash Flow ── */
   function renderT1(startDate) {
     const canvas = document.getElementById('t1-chart');
     if (!canvas) return;
@@ -221,21 +240,40 @@
     }
   }
 
+  /* ── E4+E5: compute starting balance from syncPoint ── */
+  function getSyncStartingBalance(fromDate) {
+    if (!syncPoint) return 0;
+    // Sum transactions from syncPoint.date to fromDate
+    const syncDate = syncPoint.date;
+    let bal = syncPoint.amount;
+    txData.forEach(t => {
+      if (!t.date) return;
+      if (t.date > syncDate && t.date <= fromDate) {
+        const amt = Number(t.amount || 0);
+        if (t.type === 'Income') bal += amt;
+        else if (t.type === 'Expense') bal -= amt;
+      } else if (t.date <= syncDate) {
+        // Already accounted for in the sync point
+      }
+    });
+    return bal;
+  }
+
   function renderT1DailyForecast(canvas) {
     const subtitle = document.getElementById('t1-subtitle');
-    if (subtitle) subtitle.textContent = 'Daily cash flow + 15-day forecast';
+    if (subtitle) subtitle.textContent = t1ViewMode === 'invsout'
+      ? 'Daily — Income vs Expense (15 days)'
+      : 'Daily cash flow + 15-day forecast';
 
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
-    // 15 past days (including today) + 15 future days
     const pastDays = [];
     for (let i = 14; i >= 0; i--) pastDays.push(dateOffset(todayStr, -i));
     const futureDays = [];
     for (let i = 1; i <= 15; i++) futureDays.push(dateOffset(todayStr, i));
     const allDays = [...pastDays, ...futureDays];
 
-    // Actual data from txData for past days
     const incByDay = {}, expByDay = {};
     txData.forEach(t => {
       if (!pastDays.includes(t.date)) return;
@@ -244,28 +282,14 @@
       else if (t.type === 'Expense') expByDay[t.date] = (expByDay[t.date] || 0) + amt;
     });
 
-    // Compute daily averages from past data for forecast
     const totalInc = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
     const totalExp = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
     const avgDailyInc = totalInc / Math.max(1, pastDays.length);
     const avgDailyExp = totalExp / Math.max(1, pastDays.length);
 
-    // Balance running totals
-    let runBal = 0;
-    const balPast = pastDays.map(d => {
-      runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
-      return runBal;
-    });
-    // Forecast balance continues from today's balance
-    const balForecast = [balPast[balPast.length - 1]]; // bridge at today
-    futureDays.forEach(() => {
-      balForecast.push(balForecast[balForecast.length - 1] + avgDailyInc - avgDailyExp);
-    });
-
-    const labels = allDays.map(d => d.slice(5)); // MM-DD
-
-    // today line plugin — draws at index 14.5 (between past and future)
+    const labels = allDays.map(d => d.slice(5));
     const todayIdx = 14;
+
     const todayLinePlugin = {
       id: 'todayLine',
       afterDraw(chart) {
@@ -289,6 +313,71 @@
       }
     };
 
+    if (t1ViewMode === 'invsout') {
+      // E5: In vs Out — side-by-side positive bars, no balance line
+      t1Chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: pastDays.map(d => d.slice(5)),
+          datasets: [
+            { label: 'Income',  data: pastDays.map(d => incByDay[d] || 0),
+              backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 2 },
+            { label: 'Expense', data: pastDays.map(d => expByDay[d] || 0),
+              backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 2 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+          scales: {
+            x:  { ticks: { font: { size: 9 } } },
+            y:  { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+          }
+        }
+      });
+      return;
+    }
+
+    // Net Flow mode (default)
+    let runBal = syncPoint ? getSyncStartingBalance(pastDays[0]) : 0;
+    const balPast = pastDays.map(d => {
+      runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
+      return runBal;
+    });
+    const balForecast = [balPast[balPast.length - 1]];
+    futureDays.forEach(() => {
+      balForecast.push(balForecast[balForecast.length - 1] + avgDailyInc - avgDailyExp);
+    });
+
+    // syncPoint annotation
+    let syncLinePlugin = null;
+    if (syncPoint && pastDays.includes(syncPoint.date)) {
+      const spIdx = pastDays.indexOf(syncPoint.date);
+      syncLinePlugin = {
+        id: 'syncLine',
+        afterDraw(chart) {
+          const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
+          if (!x) return;
+          const xPos = x.getPixelForValue(spIdx);
+          ctx.save();
+          ctx.strokeStyle = '#6366f1';
+          ctx.setLineDash([3, 3]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(xPos, top);
+          ctx.lineTo(xPos, bottom);
+          ctx.stroke();
+          ctx.fillStyle = '#6366f1';
+          ctx.font = '8px system-ui';
+          ctx.fillText('📍sync', xPos + 2, top + 10);
+          ctx.restore();
+        }
+      };
+    }
+
+    const plugins = [todayLinePlugin];
+    if (syncLinePlugin) plugins.push(syncLinePlugin);
+
     t1Chart = new Chart(canvas, {
       type: 'bar',
       data: {
@@ -306,7 +395,6 @@
             borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3, yAxisID: 'y2',
             fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
           { label: '~ Bal Forecast',
-            // bridge: 14 nulls, then bridge value at today (index 14), then 15 forecast values
             data: [...new Array(14).fill(null), ...balForecast],
             type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0,
             borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
@@ -342,7 +430,7 @@
                 ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
         }
       },
-      plugins: [todayLinePlugin]
+      plugins
     });
   }
 
@@ -351,7 +439,6 @@
     const nowYM   = currentYM();
     const startYM = startDate.slice(0, 7);
 
-    // How many months in the active range
     let forecastMonths;
     if (activeRange === '3m')  forecastMonths = 1;
     else if (activeRange === '6m')  forecastMonths = 3;
@@ -366,8 +453,6 @@
     }
     const allMonths = [...pastMonths, ...futureMonths];
 
-    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month forecast`;
-
     const incByM = {}, expByM = {};
     txData.forEach(t => {
       const ym = toYM(t.date);
@@ -377,13 +462,45 @@
       else if (t.type === 'Expense') expByM[ym] = (expByM[ym] || 0) + amt;
     });
 
-    // 3-month average for forecast
+    if (t1ViewMode === 'invsout') {
+      if (subtitle) subtitle.textContent = `Monthly — Income vs Expense`;
+      t1Chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: pastMonths.map(monthLabel),
+          datasets: [
+            { label: 'Income',  data: pastMonths.map(m => incByM[m] || 0),
+              backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
+            { label: 'Expense', data: pastMonths.map(m => expByM[m] || 0),
+              backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+          scales: {
+            x:  { ticks: { font: { size: 9 } } },
+            y:  { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+          }
+        }
+      });
+      return;
+    }
+
+    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month forecast`;
+
     const recentMonths = pastMonths.slice(-3);
     const avgInc = recentMonths.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentMonths.length);
     const avgExp = recentMonths.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentMonths.length);
 
-    // Running balance
+    // Starting balance from syncPoint if available
     let running = 0;
+    if (syncPoint) {
+      const syncYM = syncPoint.date.slice(0, 7);
+      if (syncYM <= pastMonths[0]) {
+        running = getSyncStartingBalance(pastMonths[0] + '-01');
+      }
+    }
     const balPast = pastMonths.map(m => {
       running += (incByM[m] || 0) - (expByM[m] || 0);
       return running;
@@ -579,14 +696,13 @@
     });
   }
 
-  /* ── D6B: Budget vs Actual panel ── */
+  /* ── D6B: Budget vs Actual panel (T4) ── */
   function renderBudgetPanel(range) {
     const canvas = document.getElementById('t4-chart');
     if (!canvas) return;
     if (t4Chart) t4Chart.destroy();
 
     const nowYM = currentYM();
-    const now   = new Date();
 
     let months;
     if (range === '1m')  months = [nowYM];
@@ -639,10 +755,10 @@
         datasets: [
           { label: 'Budget', data: budgetAmts, backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 3, order: 2 },
           { label: 'Actual', data: actualAmts, backgroundColor: barColors, borderRadius: 3, order: 3 },
-          { label: 'Running Budget', data: runBudget, type: 'line',
+          { label: 'Run Budget', data: runBudget, type: 'line',
             borderColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.3,
             fill: false, order: 1, yAxisID: 'y2' },
-          { label: 'Running Actual', data: runActual, type: 'line',
+          { label: 'Run Actual', data: runActual, type: 'line',
             borderColor: '#8b5cf6', borderWidth: 2, pointRadius: 2, tension: 0.3,
             fill: false, order: 0, yAxisID: 'y2' }
         ]
@@ -665,35 +781,76 @@
     const pctVar        = totalBudgeted > 0 ? Math.round(Math.abs(variance) / totalBudgeted * 100) : 0;
     const summaryEl     = document.getElementById('t4-summary');
     if (summaryEl) {
-      summaryEl.textContent = `Total budgeted: ${fmt(totalBudgeted)} | Total spent: ${fmt(totalActual)} | Variance: ${fmt(Math.abs(variance))} (${pctVar}% ${variance >= 0 ? 'under' : 'over'})`;
+      summaryEl.textContent = `Budgeted: ${fmt(totalBudgeted)} | Spent: ${fmt(totalActual)} | ${variance >= 0 ? 'Under' : 'Over'} ${pctVar}%`;
     }
   }
 
-  function initBudgetPanel() {
-    const toggle = document.getElementById('t4-toggle');
-    const body   = document.getElementById('t4-body');
-    const chev   = document.getElementById('t4-chevron');
-    if (toggle && body) {
-      toggle.addEventListener('click', () => {
-        t4Expanded = !t4Expanded;
-        body.style.maxHeight = t4Expanded ? '400px' : '0';
-        body.style.overflow  = t4Expanded ? 'visible' : 'hidden';
-        if (chev) chev.style.transform = t4Expanded ? 'rotate(180deg)' : '';
-        if (t4Expanded) renderBudgetPanel(t4Range);
-      });
-    }
+  /* ── E7: Panel collapse controls ── */
+  function initPanelCollapses() {
+    document.querySelectorAll('.panel-collapse-btn').forEach(btn => {
+      const panelId = btn.dataset.panel;
+      const bodyEl  = document.getElementById(panelId + '-body');
+      if (!bodyEl) return;
 
+      // Set initial max-height
+      bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+
+      btn.addEventListener('click', () => {
+        const isCollapsed = panelCollapsed[panelId];
+        panelCollapsed[panelId] = !isCollapsed;
+        if (!isCollapsed) {
+          bodyEl.style.maxHeight = '0';
+          btn.classList.add('collapsed');
+        } else {
+          bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
+          btn.classList.remove('collapsed');
+          // Expand might need more height after chart renders
+          setTimeout(() => { bodyEl.style.maxHeight = bodyEl.scrollHeight + 400 + 'px'; }, 50);
+        }
+      });
+    });
+
+    // T4 range buttons
     document.querySelectorAll('[data-t4-range]').forEach(btn => {
       btn.addEventListener('click', () => {
         t4Range = btn.dataset.t4Range;
         document.querySelectorAll('[data-t4-range]').forEach(b =>
           b.classList.toggle('active', b.dataset.t4Range === t4Range));
-        if (t4Expanded) renderBudgetPanel(t4Range);
+        renderBudgetPanel(t4Range);
+        // Re-expand body after chart draws
+        const t4Body = document.getElementById('t4-body');
+        if (t4Body && !panelCollapsed['t4']) {
+          setTimeout(() => { t4Body.style.maxHeight = t4Body.scrollHeight + 400 + 'px'; }, 100);
+        }
       });
     });
   }
 
-  /* ── Fix 14: Budget meters with proportional scale ── */
+  /* ── E6: Budget meters period-aware ── */
+  function normalizeBudgetAmount(b) {
+    const period = b.period || 'Monthly';
+    const amount = Number(b.amount || 0);
+    if (period === 'Annual') return amount / 12;
+    return amount;
+  }
+
+  function periodBadgeHtml(period) {
+    if (!period || period === 'Monthly') return '';
+    if (period === 'Annual') return `<span class="period-badge period-badge-annual">Annual</span>`;
+    if (period === 'One-time') return `<span class="period-badge period-badge-onetime">One-time</span>`;
+    return `<span class="period-badge period-badge-annual">${period}</span>`;
+  }
+
+  function budgetMatchesPeriodFilter(b) {
+    const period = b.period || 'Monthly';
+    if (meterPeriodFilter === 'all') return true;
+    if (meterPeriodFilter === 'monthly') return period === 'Monthly';
+    if (meterPeriodFilter === 'annual') return period === 'Annual' || period === '3x-year';
+    if (meterPeriodFilter === 'onetime') return period === 'One-time';
+    return true;
+  }
+
+  /* ── Fix 14: Budget meters ── */
   function renderMeters(nowYM) {
     const grid = document.getElementById('meters-grid');
     if (!grid) return;
@@ -703,19 +860,20 @@
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
-    const active = budgets.filter(b => b.active !== false);
+    const active = budgets.filter(b => b.active !== false && budgetMatchesPeriodFilter(b));
     if (active.length === 0) {
-      grid.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No active budgets.</div>';
+      grid.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No budgets for selected filter.</div>';
       return;
     }
 
     const withData = active.map(b => {
-      const catId = linkedId(b.category_id);
-      const cat   = catMap[catId] || {};
-      const spent = spendByCat[catId] || 0;
-      const limit = Number(b.amount || 0);
-      const label = b.label || cat.name || 'Budget';
-      return { b, catId, cat, spent, limit, p: pct(spent, limit), label };
+      const catId      = linkedId(b.category_id);
+      const cat        = catMap[catId] || {};
+      const spent      = spendByCat[catId] || 0;
+      const limit      = normalizeBudgetAmount(b);   // E6: normalized
+      const label      = b.label || cat.name || 'Budget';
+      const period     = b.period || 'Monthly';
+      return { b, catId, cat, spent, limit, p: pct(spent, limit), label, period };
     });
 
     if (meterView === 'group') {
@@ -730,14 +888,14 @@
     const maxAmount = Math.max(...withData.map(x => x.limit), 1);
     const sorted    = [...withData].sort((a, b) => b.limit - a.limit);
 
-    grid.innerHTML = sorted.map(({ cat, spent, limit, p, label }) => {
+    grid.innerHTML = sorted.map(({ cat, spent, limit, p, label, period }) => {
       const containerPct = Math.max(5, Math.round((limit / maxAmount) * 100));
       const fillPct      = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
       const cls          = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
       return `
         <div style="margin-bottom:0.65rem">
           <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
-            <span style="font-size:0.82rem;font-weight:600">${label}${cat.group
+            <span style="font-size:0.82rem;font-weight:600">${label}${periodBadgeHtml(period)}${cat.group
               ? ` <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400">— ${cat.group}</span>`
               : ''}</span>
             <span style="font-size:0.73rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)} · ${p}%</span>
@@ -785,7 +943,7 @@
         return `
           <div style="margin-bottom:0.5rem;padding-left:0.75rem">
             <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
-              <span style="font-size:0.78rem">${item.label}</span>
+              <span style="font-size:0.78rem">${item.label}${periodBadgeHtml(item.period)}</span>
               <span style="font-size:0.7rem;color:var(--text-secondary)">
                 ${fmt(item.spent)} / ${fmt(item.limit)} · ${item.p}%
               </span>
@@ -851,6 +1009,67 @@
         document.querySelectorAll('[data-meter-view]').forEach(b =>
           b.classList.toggle('active', b.dataset.meterView === meterView));
         renderMeters(currentYM());
+      });
+    });
+
+    // E6: period filter
+    document.querySelectorAll('[data-meter-period]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        meterPeriodFilter = btn.dataset.meterPeriod;
+        document.querySelectorAll('[data-meter-period]').forEach(b =>
+          b.classList.toggle('active', b.dataset.meterPeriod === meterPeriodFilter));
+        renderMeters(currentYM());
+      });
+    });
+  }
+
+  /* ── E4: Sync panel init ── */
+  function initSyncPanel() {
+    const toggleBtn = document.getElementById('sync-toggle-btn');
+    const panel     = document.getElementById('sync-panel');
+    const saveBtn   = document.getElementById('sync-save-btn');
+    const msgEl     = document.getElementById('sync-msg');
+    const dateEl    = document.getElementById('sync-date');
+
+    if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+
+    toggleBtn?.addEventListener('click', () => {
+      if (!panel) return;
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+    });
+
+    saveBtn?.addEventListener('click', async () => {
+      const amount = document.getElementById('sync-amount')?.value;
+      const date   = document.getElementById('sync-date')?.value;
+      const note   = document.getElementById('sync-note')?.value || '';
+      if (!amount || !date) {
+        if (msgEl) { msgEl.textContent = 'Amount and date required'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+        return;
+      }
+      try {
+        const res = await api('/api/cashflow-sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: Number(amount), date, note })
+        });
+        syncPoint = res.syncPoint;
+        updateSyncInfo();
+        if (panel) panel.style.display = 'none';
+        renderT1(rangeStart(activeRange));
+      } catch (err) {
+        if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+      }
+    });
+  }
+
+  /* ── E5: T1 view mode toggle ── */
+  function initT1ViewMode() {
+    document.querySelectorAll('[data-t1-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        t1ViewMode = btn.dataset.t1Mode;
+        document.querySelectorAll('[data-t1-mode]').forEach(b =>
+          b.classList.toggle('active', b.dataset.t1Mode === t1ViewMode));
+        renderT1(rangeStart(activeRange));
       });
     });
   }
@@ -1133,12 +1352,15 @@
   }
 
   /* ── Boot ── */
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     initPeriodButtons();
     initMeterToggle();
     initModals();
     initPlayroom();
-    initBudgetPanel();
+    initPanelCollapses();   // E7
+    initSyncPanel();        // E4
+    initT1ViewMode();       // E5
+    await loadSyncPoint();  // E4
     loadAll().catch(err => console.error('Dashboard load failed:', err));
   });
 })();
