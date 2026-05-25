@@ -213,21 +213,32 @@
     }
 
     if (panelId === 't2') {
-      html += `<div style="display:flex;align-items:center;gap:0.3rem">
-        <span style="font-size:0.74rem;color:var(--text-secondary)">From:</span>
-        <input type="date" id="t2-cutoff-date" value="${t2CutoffDate || ''}"
-          style="font-size:0.76rem;padding:0.18rem 0.35rem;border:1px solid var(--border);
-          border-radius:4px;background:var(--bg-card);color:var(--text-primary);font-family:inherit">
-        ${t2CutoffDate ? `<button id="t2-cutoff-clear" style="font-size:0.72rem;color:var(--text-secondary);
-          background:none;border:none;cursor:pointer;font-family:inherit;line-height:1;padding:0.1rem 0.25rem;
-          border:1px solid var(--border);border-radius:4px">✕</button>` : ''}
-      </div>`;
       html += `<div class="period-toggle">
         <button class="period-btn${t2ContentFilter === 'group'   ? ' active' : ''}" data-t2-filter="group">By Group</button>
         <button class="period-btn${t2ContentFilter === 'all'     ? ' active' : ''}" data-t2-filter="all">All</button>
         <button class="period-btn${t2ContentFilter === 'expense' ? ' active' : ''}" data-t2-filter="expense">Expense</button>
         <button class="period-btn${t2ContentFilter === 'loan'    ? ' active' : ''}" data-t2-filter="loan">Loan Payback</button>
         <button class="period-btn${t2ContentFilter === 'project' ? ' active' : ''}" data-t2-filter="project">Project</button>
+      </div>`;
+      // Full-width second row for cut-off date
+      const ctrlNM = t2CutoffDate
+        ? Math.max(1, monthsBetween(t2CutoffDate.slice(0, 7), currentYM()).length)
+        : null;
+      html += `<div style="flex-basis:100%;display:flex;align-items:center;gap:0.5rem;
+        padding:0.35rem 0.6rem;border-radius:4px;margin-top:-0.15rem;
+        background:${t2CutoffDate ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)'};
+        border:1px solid ${t2CutoffDate ? '#6366f1' : 'var(--border)'}">
+        <span style="font-size:0.73rem;font-weight:600;white-space:nowrap;
+          color:${t2CutoffDate ? '#6366f1' : 'var(--text-secondary)'}">📅 Actual from:</span>
+        <input type="date" id="t2-cutoff-date" value="${t2CutoffDate || ''}"
+          style="font-size:0.76rem;padding:0.18rem 0.4rem;border:1px solid var(--border);
+          border-radius:4px;background:var(--bg-card);color:var(--text-primary);font-family:inherit">
+        ${t2CutoffDate
+          ? `<span style="font-size:0.71rem;color:#6366f1">→ ${ctrlNM}-month budget window</span>
+             <button id="t2-cutoff-clear" style="font-size:0.72rem;color:var(--text-secondary);
+               background:none;border:1px solid var(--border);border-radius:4px;
+               cursor:pointer;font-family:inherit;padding:0.1rem 0.35rem;margin-left:auto">clear</button>`
+          : `<span style="font-size:0.7rem;color:var(--text-secondary)">optional — leave empty to use period toggle above</span>`}
       </div>`;
     }
 
@@ -972,6 +983,24 @@
     const totalExp   = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
     const avgDailyInc = totalInc / Math.max(1, pastDays.length);
     const avgDailyExp = totalExp / Math.max(1, pastDays.length);
+
+    // Budget-based daily forecast rates
+    const catMapFcD = {};
+    categories.forEach(c => { catMapFcD[c.id] = c; });
+    const budgetFcDInc = budgets
+      .filter(b => b.active !== false)
+      .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Earn')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const budgetFcDExp = budgets
+      .filter(b => b.active !== false && b.active !== 0)
+      .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Expense')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const budgetFcDLoan = liabilities
+      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
+      .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
+    const fcastDailyInc = budgetFcDInc > 0 ? budgetFcDInc / 30 : avgDailyInc;
+    const fcastDailyExp = (budgetFcDExp + budgetFcDLoan) > 0 ? (budgetFcDExp + budgetFcDLoan) / 30 : avgDailyExp;
+
     const labels     = allDays.map(d => d.slice(5));
     const todayIdx   = 14;
 
@@ -1019,7 +1048,7 @@
     });
     const balForecast = [balPast[balPast.length - 1]];
     futureDays.forEach(() => {
-      balForecast.push(balForecast[balForecast.length - 1] + avgDailyInc - avgDailyExp);
+      balForecast.push(balForecast[balForecast.length - 1] + fcastDailyInc - fcastDailyExp);
     });
 
     let syncLinePlugin = null;
@@ -1053,9 +1082,9 @@
             backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 2 },
           { label: 'Expense', data: [...pastDays.map(d => expByDay[d] || 0), ...new Array(15).fill(null)],
             backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 2 },
-          { label: '~ Inc Forecast', data: [...new Array(15).fill(null), ...futureDays.map(() => avgDailyInc)],
+          { label: '~ Budget Inc', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyInc)],
             backgroundColor: 'rgba(34,197,94,0.25)', borderRadius: 2 },
-          { label: '~ Exp Forecast', data: [...new Array(15).fill(null), ...futureDays.map(() => avgDailyExp)],
+          { label: '~ Budget Exp', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyExp)],
             backgroundColor: 'rgba(239,68,68,0.25)', borderRadius: 2 },
           { label: 'Balance', data: [...balPast, ...new Array(15).fill(null)], type: 'line',
             borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3, yAxisID: 'y2',
@@ -1138,11 +1167,28 @@
       return;
     }
 
-    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month forecast`;
+    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month budget forecast`;
 
+    // Budget-based monthly forecast (prefer over recent average)
+    const catMapFc = {};
+    categories.forEach(c => { catMapFc[c.id] = c; });
+    const budgetFcInc = budgets
+      .filter(b => b.active !== false)
+      .filter(b => catMapFc[linkedId(b.category_id)]?.type === 'Earn')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const budgetFcExp = budgets
+      .filter(b => b.active !== false && b.active !== 0)
+      .filter(b => catMapFc[linkedId(b.category_id)]?.type === 'Expense')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const budgetFcLoan = liabilities
+      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
+      .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
     const recentM = pastMonths.slice(-3);
     const avgInc  = recentM.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentM.length);
     const avgExp  = recentM.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentM.length);
+    // Use budget when defined; fall back to recent average only if no budgets exist
+    const fcastInc = budgetFcInc  > 0 ? budgetFcInc  : avgInc;
+    const fcastExp = (budgetFcExp + budgetFcLoan) > 0 ? (budgetFcExp + budgetFcLoan) : avgExp;
 
     let running = 0;
     if (syncPoint) {
@@ -1154,7 +1200,7 @@
       return running;
     });
     const balForecast = [balPast[balPast.length - 1]];
-    futureMonths.forEach(() => balForecast.push(balForecast[balForecast.length - 1] + avgInc - avgExp));
+    futureMonths.forEach(() => balForecast.push(balForecast[balForecast.length - 1] + fcastInc - fcastExp));
 
     const todayIdx = pastMonths.length - 1;
     const todayLinePlugin = {
@@ -1182,9 +1228,9 @@
             backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
           { label: 'Expense', data: [...pastMonths.map(m => expByM[m] || 0), ...new Array(forecastMonths).fill(null)],
             backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 },
-          { label: '~ Inc Forecast', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => avgInc)],
+          { label: '~ Budget Inc', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastInc)],
             backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 3 },
-          { label: '~ Exp Forecast', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => avgExp)],
+          { label: '~ Budget Exp', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastExp)],
             backgroundColor: 'rgba(239,68,68,0.28)', borderRadius: 3 },
           { label: 'Balance', data: [...balPast, ...new Array(forecastMonths).fill(null)], type: 'line',
             borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y2',
@@ -1201,7 +1247,7 @@
             filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } },
           tooltip: { callbacks: {
             afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ')
-              ? ['Estimated — based on 3-month average'] : []
+              ? ['Budget-based forecast'] : []
           }}
         },
         scales: {
