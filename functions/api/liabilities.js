@@ -46,11 +46,18 @@ export async function onRequestPost(context) {
 
   if (body.creditor_type) fields.creditor_type = body.creditor_type;
   if (body.loan_size !== undefined) fields.loan_size = Number(body.loan_size);
-  if (body.current_balance !== undefined) fields.current_balance = Number(body.current_balance);
   if (body.interest_rate !== undefined) fields.interest_rate = Number(body.interest_rate);
   if (body.monthly_payment !== undefined) fields.monthly_payment = Number(body.monthly_payment);
   if (body.start_date) fields.start_date = body.start_date;
   if (body.notes) fields.notes = body.notes;
+
+  // Default current_balance to loan_size — a new loan starts fully outstanding
+  const loanAmt = Number(body.loan_size || 0);
+  if (body.current_balance !== undefined && body.current_balance !== null && body.current_balance !== '') {
+    fields.current_balance = Number(body.current_balance);
+  } else {
+    fields.current_balance = loanAmt;
+  }
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);

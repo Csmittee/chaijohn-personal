@@ -913,7 +913,10 @@
             <input type="text" class="le-notes" value="${(l.notes || '').replace(/"/g,'&quot;')}"
               style="font-size:0.85rem;padding:0.3rem 0.5rem">
           </div>
-          <button class="btn btn-primary le-save" style="font-size:0.85rem;padding:0.35rem 1rem">Save Changes</button>
+          <div style="display:flex;gap:0.5rem;margin-top:0.25rem">
+            <button class="btn btn-primary le-save" style="flex:1;font-size:0.85rem;padding:0.35rem 1rem">Save Changes</button>
+            <button class="btn btn-danger le-delete" style="font-size:0.85rem;padding:0.35rem 0.75rem">Delete</button>
+          </div>
           <div class="le-msg" style="display:none;font-size:0.82rem;margin-top:0.4rem"></div>
         </div>
 
@@ -960,7 +963,20 @@
 
     panel.style.display = 'block';
     panel.querySelector('.le-save').addEventListener('click', () => saveLiabEdit(liabId, panel));
+    panel.querySelector('.le-delete').addEventListener('click', () => deleteLiability(liabId, panel));
     loadLiabHistory(liabId, panel);
+  }
+
+  async function deleteLiability(liabId, panel) {
+    if (!confirm('Delete this liability? This cannot be undone.')) return;
+    const msgEl = panel.querySelector('.le-msg');
+    try {
+      await api(`/api/liabilities/${liabId}`, { method: 'DELETE' });
+      activeLiabDetailId = null;
+      loadLiabilityTab();
+    } catch (err) {
+      if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+    }
   }
 
   async function saveLiabEdit(liabId, panel) {
