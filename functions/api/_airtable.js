@@ -20,11 +20,13 @@ export async function listRecords(apiKey, baseId, tableName, params = {}) {
   return res.json();
 }
 
-export async function createRecord(apiKey, baseId, tableName, fields) {
+export async function createRecord(apiKey, baseId, tableName, fields, { typecast = false } = {}) {
+  const body = { records: [{ fields }] };
+  if (typecast) body.typecast = true;
   const res = await fetch(`${AIRTABLE_BASE}/${baseId}/${encodeURIComponent(tableName)}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ records: [{ fields }] })
+    body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`Airtable create error ${res.status}: ${await res.text()}`);
   const data = await res.json();

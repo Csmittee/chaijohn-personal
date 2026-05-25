@@ -3,39 +3,6 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Categories';
 
-async function ensureGroupChoice(apiKey, groupValue) {
-  try {
-    const metaRes = await fetch(`https://api.airtable.com/v0/meta/bases/${BASE_ID}/tables`, {
-      headers: { Authorization: `Bearer ${apiKey}` }
-    });
-    if (!metaRes.ok) return;
-    const meta = await metaRes.json();
-    const table = (meta.tables || []).find(t => t.name === TABLE);
-    if (!table) return;
-    const groupField = (table.fields || []).find(f => f.name === 'group');
-    if (!groupField || !groupField.options) return;
-    const existingChoices = groupField.options.choices || [];
-    const alreadyExists = existingChoices.some(
-      c => c.name.toLowerCase() === groupValue.toLowerCase()
-    );
-    if (alreadyExists) return;
-    await fetch(
-      `https://api.airtable.com/v0/meta/bases/${BASE_ID}/tables/${table.id}/fields/${groupField.id}`,
-      {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          options: {
-            choices: [
-              ...existingChoices.map(c => ({ name: c.name })),
-              { name: groupValue }
-            ]
-          }
-        })
-      }
-    );
-  } catch { /* best-effort */ }
-}
 
 export async function onRequestGet(context) {
   const { env, request } = context;
@@ -84,10 +51,6 @@ export async function onRequestPost(context) {
   const validTypes = ['Earn', 'Expense', 'Loan', 'Investment'];
   if (!validTypes.includes(type)) return errorResponse(`type must be one of: ${validTypes.join(', ')}`);
 
-  if (body.group) {
-    await ensureGroupChoice(env.AIRTABLE_API_KEY, body.group);
-  }
-
   const fields = {
     name,
     type,
@@ -100,7 +63,7 @@ export async function onRequestPost(context) {
   if (body.cash_flow) fields.cash_flow = body.cash_flow;
 
   try {
-    const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+    const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields, { typecast: true });
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
