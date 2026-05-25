@@ -399,16 +399,16 @@
           const h   = cardH(limit);
           return `<div class="budget-mosaic-card" style="border-left:3px solid ${clr};min-height:${h}px">
             <div>
-              <div style="font-size:0.84rem;font-weight:700;line-height:1.3">
+              <div style="font-size:0.78rem;font-weight:700;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                 ${label}${periodBadge(period)}
               </div>
-              ${cat.group ? `<div style="font-size:0.66rem;color:var(--text-secondary);margin-top:0.1rem">${cat.group}</div>` : ''}
+              ${cat.group ? `<div style="font-size:0.62rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cat.group}</div>` : ''}
             </div>
             <div>
-              <div class="meter-bar-bg" style="height:6px;margin-bottom:0.25rem">
+              <div class="meter-bar-bg" style="height:5px;margin-bottom:0.2rem">
                 <div class="meter-bar-fill ${cls}" style="width:${Math.min(p, 100)}%"></div>
               </div>
-              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-secondary)">
+              <div style="display:flex;justify-content:space-between;font-size:0.64rem;color:var(--text-secondary)">
                 <span>${fmt(spent)}</span>
                 <span style="color:${clr};font-weight:700">${p}%</span>
                 <span>${fmt(limit)}</span>
@@ -469,7 +469,7 @@
                   ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a.
                 </div>
                 <div style="height:5px;background:var(--border);border-radius:3px;
-                  margin-top:0.4rem;overflow:hidden;width:120px">
+                  margin-top:0.4rem;overflow:hidden;width:100%">
                   <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:3px"></div>
                 </div>
                 <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.1rem">${paidPct}% paid off</div>
