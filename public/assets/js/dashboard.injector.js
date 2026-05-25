@@ -376,6 +376,28 @@
     const syncBal       = syncPoint ? syncPoint.amount : null;
     const projectedBal  = syncBal !== null ? syncBal + totalIn - totalOut - projectedOut : null;
 
+    // Days-to-zero: current cash ÷ daily net burn (budget-based, dismissed excluded)
+    const fcInc  = budgets.filter(b => b.active !== false)
+      .filter(b => catMap[linkedId(b.category_id)]?.type === 'Earn')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const fcExp  = budgets.filter(b => b.active !== false && !dismissedBudgetIds.has(b.id))
+      .filter(b => catMap[linkedId(b.category_id)]?.type === 'Expense')
+      .reduce((s, b) => s + monthlyBudgetRate(b), 0);
+    const fcLoan = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
+      .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
+    const dailyNetFc  = (fcInc - fcExp - fcLoan) / 30;
+    const currentCash = syncBal !== null ? syncBal + totalIn - totalOut : null;
+    let daysToZero = null, zeroDateStr = '';
+    if (currentCash !== null) {
+      if (currentCash <= 0) {
+        daysToZero = 0;
+      } else if (dailyNetFc < 0) {
+        daysToZero = Math.floor(currentCash / -dailyNetFc);
+        const zd = new Date(); zd.setDate(zd.getDate() + daysToZero);
+        zeroDateStr = zd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      }
+    }
+
     function miniCards(list, isIncome) {
       if (list.length === 0) return `<div style="grid-column:1/-1;color:var(--text-secondary);font-size:0.78rem">None</div>`;
       return list.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(t => {
@@ -412,8 +434,8 @@
       return `<div class="tx-mini-card" style="background:rgba(100,116,139,0.06);
         border-left:2px dashed ${item.dismissed ? 'transparent' : 'var(--border)'};${dim}">
         <div style="min-width:0;flex:1">
-          <div style="font-size:0.75rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-            color:var(--text-secondary);${item.dismissed ? 'text-decoration:line-through' : ''}">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);
+            word-break:break-word;${item.dismissed ? 'text-decoration:line-through' : ''}">
             📊 ${item.label}${item.group ? ` <span style="font-size:0.6rem;opacity:0.7">· ${item.group}</span>` : ''}</div>
           <div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem">
             <div style="flex:1;height:3px;background:var(--border);border-radius:2px">
@@ -457,12 +479,22 @@
           ${projectedBal < 0 ? ' ⚠ shortfall' : ''}
         </div>` : '';
 
+    const daysHtml = daysToZero !== null
+      ? `<div style="text-align:center;margin-bottom:0.3rem">
+          <span style="font-size:1rem;font-weight:800;
+            color:${daysToZero <= 7 ? '#ef4444' : daysToZero <= 30 ? '#f59e0b' : '#22c55e'}">
+            ⏱ ${daysToZero === 0 ? 'CASH OUT NOW' : daysToZero + ' days to ฿0'}
+          </span>
+          ${zeroDateStr ? `<span style="font-size:0.72rem;color:var(--text-secondary);margin-left:0.4rem">(${zeroDateStr})</span>` : ''}
+        </div>` : '';
+
     body.innerHTML = `
       <div class="cashflow-total" style="margin-bottom:0.25rem">
         <span style="color:#22c55e">In: ${fmt(totalIn)}</span>
         <span style="color:${netFlow >= 0 ? '#22c55e' : '#ef4444'};font-weight:700">Net ${fmt(netFlow)}</span>
         <span style="color:#ef4444">Out: ${fmt(totalOut)}</span>
       </div>
+      ${daysHtml}
       ${projectedOut > 0 ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.3rem;text-align:center">
         + ${fmt(projectedOut)} planned remaining this period
       </div>` : ''}
