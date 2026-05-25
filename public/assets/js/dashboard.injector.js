@@ -336,7 +336,6 @@
     const nMonths = activeRange === '1m' ? 1 : activeRange === '3m' ? 3 : activeRange === '6m' ? 6 : 12;
     const upcomingBudget = budgets
       .filter(b => b.active !== false && b.active !== 0)
-      .filter(b => !dismissedBudgetIds.has(b.id))
       .filter(b => {
         const cat = catMap[linkedId(b.category_id)];
         return cat && (cat.type === 'Expense' || cat.type === 'Loan');
@@ -355,11 +354,12 @@
           label: b.label || cat.name || '?',
           group: cat.group || '',
           remaining, budgetLimit, spent,
-          pct: budgetLimit > 0 ? Math.round(spent / budgetLimit * 100) : 0
+          pct: budgetLimit > 0 ? Math.round(spent / budgetLimit * 100) : 0,
+          dismissed: dismissedBudgetIds.has(b.id)
         };
       })
       .filter(Boolean)
-      .sort((a, b) => b.remaining - a.remaining);
+      .sort((a, b) => (a.dismissed ? 1 : -1) - (b.dismissed ? 1 : -1) || b.remaining - a.remaining);
 
     // Loan payments due this period (monthly_payment × nMonths)
     const upcomingLoans = liabilities
@@ -370,7 +370,7 @@
         dueDay: l.payment_due_day || null
       }));
 
-    const projectedOut  = upcomingBudget.reduce((s, i) => s + i.remaining, 0)
+    const projectedOut  = upcomingBudget.filter(i => !i.dismissed).reduce((s, i) => s + i.remaining, 0)
       + upcomingLoans.reduce((s, l) => s + l.amount, 0);
     const projectedNet  = totalIn - totalOut - projectedOut;
     const syncBal       = syncPoint ? syncPoint.amount : null;
@@ -403,11 +403,18 @@
     function budgetMiniCard(item) {
       const barW = Math.min(item.pct, 100);
       const barC = item.pct >= 100 ? '#ef4444' : item.pct >= 80 ? '#f59e0b' : '#94a3b8';
+      const dim  = item.dismissed ? 'opacity:0.35;' : '';
+      const toggleFn = item.dismissed
+        ? `window._restoreBudget('${item.id}')`
+        : `window._dismissBudget('${item.id}')`;
+      const toggleLabel = item.dismissed ? '↩ restore' : '✕ skip';
+      const toggleColor = item.dismissed ? '#6366f1' : 'var(--text-secondary)';
       return `<div class="tx-mini-card" style="background:rgba(100,116,139,0.06);
-        border-left:2px dashed var(--border)">
+        border-left:2px dashed ${item.dismissed ? 'transparent' : 'var(--border)'};${dim}">
         <div style="min-width:0;flex:1">
           <div style="font-size:0.75rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-            color:var(--text-secondary)">📊 ${item.label}${item.group ? ` <span style="font-size:0.6rem;opacity:0.7">· ${item.group}</span>` : ''}</div>
+            color:var(--text-secondary);${item.dismissed ? 'text-decoration:line-through' : ''}">
+            📊 ${item.label}${item.group ? ` <span style="font-size:0.6rem;opacity:0.7">· ${item.group}</span>` : ''}</div>
           <div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem">
             <div style="flex:1;height:3px;background:var(--border);border-radius:2px">
               <div style="height:100%;width:${barW}%;background:${barC};border-radius:2px"></div>
@@ -416,10 +423,12 @@
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;margin-left:0.5rem;gap:0.15rem">
-          <span style="font-weight:600;color:var(--text-secondary);font-size:0.78rem;white-space:nowrap">-${fmt(item.remaining)}</span>
-          <button onclick="window._dismissBudget('${item.id}')" title="Remove from forecast"
-            style="background:none;border:none;cursor:pointer;color:var(--text-secondary);opacity:0.4;
-            font-size:0.65rem;padding:0;line-height:1;hover:opacity:1">✕ skip</button>
+          <span style="font-weight:600;color:var(--text-secondary);font-size:0.78rem;white-space:nowrap">
+            ${item.dismissed ? '<s>' : ''}-${fmt(item.remaining)}${item.dismissed ? '</s>' : ''}</span>
+          <button onclick="${toggleFn}"
+            style="background:none;border:none;cursor:pointer;color:${toggleColor};
+            font-size:0.65rem;padding:0;line-height:1;font-weight:${item.dismissed ? '700' : '400'}"
+            >${toggleLabel}</button>
         </div>
       </div>`;
     }
@@ -466,14 +475,10 @@
         ${sectionLabel('🔴 Cash Out — Actual')}
         ${miniCards(trueExp, false)}
         ${loanPay.length > 0 ? sectionLabel('Loan Repayments Paid') + miniCards(loanPay, false) : ''}
-        ${(upcomingBudget.length > 0 || dismissedBudgetIds.size > 0)
-          ? sectionLabel('📅 Budget Remaining · ' + fmt(upcomingBudget.reduce((s, i) => s + i.remaining, 0))
-              + (dismissedBudgetIds.size > 0
-                ? ` <span onclick="window._restoreAllBudgets()" style="cursor:pointer;font-size:0.6rem;
-                    color:#6366f1;font-weight:600;margin-left:0.4rem;padding:1px 5px;
-                    border:1px solid #6366f1;border-radius:3px">↩ ${dismissedBudgetIds.size} skipped</span>`
-                : ''))
-            + upcomingBudget.slice(0, 15).map(budgetMiniCard).join('')
+        ${upcomingBudget.length > 0
+          ? sectionLabel('📅 Budget Remaining · ' + fmt(upcomingBudget.filter(i => !i.dismissed).reduce((s, i) => s + i.remaining, 0))
+              + (dismissedBudgetIds.size > 0 ? ` (${dismissedBudgetIds.size} skipped)` : ''))
+            + upcomingBudget.map(budgetMiniCard).join('')
           : ''}
         ${upcomingLoans.length > 0
           ? sectionLabel('💳 Loan Payments Due · ' + fmt(upcomingLoans.reduce((s, l) => s + l.amount, 0)))
@@ -1970,8 +1975,9 @@
     }
     if (t1ZoomChart) { t1ZoomChart.destroy(); t1ZoomChart = null; }
   }
-  window._dismissBudget = function(id) { dismissedBudgetIds.add(id); _rerenderT1(); };
-  window._restoreAllBudgets = function() { dismissedBudgetIds.clear(); _rerenderT1(); };
+  window._dismissBudget    = function(id) { dismissedBudgetIds.add(id);    _rerenderT1(); };
+  window._restoreBudget    = function(id) { dismissedBudgetIds.delete(id); _rerenderT1(); };
+  window._restoreAllBudgets = function() { dismissedBudgetIds.clear();     _rerenderT1(); };
 
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', async () => {
