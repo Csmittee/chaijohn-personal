@@ -8,7 +8,7 @@
   let activeRange  = '1m';
   let activePanel  = 't1';
   let contentYear  = new Date().getFullYear();
-  let t2ContentFilter = 'all';   // F6 T2 content filter
+  let t2ContentFilter = 'group'; // F6 T2 content filter
   let txData       = [];
   let budgets      = [];
   let budgetMap    = {};
@@ -203,9 +203,10 @@
 
     if (panelId === 't2') {
       html += `<div class="period-toggle">
-        <button class="period-btn${t2ContentFilter === 'all' ? ' active' : ''}" data-t2-filter="all">All</button>
+        <button class="period-btn${t2ContentFilter === 'group'   ? ' active' : ''}" data-t2-filter="group">By Group</button>
+        <button class="period-btn${t2ContentFilter === 'all'     ? ' active' : ''}" data-t2-filter="all">All</button>
         <button class="period-btn${t2ContentFilter === 'expense' ? ' active' : ''}" data-t2-filter="expense">Expense</button>
-        <button class="period-btn${t2ContentFilter === 'loan' ? ' active' : ''}" data-t2-filter="loan">Loan Payback</button>
+        <button class="period-btn${t2ContentFilter === 'loan'    ? ' active' : ''}" data-t2-filter="loan">Loan Payback</button>
         <button class="period-btn${t2ContentFilter === 'project' ? ' active' : ''}" data-t2-filter="project">Project</button>
       </div>`;
     }
@@ -375,6 +376,51 @@
       if (period === 'Annual') return `<span class="period-badge period-badge-annual">Annual÷12</span>`;
       if (period === 'One-time') return `<span class="period-badge period-badge-onetime">One-time</span>`;
       return `<span class="period-badge period-badge-annual">${period}</span>`;
+    }
+
+    // ── Group view (default) ──────────────────────────────────────────
+    if (t2ContentFilter === 'group') {
+      const grpMap = {};
+      withData.forEach(({ cat, spent, limit, p }) => {
+        const g = cat.group || 'Other';
+        if (!grpMap[g]) grpMap[g] = { name: g, spent: 0, totalLimit: 0, count: 0, worst: 0 };
+        grpMap[g].spent      += spent;
+        grpMap[g].totalLimit += limit;
+        grpMap[g].count++;
+        grpMap[g].worst = Math.max(grpMap[g].worst, p);
+      });
+      const grps = Object.values(grpMap).sort((a, b) => b.totalLimit - a.totalLimit);
+
+      body.innerHTML = `
+        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.5rem">
+          ${overCount > 0 ? `<span style="color:#ef4444;font-weight:700">${overCount} over</span> · ` : ''}
+          ${grps.length} groups · Total spent ${fmt(totalSpent)}
+        </div>
+        <div style="display:flex;gap:0.4rem;height:150px;align-items:stretch">
+          ${grps.map(g => {
+            const gp  = pct(g.spent, g.totalLimit);
+            const clr = g.worst >= 100 ? '#ef4444' : g.worst >= 80 ? '#f59e0b' : '#22c55e';
+            return `<div style="flex:${Math.max(g.totalLimit,1)};border:1px solid var(--border);border-radius:var(--radius);
+              padding:0.5rem 0.55rem;background:var(--bg-card);border-top:3px solid ${clr};
+              display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-width:0">
+              <div>
+                <div style="font-weight:700;font-size:0.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.name}</div>
+                <div style="font-size:0.62rem;color:var(--text-secondary)">${g.count} budget${g.count > 1 ? 's' : ''}</div>
+              </div>
+              <div>
+                <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:0.22rem">
+                  <div style="height:100%;width:${Math.min(gp,100)}%;background:${clr};border-radius:2px"></div>
+                </div>
+                <div style="font-size:0.62rem;display:flex;justify-content:space-between;gap:0.2rem">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmt(g.spent)}</span>
+                  <span style="color:${clr};font-weight:700;flex-shrink:0">${gp}%</span>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${fmt(g.totalLimit)}</span>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      return;
     }
 
     // Sort by budget amount desc for mosaic visual hierarchy
