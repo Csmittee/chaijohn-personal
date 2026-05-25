@@ -19,6 +19,7 @@
   let playroomBudgetId = null;
   let t4Range      = '1m';
   let dismissedAlerts = new Set();
+  let dismissedBudgetIds = new Set();
   let syncPoint    = null;
   let t1ViewMode   = 'netflow';
   let t2CutoffDate = null;
@@ -335,6 +336,7 @@
     const nMonths = activeRange === '1m' ? 1 : activeRange === '3m' ? 3 : activeRange === '6m' ? 6 : 12;
     const upcomingBudget = budgets
       .filter(b => b.active !== false && b.active !== 0)
+      .filter(b => !dismissedBudgetIds.has(b.id))
       .filter(b => {
         const cat = catMap[linkedId(b.category_id)];
         return cat && (cat.type === 'Expense' || cat.type === 'Loan');
@@ -349,6 +351,7 @@
         const remaining  = Math.max(0, budgetLimit - spent);
         if (remaining < 1) return null;
         return {
+          id: b.id,
           label: b.label || cat.name || '?',
           group: cat.group || '',
           remaining, budgetLimit, spent,
@@ -412,9 +415,12 @@
             <span style="font-size:0.6rem;color:var(--text-secondary);white-space:nowrap">${item.pct}% used</span>
           </div>
         </div>
-        <span style="font-weight:600;color:var(--text-secondary);font-size:0.78rem;white-space:nowrap;flex-shrink:0;margin-left:0.5rem">
-          -${fmt(item.remaining)}
-        </span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;margin-left:0.5rem;gap:0.15rem">
+          <span style="font-weight:600;color:var(--text-secondary);font-size:0.78rem;white-space:nowrap">-${fmt(item.remaining)}</span>
+          <button onclick="window._dismissBudget('${item.id}')" title="Remove from forecast"
+            style="background:none;border:none;cursor:pointer;color:var(--text-secondary);opacity:0.4;
+            font-size:0.65rem;padding:0;line-height:1;hover:opacity:1">✕ skip</button>
+        </div>
       </div>`;
     }
 
@@ -1094,16 +1100,28 @@
       .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Earn')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
     const budgetFcDExp  = budgets.filter(b => b.active !== false && b.active !== 0)
+      .filter(b => !dismissedBudgetIds.has(b.id))
       .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Expense')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
-    const budgetFcDLoan = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
-      .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
+
+    // Loans: pin to exact due date as lump sum; undated loans spread evenly
+    const activeLiabs = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0 && Number(l.monthly_payment || 0) > 0);
+    let loanDailySpread = 0;
+    const loanByDueDay = {}; // { dayOfMonth: totalAmount }
+    activeLiabs.forEach(l => {
+      const amt = Number(l.monthly_payment || 0);
+      const dueDay = l.payment_due_day || null;
+      if (dueDay) loanByDueDay[dueDay] = (loanByDueDay[dueDay] || 0) + amt;
+      else loanDailySpread += amt / 30;
+    });
+
     const totalInc      = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
     const totalExp      = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
     const avgDailyInc   = totalInc / Math.max(1, pastDays.length);
     const avgDailyExp   = totalExp / Math.max(1, pastDays.length);
+    const budgetFcDLoanTotal = activeLiabs.reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
     const fcastDailyInc = budgetFcDInc > 0 ? budgetFcDInc / 30 : avgDailyInc;
-    const fcastDailyExp = (budgetFcDExp + budgetFcDLoan) > 0 ? (budgetFcDExp + budgetFcDLoan) / 30 : avgDailyExp;
+    const fcastDailyExpBase = (budgetFcDExp > 0 || budgetFcDLoanTotal > 0) ? (budgetFcDExp / 30 + loanDailySpread) : avgDailyExp;
 
     // Balance curve (past actual)
     let runBal = syncPoint ? getSyncStartingBalance(pastDays[0]) : 0;
@@ -1111,9 +1129,12 @@
       runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
       return runBal;
     });
+    // Forecast: budget burn daily + lump-sum loan drops on their due day
     const balForecast = [balPast[balPast.length - 1]];
-    futureDays.forEach(() => {
-      balForecast.push(balForecast[balForecast.length - 1] + fcastDailyInc - fcastDailyExp);
+    futureDays.forEach(d => {
+      const dom = new Date(d).getDate();
+      const loanDrop = loanByDueDay[dom] || 0;
+      balForecast.push(balForecast[balForecast.length - 1] + fcastDailyInc - fcastDailyExpBase - loanDrop);
     });
 
     const todayIdx = 14;
@@ -1777,20 +1798,39 @@
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
+    const alreadyEarned = nowTx.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount || 0), 0);
+
     const fixedBudgets = budgets.filter(b => {
+      if (!b.active || dismissedBudgetIds.has(b.id)) return false;
       const catId = linkedId(b.category_id);
       const cat   = catMap[catId];
-      return cat && (cat.expense_type === 'FP-FV' || cat.expense_type === 'FP-VV') && b.active;
+      return cat && (cat.expense_type === 'FP-FV' || cat.expense_type === 'FP-VV');
     });
 
     let fixedPaid = 0, fixedDue = 0;
     const fixedRows = fixedBudgets.map(b => {
       const catId = linkedId(b.category_id);
       const paid  = catsPaidThisMonth.has(catId);
-      const amt   = Number(b.amount || 0);
+      // Use normalized monthly rate, not raw amount (fixes 3x-year/Annual budgets)
+      const amt   = Math.round(monthlyBudgetRate(b));
       if (paid) fixedPaid += amt; else fixedDue += amt;
-      return { label: b.label || catMap[catId]?.name || '?', amt, paid };
-    }).sort((a, b) => (a.paid ? 1 : -1) - (b.paid ? 1 : -1));
+      return { label: b.label || catMap[catId]?.name || '?', amt, paid, isLoan: false };
+    });
+
+    // Add loan payments to fixed commitments
+    const loanTxCatIds = new Set(nowTx.filter(t => t.source === 'LiabilityPayment').map(t => resolveCatId(t)).filter(Boolean));
+    liabilities
+      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0 && Number(l.monthly_payment || 0) > 0)
+      .forEach(l => {
+        const amt  = Number(l.monthly_payment || 0);
+        const paid = nowTx.some(t => t.source === 'LiabilityPayment' &&
+          (t.entity || '').toLowerCase().includes((l.name || '').toLowerCase().slice(0, 4)));
+        const dueTag = l.payment_due_day ? ` · Due ${l.payment_due_day}th` : '';
+        if (paid) fixedPaid += amt; else fixedDue += amt;
+        fixedRows.push({ label: `💳 ${l.name}${dueTag}`, amt, paid, isLoan: true });
+      });
+
+    fixedRows.sort((a, b) => (a.paid ? 1 : -1) - (b.paid ? 1 : -1));
 
     const daysLeft   = daysLeftInMonth();
     const daysGone   = new Date().getDate();
@@ -1811,6 +1851,7 @@
       <div style="font-size:1rem;font-weight:700;margin-bottom:0.5rem">
         Total liquid: <span class="big">${fmt(totalLiquid)}</span>
       </div>
+      ${alreadyEarned > 0 ? `<div style="color:#22c55e;font-size:0.85rem">+ ${fmt(alreadyEarned)} earned this month (already in bank)</div>` : ''}
       <div>Already spent this month: <strong>${fmt(alreadySpent)}</strong></div>
       <div style="margin-top:0.75rem;margin-bottom:0.25rem;font-weight:600;font-size:0.85rem">Fixed commitments:</div>
       ${rowsHtml || '<div style="font-size:0.82rem;color:var(--text-secondary)">No FP budgets found</div>'}
@@ -1875,6 +1916,16 @@
     document.getElementById('playroom-close')?.addEventListener('click', closePlay);
     pBackdrop?.addEventListener('click', closePlay);
   }
+
+  /* ── Dismiss budget from forecast (session-only) ── */
+  window._dismissBudget = function(id) {
+    dismissedBudgetIds.add(id);
+    const body = document.getElementById('t1-body');
+    if (body) renderT1Content(body);
+    const canvas = document.getElementById('t1-canvas');
+    if (canvas) { if (t1Chart) { t1Chart.destroy(); t1Chart = null; } renderT1DailyForecast(canvas); }
+    if (t1ZoomChart) { t1ZoomChart.destroy(); t1ZoomChart = null; }
+  };
 
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', async () => {
