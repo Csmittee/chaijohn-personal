@@ -3,6 +3,15 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Categories';
 
+async function resolveGroup(apiKey, groupInput) {
+  try {
+    const data = await listRecords(apiKey, BASE_ID, TABLE, { fields: ['group'], maxRecords: 500 });
+    const existing = [...new Set(data.records.map(r => r.fields.group).filter(Boolean))];
+    return existing.find(g => g.toLowerCase() === groupInput.toLowerCase()) || groupInput;
+  } catch {
+    return groupInput;
+  }
+}
 
 export async function onRequestGet(context) {
   const { env, request } = context;
@@ -57,7 +66,7 @@ export async function onRequestPost(context) {
     active: body.active !== undefined ? body.active : true
   };
 
-  if (body.group) fields.group = body.group;
+  if (body.group) fields.group = await resolveGroup(env.AIRTABLE_API_KEY, body.group);
   if (body.expense_type) fields.expense_type = body.expense_type;
   if (body.is_business !== undefined) fields.is_business = Boolean(body.is_business);
   if (body.cash_flow) fields.cash_flow = body.cash_flow;
