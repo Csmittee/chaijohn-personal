@@ -100,6 +100,17 @@ export async function onRequestPost(context) {
   const validTypes = ['Earn', 'Expense', 'Loan', 'Investment'];
   if (!validTypes.includes(type)) return errorResponse(`type must be one of: ${validTypes.join(', ')}`);
 
+  // Duplicate name check — category names must be unique
+  try {
+    const existing = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
+      filterByFormula: `LOWER({name})="${name.toLowerCase().replace(/"/g, '\\"')}"`,
+      maxRecords: 1
+    });
+    if (existing.records.length > 0) {
+      return errorResponse(`Category "${name}" already exists`);
+    }
+  } catch { /* non-fatal — allow creation if check fails */ }
+
   const fields = {
     name,
     type,
