@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-25
-> Current highest lesson: L034
+> Current highest lesson: L038
 
 ---
 
@@ -224,3 +224,23 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Frontend was making multiple fetch calls (transactions + budgets + categories) and joining them client-side. As the data model got more complex (transaction → budget → category), client-side joining became brittle and hard to maintain.
 **Rule:** Enrich at the API layer. GET /api/transactions now returns `budget_label`, `category_name`, `category_group` merged into each record's fields (resolved via budget chain). GET /api/budgets returns `category_name`, `category_group`, `category_type` from linked Category. Use `Promise.allSettled` for parallel enrichment fetches so one failure doesn't break the whole response. Skip enrichment entirely (early return) if no records have any link fields — avoids unnecessary API calls.
 **Tag:** #api #airtable #performance #architecture
+
+### L035 — Airtable single-select PATCH requires existing choice IDs
+**Problem:** The `ensureGroupChoice` Meta API function sent choices as `{ name: c.name }` only. Airtable's field PATCH rejects this because existing choices must include their `id` field — otherwise Airtable cannot match them and treats them as new duplicates or rejects the update entirely.
+**Rule:** When PATCHing an Airtable single-select field via the Meta API to add new choices, always include `{ id: c.id, name: c.name }` for ALL existing choices. Only new choices (being added) omit the `id`. The Meta API requires `schema.bases:write` scope on the token.
+**Tag:** #airtable #meta-api #bug-prevention
+
+### L036 — New liability must default current_balance to loan_size
+**Problem:** When creating a liability, if `current_balance` is not explicitly provided, Airtable defaults it to 0. The UI calculated: `(loan_size - 0) / loan_size = 100%` paid off — a brand-new loan with no payments showed "Fully paid" immediately.
+**Rule:** In the liabilities POST handler, always set `current_balance`. If not provided in the body, default it to `loan_size`. A new loan starts 100% outstanding, not 100% paid. `current_balance` should only be 0 after all payments are made.
+**Tag:** #liabilities #bug-prevention #api
+
+### L037 — Category name uniqueness must be enforced at API level
+**Problem:** No duplicate check on category name allowed identical records to be created (e.g. "Dog food" created twice). Frontend has no mechanism to prevent this — only the API can enforce it.
+**Rule:** POST /api/categories checks for existing records with the same name (case-insensitive, using Airtable formula `LOWER({name})="..."`) before creating. Returns 400 if duplicate found. UI shows inline error without clearing the form so the user can correct.
+**Tag:** #categories #validation #api
+
+### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
+**Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
+**Rule:** T1 (Cashflow) uses `.tx-mini-grid` 2-column mini cards — each transaction is a small pill-card with label, subtitle, and amount. T2 (Expense Intelligence) uses `.budget-mosaic` 2-column grid with `min-height` proportional to budget amount via sqrt scaling (`max(78, sqrt(amount/max) * 200)`px). Larger budgets are visually taller; all budgets remain readable with minimum height. T3 (Debt) uses `.liab-content-grid` 2-column grid — expandable history panels still work (grid rows auto-expand for the open card). T4 (Annual Plan) stays as table rows — numeric comparison data is best in tabular format.
+**Tag:** #dashboard #ux #layout

@@ -250,7 +250,7 @@ functions/
 **Working and confirmed:**
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
-- Dashboard (Fix F complete): Horizontal-scroll GRAPH ZONE (4 chart panels at 380 px, active panel highlighted with blue border). Dynamic CONTENT ZONE switches view on panel click: T1=Cashflow Breakdown, T2=Expense Intelligence (budget comparison + unbudgeted), T3=Debt Overview (expandable cards + lazy-load payment history), T4=Annual Financial Plan (4 collapsible sections). Content controls render period toggle or year selector per active panel. Risk Simulator + Solution Playroom modal buttons in content controls. ✅
+- Dashboard (Fix G + post-G): Horizontal-scroll GRAPH ZONE (4 chart panels). Dynamic CONTENT ZONE: T1=compact 2-col mini-card transaction grid, T2=2-col mosaic budget grid (card height proportional to budget amount via sqrt scaling, sorted largest→smallest), T3=2-col grid liability cards with expandable payment history, T4=Annual Financial Plan table. Category resolved via budget_id chain (G7). ✅
 - Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter, unique label enforcement, expense-only category dropdown, "Add Budget Item" form) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
 - Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
