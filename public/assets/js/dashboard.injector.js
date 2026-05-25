@@ -845,7 +845,7 @@
     const period = b.period || 'Monthly';
     if (meterPeriodFilter === 'all') return true;
     if (meterPeriodFilter === 'monthly') return period === 'Monthly';
-    if (meterPeriodFilter === 'annual') return period === 'Annual' || period === '3x-year';
+    if (meterPeriodFilter === 'annual') return period !== 'Monthly' && period !== 'One-time';
     if (meterPeriodFilter === 'onetime') return period === 'One-time';
     return true;
   }
@@ -860,7 +860,7 @@
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
-    const active = budgets.filter(b => b.active !== false && budgetMatchesPeriodFilter(b));
+    const active = budgets.filter(b => b.active !== false && b.active !== 0 && budgetMatchesPeriodFilter(b));
     if (active.length === 0) {
       grid.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No budgets for selected filter.</div>';
       return;
