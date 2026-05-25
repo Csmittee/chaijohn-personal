@@ -466,8 +466,13 @@
         ${sectionLabel('🔴 Cash Out — Actual')}
         ${miniCards(trueExp, false)}
         ${loanPay.length > 0 ? sectionLabel('Loan Repayments Paid') + miniCards(loanPay, false) : ''}
-        ${upcomingBudget.length > 0
-          ? sectionLabel('📅 Budget Remaining · ' + fmt(upcomingBudget.reduce((s, i) => s + i.remaining, 0)))
+        ${(upcomingBudget.length > 0 || dismissedBudgetIds.size > 0)
+          ? sectionLabel('📅 Budget Remaining · ' + fmt(upcomingBudget.reduce((s, i) => s + i.remaining, 0))
+              + (dismissedBudgetIds.size > 0
+                ? ` <span onclick="window._restoreAllBudgets()" style="cursor:pointer;font-size:0.6rem;
+                    color:#6366f1;font-weight:600;margin-left:0.4rem;padding:1px 5px;
+                    border:1px solid #6366f1;border-radius:3px">↩ ${dismissedBudgetIds.size} skipped</span>`
+                : ''))
             + upcomingBudget.slice(0, 15).map(budgetMiniCard).join('')
           : ''}
         ${upcomingLoans.length > 0
@@ -1070,6 +1075,36 @@
     return bal;
   }
 
+  /* Draw a red ⚠ 0 cash line where the balance forecast first crosses zero */
+  function makeZeroCrossPlugin(balForecast, fcastStartIdx) {
+    let crossIdx = null;
+    for (let i = 1; i < balForecast.length; i++) {
+      const prev = balForecast[i - 1], curr = balForecast[i];
+      if (prev != null && curr != null && prev >= 0 && curr < 0) {
+        crossIdx = fcastStartIdx + (i - 1) + prev / (prev - curr);
+        break;
+      }
+    }
+    if (crossIdx === null) return null;
+    return {
+      id: 'zeroCross',
+      afterDraw(chart) {
+        const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
+        if (!x) return;
+        const lo = Math.floor(crossIdx), hi = Math.ceil(crossIdx);
+        const xLo = x.getPixelForValue(lo), xHi = x.getPixelForValue(hi);
+        const xPos = xLo + (xHi - xLo) * (crossIdx - lo);
+        ctx.save();
+        ctx.strokeStyle = '#ef4444'; ctx.setLineDash([4, 2]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 9px system-ui';
+        ctx.fillText('⚠ 0 cash', xPos + 3, top + 24);
+        ctx.restore();
+      }
+    };
+  }
+
   function renderT1DailyForecast(canvas, isZoom = false) {
     const isInOut = t1ViewMode === 'invsout';
     const subtitle = isZoom
@@ -1192,7 +1227,7 @@
           backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 2 },
         { label: '~ Budget Inc', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyInc)],
           backgroundColor: 'rgba(34,197,94,0.25)', borderRadius: 2 },
-        { label: '~ Budget Exp', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyExp)],
+        { label: '~ Budget Exp', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyExpBase)],
           backgroundColor: 'rgba(239,68,68,0.25)', borderRadius: 2 }
       ];
       scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
@@ -1207,6 +1242,9 @@
           borderDash: [4, 3], tension: 0.3, fill: false }
       ];
       scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+      // Zero-crossing line — where balance hits 0
+      const zcp = makeZeroCrossPlugin(balForecast, 14);
+      if (zcp) plugins.push(zcp);
     }
 
     const chartRef = isZoom ? t1ZoomChart : t1Chart;
@@ -1358,6 +1396,9 @@
           borderDash: [4, 3], tension: 0.3, fill: false }
       ];
       scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+      // Zero-crossing line — nPast-1 = first forecast index (balForecast[0] = end of current month)
+      const zcp = makeZeroCrossPlugin(balForecast, nPast - 1);
+      if (zcp) plugins.push(zcp);
     }
 
     const chartRef = isZoom ? t1ZoomChart : t1Chart;
@@ -1917,15 +1958,20 @@
     pBackdrop?.addEventListener('click', closePlay);
   }
 
-  /* ── Dismiss budget from forecast (session-only) ── */
-  window._dismissBudget = function(id) {
-    dismissedBudgetIds.add(id);
+  /* ── Dismiss / restore budgets from forecast (session-only) ── */
+  function _rerenderT1() {
     const body = document.getElementById('t1-body');
     if (body) renderT1Content(body);
     const canvas = document.getElementById('t1-canvas');
-    if (canvas) { if (t1Chart) { t1Chart.destroy(); t1Chart = null; } renderT1DailyForecast(canvas); }
+    if (canvas) {
+      if (t1Chart) { t1Chart.destroy(); t1Chart = null; }
+      if (activeRange === '1m') renderT1DailyForecast(canvas);
+      else { const startDate = rangeStart(activeRange); renderT1MonthlyForecast(canvas, startDate); }
+    }
     if (t1ZoomChart) { t1ZoomChart.destroy(); t1ZoomChart = null; }
-  };
+  }
+  window._dismissBudget = function(id) { dismissedBudgetIds.add(id); _rerenderT1(); };
+  window._restoreAllBudgets = function() { dismissedBudgetIds.clear(); _rerenderT1(); };
 
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', async () => {
