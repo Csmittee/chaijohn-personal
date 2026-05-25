@@ -327,9 +327,8 @@
             </div>
             <div class="form-group">
               <label for="cat-group">Category (group it belongs to)</label>
-              <select id="cat-group">
-                <option value="">— Select group —</option>
-              </select>
+              <input type="text" id="cat-group" list="cat-group-list" placeholder="Select existing or type new group">
+              <datalist id="cat-group-list"></datalist>
             </div>
             <div class="form-group" id="cat-expense-type-group" style="display:none">
               <label for="cat-expense-type">Expense Type</label>
