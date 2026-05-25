@@ -324,6 +324,55 @@
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
+    // Per-category actual spending in this period
+    const spentByCat = {};
+    [...trueExp, ...loanPay].forEach(t => {
+      const catId = resolveCatId(t);
+      if (catId) spentByCat[catId] = (spentByCat[catId] || 0) + Number(t.amount || 0);
+    });
+
+    // Upcoming budget remaining (expense + loan-type categories, not yet fully spent)
+    const nMonths = activeRange === '1m' ? 1 : activeRange === '3m' ? 3 : activeRange === '6m' ? 6 : 12;
+    const upcomingBudget = budgets
+      .filter(b => b.active !== false && b.active !== 0)
+      .filter(b => {
+        const cat = catMap[linkedId(b.category_id)];
+        return cat && (cat.type === 'Expense' || cat.type === 'Loan');
+      })
+      .map(b => {
+        const catId      = linkedId(b.category_id);
+        const cat        = catMap[catId] || {};
+        const spent      = spentByCat[catId] || 0;
+        const budgetLimit = b.period === 'One-time'
+          ? Number(b.amount || 0)
+          : monthlyBudgetRate(b) * nMonths;
+        const remaining  = Math.max(0, budgetLimit - spent);
+        if (remaining < 1) return null;
+        return {
+          label: b.label || cat.name || '?',
+          group: cat.group || '',
+          remaining, budgetLimit, spent,
+          pct: budgetLimit > 0 ? Math.round(spent / budgetLimit * 100) : 0
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.remaining - a.remaining);
+
+    // Loan payments due this period (monthly_payment × nMonths)
+    const upcomingLoans = liabilities
+      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0 && Number(l.monthly_payment || 0) > 0)
+      .map(l => ({
+        name: l.name,
+        amount: Number(l.monthly_payment || 0) * nMonths,
+        dueDay: l.payment_due_day || null
+      }));
+
+    const projectedOut  = upcomingBudget.reduce((s, i) => s + i.remaining, 0)
+      + upcomingLoans.reduce((s, l) => s + l.amount, 0);
+    const projectedNet  = totalIn - totalOut - projectedOut;
+    const syncBal       = syncPoint ? syncPoint.amount : null;
+    const projectedBal  = syncBal !== null ? syncBal + totalIn - totalOut - projectedOut : null;
+
     function miniCards(list, isIncome) {
       if (list.length === 0) return `<div style="grid-column:1/-1;color:var(--text-secondary);font-size:0.78rem">None</div>`;
       return list.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(t => {
@@ -348,20 +397,77 @@
         text-transform:uppercase;letter-spacing:0.05em;padding:0.3rem 0 0.1rem">${text}</div>`;
     }
 
+    function budgetMiniCard(item) {
+      const barW = Math.min(item.pct, 100);
+      const barC = item.pct >= 100 ? '#ef4444' : item.pct >= 80 ? '#f59e0b' : '#94a3b8';
+      return `<div class="tx-mini-card" style="background:rgba(100,116,139,0.06);
+        border-left:2px dashed var(--border)">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:0.75rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            color:var(--text-secondary)">📊 ${item.label}${item.group ? ` <span style="font-size:0.6rem;opacity:0.7">· ${item.group}</span>` : ''}</div>
+          <div style="display:flex;align-items:center;gap:0.3rem;margin-top:0.15rem">
+            <div style="flex:1;height:3px;background:var(--border);border-radius:2px">
+              <div style="height:100%;width:${barW}%;background:${barC};border-radius:2px"></div>
+            </div>
+            <span style="font-size:0.6rem;color:var(--text-secondary);white-space:nowrap">${item.pct}% used</span>
+          </div>
+        </div>
+        <span style="font-weight:600;color:var(--text-secondary);font-size:0.78rem;white-space:nowrap;flex-shrink:0;margin-left:0.5rem">
+          -${fmt(item.remaining)}
+        </span>
+      </div>`;
+    }
+
+    function loanMiniCard(loan) {
+      const dueText = loan.dueDay
+        ? `Due ${loan.dueDay}th${nMonths > 1 ? ` × ${nMonths} months` : ''}`
+        : `Scheduled${nMonths > 1 ? ` × ${nMonths} months` : ' monthly'}`;
+      return `<div class="tx-mini-card" style="background:rgba(239,68,68,0.04);
+        border-left:2px dashed #ef4444">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:0.75rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            color:var(--text-secondary)">💳 ${loan.name}</div>
+          <div style="font-size:0.62rem;color:var(--text-secondary)">${dueText}</div>
+        </div>
+        <span style="font-weight:600;color:#ef4444;font-size:0.78rem;white-space:nowrap;flex-shrink:0;margin-left:0.5rem">
+          -${fmt(loan.amount)}
+        </span>
+      </div>`;
+    }
+
+    const projBalHtml = projectedBal !== null
+      ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.25rem;text-align:center">
+          Sync ${fmt(syncBal)} → projected end balance:
+          <strong style="color:${projectedBal >= 0 ? '#22c55e' : '#ef4444'}">${fmt(projectedBal)}</strong>
+          ${projectedBal < 0 ? ' ⚠ shortfall' : ''}
+        </div>` : '';
+
     body.innerHTML = `
-      <div class="cashflow-total" style="margin-bottom:0.5rem">
+      <div class="cashflow-total" style="margin-bottom:0.25rem">
         <span style="color:#22c55e">In: ${fmt(totalIn)}</span>
         <span style="color:${netFlow >= 0 ? '#22c55e' : '#ef4444'};font-weight:700">Net ${fmt(netFlow)}</span>
         <span style="color:#ef4444">Out: ${fmt(totalOut)}</span>
       </div>
+      ${projectedOut > 0 ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.3rem;text-align:center">
+        + ${fmt(projectedOut)} planned remaining this period
+      </div>` : ''}
+      ${projBalHtml}
 
-      <div class="tx-mini-grid">
+      <div class="tx-mini-grid" style="margin-top:0.4rem">
         ${sectionLabel('💚 Cash In')}
         ${miniCards(cashIn, true)}
         ${loanIn.length > 0 ? sectionLabel('Loans Received') + miniCards(loanIn, true) : ''}
-        ${sectionLabel('🔴 Cash Out')}
+        ${sectionLabel('🔴 Cash Out — Actual')}
         ${miniCards(trueExp, false)}
-        ${loanPay.length > 0 ? sectionLabel('Loan Repayments') + miniCards(loanPay, false) : ''}
+        ${loanPay.length > 0 ? sectionLabel('Loan Repayments Paid') + miniCards(loanPay, false) : ''}
+        ${upcomingBudget.length > 0
+          ? sectionLabel('📅 Budget Remaining · ' + fmt(upcomingBudget.reduce((s, i) => s + i.remaining, 0)))
+            + upcomingBudget.slice(0, 15).map(budgetMiniCard).join('')
+          : ''}
+        ${upcomingLoans.length > 0
+          ? sectionLabel('💳 Loan Payments Due · ' + fmt(upcomingLoans.reduce((s, l) => s + l.amount, 0)))
+            + upcomingLoans.map(loanMiniCard).join('')
+          : ''}
       </div>`;
   }
 
