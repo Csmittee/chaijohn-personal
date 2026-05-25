@@ -53,6 +53,24 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+
+    // F2: loan received = cash IN — create Income transaction (non-fatal)
+    const loanSize = Number(body.original_amount || 0);
+    if (loanSize > 0) {
+      try {
+        await createRecord(env.AIRTABLE_API_KEY, BASE_ID, 'Transactions', {
+          date: new Date().toISOString().split('T')[0],
+          type: 'Income',
+          amount: loanSize,
+          entity: creditor_name,
+          description: `Loan received — ${creditor_name}`,
+          source: 'LiabilityCreation'
+        });
+      } catch (e) {
+        console.error('Failed to create income tx for debt:', e.message);
+      }
+    }
+
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
