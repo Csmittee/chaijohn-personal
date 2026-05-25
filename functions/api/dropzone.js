@@ -3,39 +3,53 @@ import { createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const QUEUE_TABLE = 'Drop_Zone_Queue';
 
-function buildImagePrompt(hintType, today) {
+function buildImagePrompt(hintType, hintSubtype, today) {
+  const key = hintSubtype ? `${hintType}_${hintSubtype}` : hintType;
   const prompts = {
-    Transaction: `Extract all financial data from this receipt or bill image. Return ONLY a valid JSON object (no markdown, no explanation):
-{"suggested_type":"Transaction","description":"one sentence describing the receipt","prefilled":{"date":"${today}","type":"Expense","amount":0,"description":"items purchased or service description","entity":"merchant or store name"}}
-Rules: amount must be total amount as a number (no currency symbol), date in YYYY-MM-DD format, entity is the shop/merchant name, description summarises what was bought.`,
+    Transaction_Expense: `Extract expense data from this receipt or bill. Return ONLY valid JSON:
+{"suggested_type":"Transaction","description":"one sentence about the receipt","prefilled":{"date":"${today}","type":"Expense","amount":0,"description":"items purchased or service","entity":"merchant or store name"}}
+Rules: amount = total as a number, date in YYYY-MM-DD, entity = shop name, description = what was bought.`,
 
-    Quote: `Extract the quote text, author, and source from this image. Return ONLY a valid JSON object:
-{"suggested_type":"Quote","description":"one sentence about the quote","prefilled":{"text":"full quote text verbatim","author":"who said it or empty string","source":"book or speech or empty string","mood_tag":"Motivational"}}`,
+    Transaction_Income: `Extract income or payment-received data from this document. Return ONLY valid JSON:
+{"suggested_type":"Transaction","description":"one sentence about the payment","prefilled":{"date":"${today}","type":"Income","amount":0,"description":"what the income is for","entity":"payer or source name"}}`,
 
-    Asset: `Identify this item as a personal collectible or asset. Return ONLY a valid JSON object:
-{"suggested_type":"Asset","description":"one sentence about the item","prefilled":{"name":"item name","category":"Other","estimated_value":0,"notes":"any relevant details"}}`,
+    Transaction: `Extract financial data from this receipt or document. Return ONLY valid JSON:
+{"suggested_type":"Transaction","description":"one sentence","prefilled":{"date":"${today}","type":"Expense","amount":0,"description":"what it is for","entity":"merchant or payer name"}}`,
 
-    Story: `Read this image (handwriting, note, photo) and extract a personal diary story. Return ONLY a valid JSON object:
-{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"entry title","content":"full extracted text content","entry_type":"Story","tags":""}}`,
+    Quote: `Extract the quote text, author, and source from this image. Return ONLY valid JSON:
+{"suggested_type":"Quote","description":"one sentence about the quote","prefilled":{"text":"full quote verbatim","author":"who said it or empty","source":"book or speech or empty","mood_tag":"Motivational"}}`,
 
-    Idea: `Read this image and extract an idea note or brainstorm. Return ONLY a valid JSON object:
-{"suggested_type":"Diary","description":"one sentence summary of the idea","prefilled":{"title":"idea title","content":"full extracted content","entry_type":"Idea","tags":""}}`,
+    Asset: `Identify this item as a collectible or asset. Return ONLY valid JSON:
+{"suggested_type":"Asset","description":"one sentence about the item","prefilled":{"name":"item name","category":"Other","estimated_value":0,"notes":"any details"}}`,
 
-    Blog: `Read this image and extract a blog post draft or outline. Return ONLY a valid JSON object:
-{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"blog post title","content":"full extracted content","entry_type":"Blog","tags":""}}`,
+    Diary_Story: `Read this image and extract a diary story. Return ONLY valid JSON:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"entry title","content":"full extracted text","entry_type":"Story","tags":""}}`,
 
-    Project: `Read this image and extract a project note, plan, or outline. Return ONLY a valid JSON object:
+    Diary_Idea: `Read this image and extract an idea note. Return ONLY valid JSON:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"idea title","content":"full extracted content","entry_type":"Idea","tags":""}}`,
+
+    Diary_Blog: `Read this image and extract a blog post draft. Return ONLY valid JSON:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"blog title","content":"full extracted content","entry_type":"Blog","tags":""}}`,
+
+    Diary_Project: `Read this image and extract a project note or plan. Return ONLY valid JSON:
 {"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"project title","content":"full extracted content","entry_type":"Project","tags":""}}`,
 
-    Diary: `Read this image (handwriting, note, etc.) and extract the content as a diary entry. Return ONLY a valid JSON object:
+    Diary: `Read this image and extract the content as a diary entry. Return ONLY valid JSON:
 {"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"entry title","content":"full extracted content","entry_type":"Story","tags":""}}`
   };
 
-  return prompts[hintType] || prompts.Transaction;
+  return prompts[key] || prompts[hintType] || prompts.Transaction_Expense;
 }
 
-function buildTextPrompt(hintType) {
+function buildTextPrompt(hintType, hintSubtype) {
+  const key = hintSubtype ? `${hintType}_${hintSubtype}` : hintType;
   const systemPrompts = {
+    Transaction_Expense: `Extract expense data from this text. Return JSON only:
+{"suggested_type":"Transaction","description":"one sentence","prefilled":{"date":"YYYY-MM-DD","type":"Expense","amount":0,"description":"what it was for","entity":"merchant name"}}`,
+
+    Transaction_Income: `Extract income or payment-received data from this text. Return JSON only:
+{"suggested_type":"Transaction","description":"one sentence","prefilled":{"date":"YYYY-MM-DD","type":"Income","amount":0,"description":"what the income is for","entity":"payer or source name"}}`,
+
     Transaction: `Extract financial transaction data from this text. Return JSON only (no markdown):
 {"suggested_type":"Transaction","description":"one sentence","prefilled":{"date":"YYYY-MM-DD","type":"Expense","amount":0,"description":"what it was for","entity":"merchant name"}}`,
 
@@ -61,11 +75,11 @@ function buildTextPrompt(hintType) {
 {"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"title","content":"full content","entry_type":"Story","tags":""}}`
   };
 
-  return systemPrompts[hintType] || systemPrompts.Diary;
+  return systemPrompts[key] || systemPrompts[hintType] || systemPrompts.Diary;
 }
 
-async function callClaude(apiKey, cloudinaryUrl, hintType, today) {
-  const prompt = buildImagePrompt(hintType || 'Transaction', today);
+async function callClaude(apiKey, cloudinaryUrl, hintType, hintSubtype, today) {
+  const prompt = buildImagePrompt(hintType || 'Transaction', hintSubtype || null, today);
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -94,8 +108,8 @@ async function callClaude(apiKey, cloudinaryUrl, hintType, today) {
   return JSON.parse(cleaned);
 }
 
-async function callClaudeText(apiKey, textContent, filename, hintType) {
-  const systemPrompt = buildTextPrompt(hintType || 'Diary');
+async function callClaudeText(apiKey, textContent, filename, hintType, hintSubtype) {
+  const systemPrompt = buildTextPrompt(hintType || 'Diary', hintSubtype || null);
   const userMsg = `File: ${filename}\n\nContent:\n${textContent.slice(0, 8000)}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -130,7 +144,7 @@ export async function onRequestPost(context) {
     return errorResponse('Invalid JSON body');
   }
 
-  const { cloudinary_url, filename, mime_type, text_content, hint_type } = body;
+  const { cloudinary_url, filename, mime_type, text_content, hint_type, hint_subtype } = body;
 
   if (!cloudinary_url && !text_content) {
     return errorResponse('cloudinary_url or text_content is required');
@@ -144,9 +158,9 @@ export async function onRequestPost(context) {
 
   try {
     if (isText) {
-      aiRaw = await callClaudeText(env.ANTHROPIC_API_KEY, text_content, filename || 'file.txt', hint_type);
+      aiRaw = await callClaudeText(env.ANTHROPIC_API_KEY, text_content, filename || 'file.txt', hint_type, hint_subtype);
     } else {
-      aiRaw = await callClaude(env.ANTHROPIC_API_KEY, cloudinary_url, hint_type, today);
+      aiRaw = await callClaude(env.ANTHROPIC_API_KEY, cloudinary_url, hint_type, hint_subtype, today);
     }
   } catch (err) {
     aiError = err.message;
@@ -187,8 +201,12 @@ export async function onRequestPost(context) {
     }
   } else {
     if (aiRaw) {
-      const prefilled   = aiRaw.prefilled || {};
+      const prefilled     = aiRaw.prefilled || {};
       const suggestedType = aiRaw.suggested_type || hint_type || 'Transaction';
+      // User's explicit Expense/Income choice overrides AI guess
+      if (hint_type === 'Transaction' && (hint_subtype === 'Expense' || hint_subtype === 'Income')) {
+        prefilled.type = hint_subtype;
+      }
       queueFields.file_type         = aiRaw.file_type || 'Image';
       queueFields.ai_extracted_text = aiRaw.extracted_text || '';
       queueFields.ai_description    = aiRaw.description || '';
