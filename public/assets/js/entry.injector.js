@@ -319,12 +319,26 @@
         <div style="display:flex;gap:0.5rem">
           <button class="btn btn-primary ef-save" data-id="${txId}" style="flex:1;font-size:0.82rem;padding:0.3rem">Save</button>
           <button class="btn btn-outline ef-cancel" style="flex:1;font-size:0.82rem;padding:0.3rem">Cancel</button>
+          <button class="btn ef-delete" data-id="${txId}"
+            style="flex:1;font-size:0.82rem;padding:0.3rem;
+            background:#ef4444;color:white;border:none;border-radius:var(--radius);
+            cursor:pointer">🗑 Delete</button>
         </div>
         <div class="ef-msg" style="display:none;font-size:0.78rem;margin-top:0.25rem"></div>
       </div>`;
 
     row.querySelector('.ef-save').addEventListener('click', () => saveEditTx(txId, row));
     row.querySelector('.ef-cancel').addEventListener('click', () => loadTransactions());
+    row.querySelector('.ef-delete').addEventListener('click', async () => {
+      if (!confirm('Delete this transaction?')) return;
+      try {
+        await api(`/api/transactions/${txId}`, { method: 'DELETE' });
+        loadTransactions();
+      } catch (err) {
+        const msgEl = row.querySelector('.ef-msg');
+        if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+      }
+    });
   }
 
   async function saveEditTx(txId, row) {
