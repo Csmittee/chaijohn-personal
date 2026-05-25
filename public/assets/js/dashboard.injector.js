@@ -5,22 +5,21 @@
   const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
   const pct = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0;
 
-  let activeRange = '1m';
-  let txData = [];
-  let budgets = [];
-  let liabilities = [];
-  let categories = [];
+  let activeRange  = '1m';
+  let activePanel  = 't1';
+  let contentYear  = new Date().getFullYear();
+  let t2ContentFilter = 'all';   // F6 T2 content filter
+  let txData       = [];
+  let budgets      = [];
+  let liabilities  = [];
+  let categories   = [];
   let t1Chart, t2Chart, t3Chart, t4Chart, playroomChart;
   let t2DrillGroup = null;
   let playroomBudgetId = null;
-  let meterView = 'all';
-  let meterGroupState = {};
-  let meterPeriodFilter = 'all';  // E6
-  let t4Range = '1m';
+  let t4Range      = '1m';
   let dismissedAlerts = new Set();
-  let syncPoint = null;            // E4: { amount, date, note }
-  let t1ViewMode = 'netflow';      // E5: 'netflow' | 'invsout'
-  let panelCollapsed = {};         // E7: panel id → bool
+  let syncPoint    = null;
+  let t1ViewMode   = 'netflow';
 
   /* ── Date helpers ── */
   function rangeStart(range) {
@@ -48,24 +47,14 @@
     }
     return months;
   }
-  function daysInMonth() {
-    const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth();
-    const days = [];
-    for (let d = 1; d <= now.getDate(); d++) {
-      days.push(`${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
-    }
-    return days;
-  }
-  function daysLeftInMonth() {
-    const now = new Date();
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return last - now.getDate();
-  }
   function dateOffset(base, days) {
     const d = new Date(base);
     d.setDate(d.getDate() + days);
     return d.toISOString().split('T')[0];
+  }
+  function daysLeftInMonth() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
   }
 
   /* ── API ── */
@@ -75,7 +64,7 @@
     return r.json();
   }
 
-  /* ── E4: Load sync point ── */
+  /* ── E4: Sync point ── */
   async function loadSyncPoint() {
     try {
       const res = await api('/api/cashflow-sync');
@@ -115,8 +104,8 @@
     renderT2();
     renderT3();
     renderBudgetPanel(t4Range);
-    renderMeters(nowYM);
     buildPlayroomCategoryOptions();
+    loadContentZone(activePanel);
   }
 
   /* ── Helpers ── */
@@ -131,6 +120,605 @@
       if (k) map[k] = (map[k] || 0) + Number(item.amount || 0);
     });
     return map;
+  }
+
+  /* ── F5-F6: Graph panel clicks ── */
+  function initGraphPanels() {
+    document.querySelectorAll('.graph-panel').forEach(panel => {
+      panel.addEventListener('click', e => {
+        // Don't trigger panel switch when clicking buttons inside the panel
+        if (e.target.closest('button') || e.target.closest('input')) return;
+        const panelId = panel.dataset.panel;
+        activatePanel(panelId);
+      });
+    });
+
+    // T4 range buttons (inside T4 graph panel)
+    document.querySelectorAll('[data-t4-range]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        t4Range = btn.dataset.t4Range;
+        document.querySelectorAll('[data-t4-range]').forEach(b =>
+          b.classList.toggle('active', b.dataset.t4Range === t4Range));
+        renderBudgetPanel(t4Range);
+      });
+    });
+  }
+
+  function activatePanel(panelId) {
+    activePanel = panelId;
+    document.querySelectorAll('.graph-panel').forEach(p =>
+      p.classList.toggle('active', p.dataset.panel === panelId));
+    loadContentZone(panelId);
+  }
+
+  /* ── F6: Content zone ── */
+  function loadContentZone(panelId) {
+    renderContentControls(panelId);
+    const body = document.getElementById('content-body');
+    if (!body) return;
+    if (panelId === 't1') renderT1Content(body);
+    else if (panelId === 't2') renderT2Content(body);
+    else if (panelId === 't3') renderT3Content(body);
+    else if (panelId === 't4') renderT4Content(body);
+  }
+
+  function renderContentControls(panelId) {
+    const ctrl = document.getElementById('content-controls');
+    if (!ctrl) return;
+
+    const isYearPanel = panelId === 't3' || panelId === 't4';
+
+    let html = '';
+
+    if (isYearPanel) {
+      // Year selector for T3/T4
+      const years = [];
+      for (let y = new Date().getFullYear(); y >= new Date().getFullYear() - 3; y--) years.push(y);
+      html += `<div style="display:flex;align-items:center;gap:0.35rem">
+        <span style="font-size:0.78rem;color:var(--text-secondary)">Year:</span>
+        <select id="content-year-sel"
+          style="font-size:0.82rem;padding:0.25rem 0.5rem;border:1px solid var(--border);
+          border-radius:4px;background:var(--bg-card);color:var(--text-primary);font-family:inherit">
+          ${years.map(y => `<option value="${y}" ${y === contentYear ? 'selected' : ''}>${y}</option>`).join('')}
+        </select>
+      </div>`;
+    } else {
+      // Period toggle for T1/T2
+      html += `<div class="period-toggle">
+        <button class="period-btn${activeRange === '1m' ? ' active' : ''}" data-content-range="1m">1M</button>
+        <button class="period-btn${activeRange === '3m' ? ' active' : ''}" data-content-range="3m">3M</button>
+        <button class="period-btn${activeRange === '6m' ? ' active' : ''}" data-content-range="6m">6M</button>
+        <button class="period-btn${activeRange === '12m' ? ' active' : ''}" data-content-range="12m">12M</button>
+      </div>`;
+    }
+
+    if (panelId === 't2') {
+      html += `<div class="period-toggle">
+        <button class="period-btn${t2ContentFilter === 'all' ? ' active' : ''}" data-t2-filter="all">All</button>
+        <button class="period-btn${t2ContentFilter === 'expense' ? ' active' : ''}" data-t2-filter="expense">Expense</button>
+        <button class="period-btn${t2ContentFilter === 'loan' ? ' active' : ''}" data-t2-filter="loan">Loan Payback</button>
+        <button class="period-btn${t2ContentFilter === 'project' ? ' active' : ''}" data-t2-filter="project">Project</button>
+      </div>`;
+    }
+
+    // Action buttons
+    html += `<div style="margin-left:auto;display:flex;gap:0.4rem">
+      <button class="btn btn-sm" id="open-simulator"
+        style="background:#7c3aed;color:#fff;font-size:0.78rem;padding:0.3rem 0.65rem">🔬 Simulator</button>
+      <button class="btn btn-sm" id="open-playroom"
+        style="background:#0891b2;color:#fff;font-size:0.78rem;padding:0.3rem 0.65rem">🎮 Playroom</button>
+    </div>`;
+
+    ctrl.innerHTML = html;
+
+    // Wire content range buttons
+    ctrl.querySelectorAll('[data-content-range]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeRange = btn.dataset.contentRange;
+        t2DrillGroup = null;
+        loadAll().catch(console.error);
+      });
+    });
+
+    // Wire T2 filter buttons
+    ctrl.querySelectorAll('[data-t2-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        t2ContentFilter = btn.dataset.t2Filter;
+        renderContentControls('t2');
+        const body = document.getElementById('content-body');
+        if (body) renderT2Content(body);
+      });
+    });
+
+    // Wire year selector
+    const yearSel = ctrl.querySelector('#content-year-sel');
+    yearSel?.addEventListener('change', () => {
+      contentYear = parseInt(yearSel.value);
+      const body = document.getElementById('content-body');
+      if (body) {
+        if (activePanel === 't3') renderT3Content(body);
+        if (activePanel === 't4') renderT4Content(body);
+      }
+    });
+
+    // Re-wire modal buttons (they get re-rendered each time)
+    ctrl.querySelector('#open-simulator')?.addEventListener('click', () =>
+      document.getElementById('sim-backdrop')?.classList.add('open'));
+    ctrl.querySelector('#open-playroom')?.addEventListener('click', () => {
+      document.getElementById('playroom-backdrop')?.classList.add('open');
+      document.getElementById('playroom-panel')?.classList.add('open');
+    });
+  }
+
+  /* ── F6: T1 Content — Cashflow Breakdown ── */
+  function renderT1Content(body) {
+    const start = rangeStart(activeRange);
+    const end   = new Date().toISOString().split('T')[0];
+
+    const periodTx = txData.filter(t => t.date >= start && t.date <= end);
+
+    const cashIn    = periodTx.filter(t => t.type === 'Income' && t.source !== 'LiabilityCreation');
+    const loanIn    = periodTx.filter(t => t.source === 'LiabilityCreation');
+    const trueExp   = periodTx.filter(t => t.type === 'Expense' && t.source !== 'LiabilityPayment');
+    const loanPay   = periodTx.filter(t => t.source === 'LiabilityPayment');
+
+    const totalIn   = [...cashIn, ...loanIn].reduce((s, t) => s + Number(t.amount || 0), 0);
+    const totalOut  = [...trueExp, ...loanPay].reduce((s, t) => s + Number(t.amount || 0), 0);
+    const netFlow   = totalIn - totalOut;
+
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    function txRows(list) {
+      if (list.length === 0) return '<div class="cashflow-row" style="color:var(--text-secondary);font-size:0.8rem">None in this period</div>';
+      return list.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(t => {
+        const catId = linkedId(t.category_id);
+        const cat   = catMap[catId];
+        const isInc = t.type === 'Income';
+        return `<div class="cashflow-row">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${t.description || t.entity || '—'}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-secondary)">
+              ${t.date || ''} ${cat ? '· ' + (cat.group ? cat.group + ' — ' : '') + cat.name : ''}
+              ${t.entity ? '· ' + t.entity : ''}
+            </div>
+          </div>
+          <span style="font-weight:700;color:${isInc ? '#22c55e' : '#ef4444'};margin-left:0.5rem;white-space:nowrap">
+            ${isInc ? '+' : '-'}${fmt(t.amount)}
+          </span>
+        </div>`;
+      }).join('');
+    }
+
+    body.innerHTML = `
+      <div style="margin-bottom:1rem">
+        <div class="cashflow-total" style="margin-bottom:0.35rem">
+          <span style="color:#22c55e">Cash In: ${fmt(totalIn)}</span>
+          <span style="color:#ef4444">Cash Out: ${fmt(totalOut)}</span>
+        </div>
+        <div class="cashflow-total"
+          style="padding:0.6rem 0.75rem;background:${netFlow >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'};
+          border-radius:var(--radius);margin-bottom:0">
+          <span style="font-size:1rem">Net Flow</span>
+          <span style="font-size:1.1rem;color:${netFlow >= 0 ? '#22c55e' : '#ef4444'}">${fmt(netFlow)}</span>
+        </div>
+      </div>
+
+      <div class="content-card">
+        <div class="cashflow-section-header" style="padding-top:0;margin-top:0">
+          💚 Cash In — ${fmt(totalIn)}
+        </div>
+        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;padding-top:0.1rem">Income / Sales</div>
+        ${txRows(cashIn)}
+        ${loanIn.length > 0 ? `
+          <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Loans Received</div>
+          ${txRows(loanIn)}
+        ` : ''}
+      </div>
+
+      <div class="content-card">
+        <div class="cashflow-section-header" style="padding-top:0;margin-top:0">
+          🔴 Cash Out — ${fmt(totalOut)}
+        </div>
+        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;padding-top:0.1rem">True Expenses</div>
+        ${txRows(trueExp)}
+        ${loanPay.length > 0 ? `
+          <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Loan Paybacks</div>
+          ${txRows(loanPay)}
+        ` : ''}
+        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Project Funding</div>
+        <div class="cashflow-row" style="color:var(--text-secondary);font-size:0.8rem">
+          ฿0 — No project funding recorded yet
+        </div>
+      </div>`;
+  }
+
+  /* ── F6: T2 Content — Expense Intelligence ── */
+  function renderT2Content(body) {
+    const nowYM = currentYM();
+    const start = rangeStart(activeRange);
+
+    const periodExp = txData.filter(t =>
+      t.type === 'Expense' && t.date >= start && t.date <= new Date().toISOString().split('T')[0]
+    );
+
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    const spendByCat = groupSum(periodExp, t => linkedId(t.category_id));
+
+    // Filter budgets based on t2ContentFilter
+    let visibleBudgets = budgets.filter(b => b.active !== false && b.active !== 0);
+    if (t2ContentFilter === 'expense') {
+      visibleBudgets = visibleBudgets.filter(b => {
+        const cat = catMap[linkedId(b.category_id)];
+        return cat?.type === 'Expense';
+      });
+    } else if (t2ContentFilter === 'loan') {
+      visibleBudgets = visibleBudgets.filter(b => {
+        const cat = catMap[linkedId(b.category_id)];
+        return cat?.type === 'Loan';
+      });
+    }
+
+    const withData = visibleBudgets.map(b => {
+      const catId  = linkedId(b.category_id);
+      const cat    = catMap[catId] || {};
+      const spent  = spendByCat[catId] || 0;
+      const period = b.period || 'Monthly';
+      const limit  = period === 'Annual' ? Number(b.amount || 0) / 12 : Number(b.amount || 0);
+      const label  = b.label || cat.name || 'Budget';
+      const p      = pct(spent, limit);
+      return { b, catId, cat, spent, limit, p, label, period };
+    }).sort((a, b) => b.p - a.p);
+
+    // Find unbudgeted expenses
+    const budgetedCatIds = new Set(visibleBudgets.map(b => linkedId(b.category_id)).filter(Boolean));
+    const unbudgeted = periodExp.filter(t => {
+      const cid = linkedId(t.category_id);
+      return !cid || !budgetedCatIds.has(cid);
+    });
+    const unbudgetedTotal = unbudgeted.reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    const overCount    = withData.filter(x => x.p >= 100).length;
+    const totalSpent   = withData.reduce((s, x) => s + x.spent, 0);
+
+    function periodBadge(period) {
+      if (!period || period === 'Monthly') return '';
+      if (period === 'Annual') return `<span class="period-badge period-badge-annual">Annual÷12</span>`;
+      if (period === 'One-time') return `<span class="period-badge period-badge-onetime">One-time</span>`;
+      return `<span class="period-badge period-badge-annual">${period}</span>`;
+    }
+
+    body.innerHTML = `
+      <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem">
+        ${overCount} budget${overCount !== 1 ? 's' : ''} over limit ·
+        ${unbudgeted.length} unbudgeted item${unbudgeted.length !== 1 ? 's' : ''} ·
+        Total spent ${fmt(totalSpent)}
+      </div>
+
+      ${withData.length === 0 ? '<div class="content-card" style="color:var(--text-secondary)">No budgets match filter.</div>' : ''}
+
+      ${withData.map(({ cat, spent, limit, p, label, period }) => {
+        const cls = p >= 100 ? 'over' : p >= 80 ? 'warn' : 'ok';
+        const clr = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+        return `<div class="content-card" style="border-left:3px solid ${clr}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem">
+            <span style="font-size:0.88rem;font-weight:600">
+              ${label}${periodBadge(period)}
+            </span>
+            <span style="font-size:0.85rem;color:${clr};font-weight:700">${p}%</span>
+          </div>
+          ${cat.group ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.3rem">${cat.group} — ${cat.name || ''}</div>` : ''}
+          <div class="meter-bar-bg" style="height:10px;margin-bottom:0.3rem">
+            <div class="meter-bar-fill ${cls}" style="width:${Math.min(p, 100)}%"></div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);display:flex;justify-content:space-between">
+            <span>Spent: ${fmt(spent)}</span>
+            <span>Budget: ${fmt(limit)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+
+      ${unbudgeted.length > 0 ? `
+        <div style="font-size:0.85rem;font-weight:700;color:#f59e0b;margin:0.75rem 0 0.35rem">
+          ⚡ Unbudgeted Expenses — ${fmt(unbudgetedTotal)}
+        </div>
+        ${unbudgeted.slice(0, 10).map(t => {
+          const cat = catMap[linkedId(t.category_id)];
+          return `<div class="content-card" style="border-left:3px solid #f59e0b">
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-size:0.83rem">${t.description || t.entity || '—'}</span>
+              <span style="color:#ef4444;font-weight:700">-${fmt(t.amount)}</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-secondary)">${t.date} ${cat ? '· ' + cat.name : ''}</div>
+          </div>`;
+        }).join('')}
+      ` : ''}`;
+  }
+
+  /* ── F6: T3 Content — Debt Overview ── */
+  function renderT3Content(body) {
+    const active = liabilities
+      .filter(l => l.active !== false)
+      .sort((a, b) => Number(b.current_balance || 0) - Number(a.current_balance || 0));
+
+    const totalDebt    = active.reduce((s, l) => s + Number(l.current_balance || 0), 0);
+    const monthlyObl   = active.reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
+
+    if (active.length === 0) {
+      body.innerHTML = '<div class="content-card" style="color:var(--text-secondary)">No active liabilities.</div>';
+      return;
+    }
+
+    body.innerHTML = `
+      <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.75rem">
+        Total debt: ${fmt(totalDebt)} across ${active.length} loan${active.length !== 1 ? 's' : ''} ·
+        Monthly obligation: ${fmt(monthlyObl)}
+      </div>
+      ${active.map(l => {
+        const bal    = Number(l.current_balance || 0);
+        const loan   = Number(l.loan_size || bal);
+        const paidPct = loan > 0 ? Math.round((1 - bal / loan) * 100) : 0;
+        return `
+          <div class="liab-content-card">
+            <div class="liab-content-header" data-liab-toggle="${l.id}">
+              <div>
+                <div style="font-size:0.9rem;font-weight:700">${l.name}</div>
+                <div style="font-size:0.75rem;color:var(--text-secondary)">
+                  ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a.
+                </div>
+                <div style="height:5px;background:var(--border);border-radius:3px;
+                  margin-top:0.4rem;overflow:hidden;width:120px">
+                  <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:3px"></div>
+                </div>
+                <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.1rem">${paidPct}% paid off</div>
+              </div>
+              <div style="text-align:right">
+                <div style="color:#ef4444;font-weight:700;font-size:1rem">${fmt(bal)}</div>
+                <div style="font-size:0.72rem;color:var(--text-secondary)">of ${fmt(loan)}</div>
+                <div style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.2rem">
+                  Monthly: ${fmt(l.monthly_payment)}
+                </div>
+                <span style="font-size:0.7rem;color:var(--color-primary)">▼ history</span>
+              </div>
+            </div>
+            <div class="liab-content-body" id="liab-hist-${l.id}">
+              <div style="color:var(--text-secondary);font-size:0.82rem">Click to load history…</div>
+            </div>
+          </div>`;
+      }).join('')}`;
+
+    // Wire toggles
+    body.querySelectorAll('[data-liab-toggle]').forEach(header => {
+      let loaded = false;
+      header.addEventListener('click', async () => {
+        const liabId  = header.dataset.liabToggle;
+        const details = document.getElementById('liab-hist-' + liabId);
+        if (!details) return;
+        const isOpen = details.style.display === 'block';
+        details.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen && !loaded) {
+          loaded = true;
+          try {
+            const res = await api(`/api/liabilities/${liabId}/history`);
+            const payments = (res.payments || []).slice(0, 6);
+            if (payments.length === 0) {
+              details.innerHTML = '<div style="color:var(--text-secondary)">No payments recorded.</div>';
+            } else {
+              details.innerHTML = payments.map(p => `
+                <div style="display:flex;justify-content:space-between;padding:0.25rem 0;
+                  border-bottom:1px solid var(--border);font-size:0.82rem">
+                  <span style="color:var(--text-secondary)">${p.date}</span>
+                  <span style="font-weight:600;color:#22c55e">${fmt(p.amount)}</span>
+                  <span style="color:var(--text-secondary);font-size:0.75rem">${p.note || ''}</span>
+                </div>`).join('');
+            }
+          } catch (err) {
+            details.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
+          }
+        }
+      });
+    });
+  }
+
+  /* ── F6: T4 Content — Annual Financial Plan ── */
+  function renderT4Content(body) {
+    const yearStart = `${contentYear}-01-01`;
+    const yearEnd   = `${contentYear}-12-31`;
+    const today     = new Date().toISOString().split('T')[0];
+    const cutoff    = today < yearEnd ? today : yearEnd;
+    const nowYM     = currentYM();
+
+    const yearTx = txData.filter(t => t.date >= yearStart && t.date <= cutoff);
+    const catMap = {};
+    categories.forEach(c => { catMap[c.id] = c; });
+
+    // Months elapsed in selected year (up to today for current year, all 12 for past years)
+    const isCurrentYear = contentYear === new Date().getFullYear();
+    const monthsElapsed = isCurrentYear ? new Date().getMonth() + 1 : 12;
+
+    // INCOME PLAN
+    const earnCats = categories.filter(c => c.type === 'Earn');
+    const earnBudgets = budgets.filter(b => {
+      const cat = catMap[linkedId(b.category_id)];
+      return cat?.type === 'Earn';
+    });
+    const incActualByCat = groupSum(
+      yearTx.filter(t => t.type === 'Income'),
+      t => linkedId(t.category_id)
+    );
+    const incActualTotal = Object.values(incActualByCat).reduce((s, v) => s + v, 0);
+
+    function planRow(label, budgetMonth, monthsEl, actual, bgStyle) {
+      const expected = budgetMonth * monthsEl;
+      const variance = actual - expected;
+      const varClr   = variance >= 0 ? '#22c55e' : '#ef4444';
+      return `<div class="plan-row" style="grid-template-columns:2fr 1fr 1fr 1fr;${bgStyle || ''}">
+        <span>${label}</span>
+        <span style="text-align:right">${fmt(budgetMonth)}/mo</span>
+        <span style="text-align:right">${fmt(actual)}</span>
+        <span style="text-align:right;color:${varClr}">${variance >= 0 ? '+' : ''}${fmt(variance)}</span>
+      </div>`;
+    }
+
+    const incomeRows = earnBudgets.map(b => {
+      const catId     = linkedId(b.category_id);
+      const cat       = catMap[catId] || {};
+      const label     = b.label || cat.name || '?';
+      const budgetMo  = Number(b.amount || 0);
+      const actual    = incActualByCat[catId] || 0;
+      return planRow(label, budgetMo, monthsElapsed, actual);
+    });
+
+    // EXPENSE PLAN
+    const expBudgets = budgets.filter(b => {
+      const cat = catMap[linkedId(b.category_id)];
+      return cat?.type === 'Expense' && b.active !== false && b.active !== 0;
+    });
+    const expActualByCat = groupSum(
+      yearTx.filter(t => t.type === 'Expense' && t.source !== 'LiabilityPayment'),
+      t => linkedId(t.category_id)
+    );
+    const expActualTotal = Object.values(expActualByCat).reduce((s, v) => s + v, 0);
+
+    const expenseRows = expBudgets.map(b => {
+      const catId    = linkedId(b.category_id);
+      const cat      = catMap[catId] || {};
+      const label    = b.label || cat.name || '?';
+      const period   = b.period || 'Monthly';
+      const budgetMo = period === 'Annual' ? Number(b.amount || 0) / 12 : Number(b.amount || 0);
+      const actual   = expActualByCat[catId] || 0;
+      return planRow(label, budgetMo, monthsElapsed, actual);
+    });
+
+    // LOAN OBLIGATIONS
+    const activeLiabs = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0);
+    const loanPayments = yearTx.filter(t => t.source === 'LiabilityPayment');
+    const paidByLiab = {};
+    // We can't easily match loan payments to specific liabilities without more data
+    const totalLoanPaid = loanPayments.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const annualObligation = activeLiabs.reduce((s, l) => s + Number(l.monthly_payment || 0), 0) * 12;
+
+    const loanRows = activeLiabs.map(l => {
+      const annObl = Number(l.monthly_payment || 0) * 12;
+      return `<div class="plan-row" style="grid-template-columns:2fr 1fr 1fr">
+        <span>${l.name} (${l.interest_rate || 0}%)</span>
+        <span style="text-align:right">${fmt(annObl)}/yr</span>
+        <span style="text-align:right;color:var(--text-secondary)">${fmt(l.current_balance)} remaining</span>
+      </div>`;
+    });
+
+    // Grand summary
+    const totalIncExpected = earnBudgets.reduce((s, b) => s + Number(b.amount || 0), 0) * monthsElapsed;
+    const totalExpExpected = expBudgets.reduce((s, b) => {
+      const period = b.period || 'Monthly';
+      const mo = period === 'Annual' ? Number(b.amount || 0) / 12 : Number(b.amount || 0);
+      return s + mo;
+    }, 0) * monthsElapsed;
+    const planNet    = totalIncExpected - totalExpExpected;
+    const actualNet  = incActualTotal - expActualTotal;
+
+    body.innerHTML = `
+      <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.75rem">
+        ${contentYear} · ${monthsElapsed} month${monthsElapsed !== 1 ? 's' : ''} elapsed
+      </div>
+
+      <!-- Grand summary -->
+      <div class="content-card" style="background:rgba(59,130,246,0.04);margin-bottom:0.75rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.5rem;font-size:0.82rem">
+          <div>
+            <div style="color:var(--text-secondary);font-size:0.72rem">Expected In</div>
+            <div style="font-weight:700;color:#22c55e">${fmt(totalIncExpected)}</div>
+          </div>
+          <div>
+            <div style="color:var(--text-secondary);font-size:0.72rem">Expected Out</div>
+            <div style="font-weight:700;color:#ef4444">${fmt(totalExpExpected)}</div>
+          </div>
+          <div>
+            <div style="color:var(--text-secondary);font-size:0.72rem">Plan Net</div>
+            <div style="font-weight:700;color:${planNet >= 0 ? '#22c55e' : '#ef4444'}">${fmt(planNet)}</div>
+          </div>
+          <div>
+            <div style="color:var(--text-secondary);font-size:0.72rem">Actual Net YTD</div>
+            <div style="font-weight:700;color:${actualNet >= 0 ? '#22c55e' : '#ef4444'}">${fmt(actualNet)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Income Plan -->
+      <div class="plan-section" id="plan-income">
+        <div class="plan-section-header" data-plan-toggle="income">
+          <span>💚 Income Plan</span>
+          <span style="font-size:0.8rem;color:var(--text-secondary)">
+            Actual ${fmt(incActualTotal)} / Expected ${fmt(totalIncExpected)} ▼
+          </span>
+        </div>
+        <div class="plan-section-body" id="plan-body-income">
+          <div class="plan-row" style="grid-template-columns:2fr 1fr 1fr 1fr;font-weight:600;font-size:0.78rem;color:var(--text-secondary)">
+            <span>Category</span><span style="text-align:right">Budget/mo</span>
+            <span style="text-align:right">Actual YTD</span><span style="text-align:right">Variance</span>
+          </div>
+          ${incomeRows.length > 0 ? incomeRows.join('') : '<div class="plan-row" style="color:var(--text-secondary)">No income budgets defined</div>'}
+        </div>
+      </div>
+
+      <!-- Expense Plan -->
+      <div class="plan-section" id="plan-expense">
+        <div class="plan-section-header" data-plan-toggle="expense">
+          <span>🔴 Expense Plan</span>
+          <span style="font-size:0.8rem;color:var(--text-secondary)">
+            Actual ${fmt(expActualTotal)} / Expected ${fmt(totalExpExpected)} ▼
+          </span>
+        </div>
+        <div class="plan-section-body" id="plan-body-expense">
+          <div class="plan-row" style="grid-template-columns:2fr 1fr 1fr 1fr;font-weight:600;font-size:0.78rem;color:var(--text-secondary)">
+            <span>Budget</span><span style="text-align:right">Budget/mo</span>
+            <span style="text-align:right">Actual YTD</span><span style="text-align:right">Variance</span>
+          </div>
+          ${expenseRows.length > 0 ? expenseRows.join('') : '<div class="plan-row" style="color:var(--text-secondary)">No expense budgets defined</div>'}
+        </div>
+      </div>
+
+      <!-- Loan Obligations -->
+      <div class="plan-section" id="plan-loans">
+        <div class="plan-section-header" data-plan-toggle="loans">
+          <span>💳 Loan Obligations</span>
+          <span style="font-size:0.8rem;color:var(--text-secondary)">
+            ${fmt(totalLoanPaid)} paid YTD / ${fmt(annualObligation)} annual ▼
+          </span>
+        </div>
+        <div class="plan-section-body" id="plan-body-loans">
+          <div class="plan-row" style="grid-template-columns:2fr 1fr 1fr;font-weight:600;font-size:0.78rem;color:var(--text-secondary)">
+            <span>Loan</span><span style="text-align:right">Annual Obligation</span>
+            <span style="text-align:right">Balance</span>
+          </div>
+          ${loanRows.length > 0 ? loanRows.join('') : '<div class="plan-row" style="color:var(--text-secondary)">No active loans</div>'}
+        </div>
+      </div>
+
+      <!-- Project Funding -->
+      <div class="plan-section">
+        <div class="plan-section-header" data-plan-toggle="projects">
+          <span>🚀 Project Funding</span>
+          <span style="font-size:0.8rem;color:var(--text-secondary)">Coming soon ▼</span>
+        </div>
+        <div class="plan-section-body" id="plan-body-projects" style="display:none">
+          <div style="color:var(--text-secondary);font-size:0.85rem">No projects defined yet — coming soon</div>
+        </div>
+      </div>`;
+
+    // Wire plan section toggles
+    body.querySelectorAll('[data-plan-toggle]').forEach(header => {
+      header.addEventListener('click', () => {
+        const key    = header.dataset.planToggle;
+        const bodyEl = document.getElementById('plan-body-' + key);
+        if (bodyEl) bodyEl.style.display = bodyEl.style.display === 'none' ? '' : 'none';
+      });
+    });
   }
 
   /* ── D4: Smart Alert chips ── */
@@ -160,9 +748,8 @@
       const pmt = Number(l.monthly_payment || 0);
       if (bal > 0 && pmt > 0) {
         const id = `liab-due-${l.id}`;
-        if (!dismissedAlerts.has(id)) {
+        if (!dismissedAlerts.has(id))
           redChips.push({ id, text: `💳 ${l.name} payment due ${fmt(pmt)}` });
-        }
       }
     });
 
@@ -182,9 +769,8 @@
     if (activeLiabs.length > 0) {
       const totalDebt = activeLiabs.reduce((s, l) => s + Number(l.current_balance || 0), 0);
       const id = `total-debt-${nowYM}`;
-      if (!dismissedAlerts.has(id)) {
+      if (!dismissedAlerts.has(id))
         blueChips.push({ id, text: `🏦 Total debt ${fmt(totalDebt)} across ${activeLiabs.length} loan${activeLiabs.length > 1 ? 's' : ''}` });
-      }
     }
 
     const allChips = [...redChips, ...amberChips, ...blueChips];
@@ -192,7 +778,7 @@
     const overflow = showAll ? 0 : allChips.length - 6;
 
     function chipHtml(c, cls) {
-      return `<span class="alert-chip ${cls}" style="display:inline-flex;align-items:center;gap:0.25rem">
+      return `<span class="alert-chip ${cls}">
         ${c.text}
         <button class="alert-dismiss" data-alert-id="${c.id}"
           style="background:none;border:none;cursor:pointer;color:inherit;font-size:0.8rem;
@@ -222,38 +808,28 @@
         renderAlerts(nowYM, showAll);
       });
     });
-
-    document.getElementById('alert-show-more')?.addEventListener('click', () => {
-      renderAlerts(nowYM, true);
-    });
+    document.getElementById('alert-show-more')?.addEventListener('click', () => renderAlerts(nowYM, true));
   }
 
-  /* ── D3: T1 Cash Flow ── */
+  /* ── T1 Cash Flow chart ── */
   function renderT1(startDate) {
     const canvas = document.getElementById('t1-chart');
     if (!canvas) return;
     if (t1Chart) t1Chart.destroy();
-    if (activeRange === '1m') {
-      renderT1DailyForecast(canvas);
-    } else {
-      renderT1MonthlyForecast(canvas, startDate);
-    }
+    if (activeRange === '1m') renderT1DailyForecast(canvas);
+    else renderT1MonthlyForecast(canvas, startDate);
   }
 
-  /* ── E4+E5: compute starting balance from syncPoint ── */
   function getSyncStartingBalance(fromDate) {
     if (!syncPoint) return 0;
-    // Sum transactions from syncPoint.date to fromDate
     const syncDate = syncPoint.date;
     let bal = syncPoint.amount;
     txData.forEach(t => {
       if (!t.date) return;
       if (t.date > syncDate && t.date <= fromDate) {
         const amt = Number(t.amount || 0);
-        if (t.type === 'Income') bal += amt;
+        if (t.type === 'Income')       bal += amt;
         else if (t.type === 'Expense') bal -= amt;
-      } else if (t.date <= syncDate) {
-        // Already accounted for in the sync point
       }
     });
     return bal;
@@ -267,10 +843,8 @@
 
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-
-    const pastDays = [];
+    const pastDays = [], futureDays = [];
     for (let i = 14; i >= 0; i--) pastDays.push(dateOffset(todayStr, -i));
-    const futureDays = [];
     for (let i = 1; i <= 15; i++) futureDays.push(dateOffset(todayStr, i));
     const allDays = [...pastDays, ...futureDays];
 
@@ -278,43 +852,33 @@
     txData.forEach(t => {
       if (!pastDays.includes(t.date)) return;
       const amt = Number(t.amount || 0);
-      if (t.type === 'Income')  incByDay[t.date]  = (incByDay[t.date]  || 0) + amt;
-      else if (t.type === 'Expense') expByDay[t.date] = (expByDay[t.date] || 0) + amt;
+      if (t.type === 'Income')       incByDay[t.date]  = (incByDay[t.date]  || 0) + amt;
+      else if (t.type === 'Expense') expByDay[t.date]  = (expByDay[t.date]  || 0) + amt;
     });
 
-    const totalInc = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
-    const totalExp = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
+    const totalInc   = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
+    const totalExp   = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
     const avgDailyInc = totalInc / Math.max(1, pastDays.length);
     const avgDailyExp = totalExp / Math.max(1, pastDays.length);
-
-    const labels = allDays.map(d => d.slice(5));
-    const todayIdx = 14;
+    const labels     = allDays.map(d => d.slice(5));
+    const todayIdx   = 14;
 
     const todayLinePlugin = {
       id: 'todayLine',
       afterDraw(chart) {
         const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
         if (!x) return;
-        const xLeft  = x.getPixelForValue(todayIdx);
-        const xRight = x.getPixelForValue(todayIdx + 1);
-        const xPos   = (xLeft + xRight) / 2;
+        const xPos = (x.getPixelForValue(todayIdx) + x.getPixelForValue(todayIdx + 1)) / 2;
         ctx.save();
-        ctx.strokeStyle = '#f59e0b';
-        ctx.setLineDash([5, 3]);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(xPos, top);
-        ctx.lineTo(xPos, bottom);
-        ctx.stroke();
-        ctx.fillStyle = '#f59e0b';
-        ctx.font = '9px system-ui';
+        ctx.strokeStyle = '#f59e0b'; ctx.setLineDash([5, 3]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+        ctx.fillStyle = '#f59e0b'; ctx.font = '9px system-ui';
         ctx.fillText('Today', xPos + 3, top + 10);
         ctx.restore();
       }
     };
 
     if (t1ViewMode === 'invsout') {
-      // E5: In vs Out — side-by-side positive bars, no balance line
       t1Chart = new Chart(canvas, {
         type: 'bar',
         data: {
@@ -329,16 +893,13 @@
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
-          scales: {
-            x:  { ticks: { font: { size: 9 } } },
-            y:  { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
-          }
+          scales: { x: { ticks: { font: { size: 9 } } },
+            y: { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } } }
         }
       });
       return;
     }
 
-    // Net Flow mode (default)
     let runBal = syncPoint ? getSyncStartingBalance(pastDays[0]) : 0;
     const balPast = pastDays.map(d => {
       runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
@@ -349,7 +910,6 @@
       balForecast.push(balForecast[balForecast.length - 1] + avgDailyInc - avgDailyExp);
     });
 
-    // syncPoint annotation
     let syncLinePlugin = null;
     if (syncPoint && pastDays.includes(syncPoint.date)) {
       const spIdx = pastDays.indexOf(syncPoint.date);
@@ -360,15 +920,9 @@
           if (!x) return;
           const xPos = x.getPixelForValue(spIdx);
           ctx.save();
-          ctx.strokeStyle = '#6366f1';
-          ctx.setLineDash([3, 3]);
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(xPos, top);
-          ctx.lineTo(xPos, bottom);
-          ctx.stroke();
-          ctx.fillStyle = '#6366f1';
-          ctx.font = '8px system-ui';
+          ctx.strokeStyle = '#6366f1'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+          ctx.fillStyle = '#6366f1'; ctx.font = '8px system-ui';
           ctx.fillText('📍sync', xPos + 2, top + 10);
           ctx.restore();
         }
@@ -394,8 +948,7 @@
           { label: 'Balance', data: [...balPast, ...new Array(15).fill(null)], type: 'line',
             borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3, yAxisID: 'y2',
             fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
-          { label: '~ Bal Forecast',
-            data: [...new Array(14).fill(null), ...balForecast],
+          { label: '~ Bal Forecast', data: [...new Array(14).fill(null), ...balForecast],
             type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0,
             borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
         ]
@@ -403,25 +956,17 @@
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 10, font: { size: 9 },
-              filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' }
-          },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const isForecast = ctx.dataset.label.startsWith('~ ');
-                const prefix = isForecast ? '~ Est: ' : '';
-                const v = Math.round(ctx.raw || 0);
-                return `${prefix}${ctx.dataset.label.replace('~ ', '')}: ฿${v.toLocaleString()}`;
-              },
-              afterBody: ctx => {
-                const isForecast = ctx[0] && ctx[0].dataset.label.startsWith('~ ');
-                return isForecast ? ['Estimated — based on 15-day average'] : [];
-              }
-            }
-          }
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
+            filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } },
+          tooltip: { callbacks: {
+            label: ctx => {
+              const isForecast = ctx.dataset.label.startsWith('~ ');
+              const v = Math.round(ctx.raw || 0);
+              return `${isForecast ? '~ Est: ' : ''}${ctx.dataset.label.replace('~ ', '')}: ฿${v.toLocaleString()}`;
+            },
+            afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ')
+              ? ['Estimated — based on 15-day average'] : []
+          }}
         },
         scales: {
           x:  { ticks: { font: { size: 9 } } },
@@ -435,14 +980,10 @@
   }
 
   function renderT1MonthlyForecast(canvas, startDate) {
-    const subtitle = document.getElementById('t1-subtitle');
-    const nowYM   = currentYM();
-    const startYM = startDate.slice(0, 7);
-
-    let forecastMonths;
-    if (activeRange === '3m')  forecastMonths = 1;
-    else if (activeRange === '6m')  forecastMonths = 3;
-    else forecastMonths = 6;
+    const subtitle   = document.getElementById('t1-subtitle');
+    const nowYM      = currentYM();
+    const startYM    = startDate.slice(0, 7);
+    const forecastMonths = activeRange === '3m' ? 1 : activeRange === '6m' ? 3 : 6;
 
     const pastMonths   = monthsBetween(startYM, nowYM);
     const futureMonths = [];
@@ -458,12 +999,12 @@
       const ym = toYM(t.date);
       if (!pastMonths.includes(ym)) return;
       const amt = Number(t.amount || 0);
-      if (t.type === 'Income')  incByM[ym] = (incByM[ym] || 0) + amt;
+      if (t.type === 'Income')       incByM[ym] = (incByM[ym] || 0) + amt;
       else if (t.type === 'Expense') expByM[ym] = (expByM[ym] || 0) + amt;
     });
 
     if (t1ViewMode === 'invsout') {
-      if (subtitle) subtitle.textContent = `Monthly — Income vs Expense`;
+      if (subtitle) subtitle.textContent = 'Monthly — Income vs Expense';
       t1Chart = new Chart(canvas, {
         type: 'bar',
         data: {
@@ -478,10 +1019,8 @@
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
-          scales: {
-            x:  { ticks: { font: { size: 9 } } },
-            y:  { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
-          }
+          scales: { x: { ticks: { font: { size: 9 } } },
+            y: { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } } }
         }
       });
       return;
@@ -489,26 +1028,21 @@
 
     if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month forecast`;
 
-    const recentMonths = pastMonths.slice(-3);
-    const avgInc = recentMonths.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentMonths.length);
-    const avgExp = recentMonths.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentMonths.length);
+    const recentM = pastMonths.slice(-3);
+    const avgInc  = recentM.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentM.length);
+    const avgExp  = recentM.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentM.length);
 
-    // Starting balance from syncPoint if available
     let running = 0;
     if (syncPoint) {
       const syncYM = syncPoint.date.slice(0, 7);
-      if (syncYM <= pastMonths[0]) {
-        running = getSyncStartingBalance(pastMonths[0] + '-01');
-      }
+      if (syncYM <= pastMonths[0]) running = getSyncStartingBalance(pastMonths[0] + '-01');
     }
     const balPast = pastMonths.map(m => {
       running += (incByM[m] || 0) - (expByM[m] || 0);
       return running;
     });
     const balForecast = [balPast[balPast.length - 1]];
-    futureMonths.forEach(() => {
-      balForecast.push(balForecast[balForecast.length - 1] + avgInc - avgExp);
-    });
+    futureMonths.forEach(() => balForecast.push(balForecast[balForecast.length - 1] + avgInc - avgExp));
 
     const todayIdx = pastMonths.length - 1;
     const todayLinePlugin = {
@@ -516,26 +1050,17 @@
       afterDraw(chart) {
         const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
         if (!x) return;
-        const xLeft  = x.getPixelForValue(todayIdx);
-        const xRight = x.getPixelForValue(todayIdx + 1);
-        const xPos   = (xLeft + xRight) / 2;
+        const xPos = (x.getPixelForValue(todayIdx) + x.getPixelForValue(todayIdx + 1)) / 2;
         ctx.save();
-        ctx.strokeStyle = '#f59e0b';
-        ctx.setLineDash([5, 3]);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(xPos, top);
-        ctx.lineTo(xPos, bottom);
-        ctx.stroke();
-        ctx.fillStyle = '#f59e0b';
-        ctx.font = '9px system-ui';
+        ctx.strokeStyle = '#f59e0b'; ctx.setLineDash([5, 3]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+        ctx.fillStyle = '#f59e0b'; ctx.font = '9px system-ui';
         ctx.fillText('Now', xPos + 3, top + 10);
         ctx.restore();
       }
     };
 
     const nPast = pastMonths.length;
-
     t1Chart = new Chart(canvas, {
       type: 'bar',
       data: {
@@ -552,8 +1077,7 @@
           { label: 'Balance', data: [...balPast, ...new Array(forecastMonths).fill(null)], type: 'line',
             borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y2',
             fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
-          { label: '~ Bal Forecast',
-            data: [...new Array(nPast - 1).fill(null), ...balForecast],
+          { label: '~ Bal Forecast', data: [...new Array(nPast - 1).fill(null), ...balForecast],
             type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 1,
             borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
         ]
@@ -561,19 +1085,12 @@
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: { boxWidth: 10, font: { size: 9 },
-              filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' }
-          },
-          tooltip: {
-            callbacks: {
-              afterBody: ctx => {
-                const isForecast = ctx[0] && ctx[0].dataset.label.startsWith('~ ');
-                return isForecast ? ['Estimated — based on 3-month average'] : [];
-              }
-            }
-          }
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
+            filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } },
+          tooltip: { callbacks: {
+            afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ')
+              ? ['Estimated — based on 3-month average'] : []
+          }}
         },
         scales: {
           x:  { ticks: { font: { size: 9 } } },
@@ -586,22 +1103,21 @@
     });
   }
 
-  /* ── Fix 3: T2 Group-level Pareto with drill-down ── */
+  /* ── T2 Expense Pareto chart ── */
   function renderT2() {
     const canvas = document.getElementById('t2-chart');
     if (!canvas) return;
     if (t2Chart) t2Chart.destroy();
 
-    const catMap = {};
+    const catMap  = {};
     categories.forEach(c => { catMap[c.id] = c; });
-    const expenses  = txData.filter(t => t.type === 'Expense');
-    const backBtn   = document.getElementById('t2-back-btn');
-    const subtitle  = document.getElementById('t2-subtitle');
+    const expenses = txData.filter(t => t.type === 'Expense');
+    const backBtn  = document.getElementById('t2-back-btn');
+    const subtitle = document.getElementById('t2-subtitle');
 
     if (t2DrillGroup) {
       if (backBtn) backBtn.classList.remove('hidden');
       if (subtitle) subtitle.textContent = t2DrillGroup;
-
       const sumByCat = {};
       expenses.forEach(t => {
         const catId = linkedId(t.category_id);
@@ -612,17 +1128,14 @@
       const sorted = Object.entries(sumByCat).sort((a, b) => b[1] - a[1]);
       t2Chart = new Chart(canvas, {
         type: 'bar',
-        data: {
-          labels: sorted.map(([id]) => catMap[id]?.name || id),
+        data: { labels: sorted.map(([id]) => catMap[id]?.name || id),
           datasets: [{ data: sorted.map(([, v]) => v),
-            backgroundColor: sorted.map((_, i) => `hsl(${200 + i * 25},60%,55%)`), borderRadius: 3 }]
-        },
+            backgroundColor: sorted.map((_, i) => `hsl(${200 + i * 25},60%,55%)`), borderRadius: 3 }] },
         options: t2ChartOptions()
       });
     } else {
       if (backBtn) backBtn.classList.add('hidden');
       if (subtitle) subtitle.textContent = 'By group — click to drill in';
-
       const sumByGroup = {};
       expenses.forEach(t => {
         const catId = linkedId(t.category_id);
@@ -632,11 +1145,9 @@
       const sorted = Object.entries(sumByGroup).sort((a, b) => b[1] - a[1]);
       t2Chart = new Chart(canvas, {
         type: 'bar',
-        data: {
-          labels: sorted.map(([g]) => g),
+        data: { labels: sorted.map(([g]) => g),
           datasets: [{ data: sorted.map(([, v]) => v),
-            backgroundColor: sorted.map((_, i) => `hsl(${i * 30},65%,55%)`), borderRadius: 3 }]
-        },
+            backgroundColor: sorted.map((_, i) => `hsl(${i * 30},65%,55%)`), borderRadius: 3 }] },
         options: {
           ...t2ChartOptions(),
           onClick: (evt, elements) => {
@@ -658,7 +1169,7 @@
     };
   }
 
-  /* ── Fix 4: T3 Liabilities sorted by balance ── */
+  /* ── T3 Liabilities chart ── */
   function renderT3() {
     const canvas = document.getElementById('t3-chart');
     if (!canvas) return;
@@ -674,7 +1185,7 @@
 
     if (active.length === 0) {
       const parent = canvas.parentElement;
-      if (parent) parent.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:2rem;font-size:0.85rem">No active liabilities</div>';
+      if (parent) parent.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:1rem;font-size:0.82rem">No active liabilities</div>';
       return;
     }
 
@@ -696,14 +1207,13 @@
     });
   }
 
-  /* ── D6B: Budget vs Actual panel (T4) ── */
+  /* ── T4 Budget vs Actual chart ── */
   function renderBudgetPanel(range) {
     const canvas = document.getElementById('t4-chart');
     if (!canvas) return;
     if (t4Chart) t4Chart.destroy();
 
     const nowYM = currentYM();
-
     let months;
     if (range === '1m')  months = [nowYM];
     else if (range === '3m')  months = monthsBetween(rangeStart('3m').slice(0, 7), nowYM);
@@ -712,7 +1222,6 @@
 
     const budgetByMonth = {};
     months.forEach(ym => { budgetByMonth[ym] = 0; });
-
     budgets.forEach(b => {
       if (!b.active) return;
       const limit = Number(b.amount || 0);
@@ -756,11 +1265,9 @@
           { label: 'Budget', data: budgetAmts, backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 3, order: 2 },
           { label: 'Actual', data: actualAmts, backgroundColor: barColors, borderRadius: 3, order: 3 },
           { label: 'Run Budget', data: runBudget, type: 'line',
-            borderColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.3,
-            fill: false, order: 1, yAxisID: 'y2' },
+            borderColor: '#f59e0b', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, order: 1, yAxisID: 'y2' },
           { label: 'Run Actual', data: runActual, type: 'line',
-            borderColor: '#8b5cf6', borderWidth: 2, pointRadius: 2, tension: 0.3,
-            fill: false, order: 0, yAxisID: 'y2' }
+            borderColor: '#8b5cf6', borderWidth: 2, pointRadius: 2, tension: 0.3, fill: false, order: 0, yAxisID: 'y2' }
         ]
       },
       options: {
@@ -785,245 +1292,7 @@
     }
   }
 
-  /* ── E7: Panel collapse controls ── */
-  function initPanelCollapses() {
-    document.querySelectorAll('.panel-collapse-btn').forEach(btn => {
-      const panelId = btn.dataset.panel;
-      const bodyEl  = document.getElementById(panelId + '-body');
-      if (!bodyEl) return;
-
-      // Set initial max-height
-      bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
-
-      btn.addEventListener('click', () => {
-        const isCollapsed = panelCollapsed[panelId];
-        panelCollapsed[panelId] = !isCollapsed;
-        if (!isCollapsed) {
-          bodyEl.style.maxHeight = '0';
-          btn.classList.add('collapsed');
-        } else {
-          bodyEl.style.maxHeight = bodyEl.scrollHeight + 'px';
-          btn.classList.remove('collapsed');
-          // Expand might need more height after chart renders
-          setTimeout(() => { bodyEl.style.maxHeight = bodyEl.scrollHeight + 400 + 'px'; }, 50);
-        }
-      });
-    });
-
-    // T4 range buttons
-    document.querySelectorAll('[data-t4-range]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        t4Range = btn.dataset.t4Range;
-        document.querySelectorAll('[data-t4-range]').forEach(b =>
-          b.classList.toggle('active', b.dataset.t4Range === t4Range));
-        renderBudgetPanel(t4Range);
-        // Re-expand body after chart draws
-        const t4Body = document.getElementById('t4-body');
-        if (t4Body && !panelCollapsed['t4']) {
-          setTimeout(() => { t4Body.style.maxHeight = t4Body.scrollHeight + 400 + 'px'; }, 100);
-        }
-      });
-    });
-  }
-
-  /* ── E6: Budget meters period-aware ── */
-  function normalizeBudgetAmount(b) {
-    const period = b.period || 'Monthly';
-    const amount = Number(b.amount || 0);
-    if (period === 'Annual') return amount / 12;
-    return amount;
-  }
-
-  function periodBadgeHtml(period) {
-    if (!period || period === 'Monthly') return '';
-    if (period === 'Annual') return `<span class="period-badge period-badge-annual">Annual</span>`;
-    if (period === 'One-time') return `<span class="period-badge period-badge-onetime">One-time</span>`;
-    return `<span class="period-badge period-badge-annual">${period}</span>`;
-  }
-
-  function budgetMatchesPeriodFilter(b) {
-    const period = b.period || 'Monthly';
-    if (meterPeriodFilter === 'all') return true;
-    if (meterPeriodFilter === 'monthly') return period === 'Monthly';
-    if (meterPeriodFilter === 'annual') return period !== 'Monthly' && period !== 'One-time';
-    if (meterPeriodFilter === 'onetime') return period === 'One-time';
-    return true;
-  }
-
-  /* ── Fix 14: Budget meters ── */
-  function renderMeters(nowYM) {
-    const grid = document.getElementById('meters-grid');
-    if (!grid) return;
-
-    const nowExpenses = txData.filter(t => toYM(t.date) === nowYM && t.type === 'Expense');
-    const spendByCat  = groupSum(nowExpenses, t => linkedId(t.category_id));
-    const catMap = {};
-    categories.forEach(c => { catMap[c.id] = c; });
-
-    const active = budgets.filter(b => b.active !== false && b.active !== 0 && budgetMatchesPeriodFilter(b));
-    if (active.length === 0) {
-      grid.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No budgets for selected filter.</div>';
-      return;
-    }
-
-    const withData = active.map(b => {
-      const catId      = linkedId(b.category_id);
-      const cat        = catMap[catId] || {};
-      const spent      = spendByCat[catId] || 0;
-      const limit      = normalizeBudgetAmount(b);   // E6: normalized
-      const label      = b.label || cat.name || 'Budget';
-      const period     = b.period || 'Monthly';
-      return { b, catId, cat, spent, limit, p: pct(spent, limit), label, period };
-    });
-
-    if (meterView === 'group') {
-      renderMeterGroupView(grid, withData);
-    } else {
-      renderMeterAllView(grid, withData);
-    }
-  }
-
-  function renderMeterAllView(grid, withData) {
-    grid.style.cssText = 'margin-bottom:1rem';
-    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
-    const sorted    = [...withData].sort((a, b) => b.limit - a.limit);
-
-    grid.innerHTML = sorted.map(({ cat, spent, limit, p, label, period }) => {
-      const containerPct = Math.max(5, Math.round((limit / maxAmount) * 100));
-      const fillPct      = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-      const cls          = p >= 100 ? 'over' : p >= 85 ? 'warn' : 'ok';
-      return `
-        <div style="margin-bottom:0.65rem">
-          <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
-            <span style="font-size:0.82rem;font-weight:600">${label}${periodBadgeHtml(period)}${cat.group
-              ? ` <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400">— ${cat.group}</span>`
-              : ''}</span>
-            <span style="font-size:0.73rem;color:var(--text-secondary)">${fmt(spent)} / ${fmt(limit)} · ${p}%</span>
-          </div>
-          <div style="width:${containerPct}%;min-width:8%">
-            <div class="meter-bar-bg" style="height:10px">
-              <div class="meter-bar-fill ${cls}" style="width:${fillPct}%"></div>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-  }
-
-  function renderMeterGroupView(grid, withData) {
-    grid.style.cssText = 'margin-bottom:1rem';
-    const maxAmount = Math.max(...withData.map(x => x.limit), 1);
-
-    const groups = {};
-    withData.forEach(item => {
-      const grp = item.cat.group || 'Other';
-      if (!groups[grp]) groups[grp] = [];
-      groups[grp].push(item);
-    });
-
-    const sortedGroups = Object.entries(groups)
-      .map(([name, items]) => ({
-        name, items,
-        totalBudget: items.reduce((s, x) => s + x.limit, 0),
-        totalSpent:  items.reduce((s, x) => s + x.spent, 0)
-      }))
-      .sort((a, b) => b.totalBudget - a.totalBudget);
-
-    let html = '';
-    sortedGroups.forEach(({ name, items, totalBudget, totalSpent }) => {
-      const grpPct       = pct(totalSpent, totalBudget);
-      const grpCls       = grpPct >= 100 ? 'over' : grpPct >= 85 ? 'warn' : 'ok';
-      const containerPct = Math.max(5, Math.round((totalBudget / maxAmount) * 100));
-      const fillPct      = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
-      const expanded     = meterGroupState[name] !== false;
-
-      const innerHtml = items.sort((a, b) => b.limit - a.limit).map(item => {
-        const itemCPct = Math.max(5, Math.round((item.limit / maxAmount) * 100));
-        const itemFPct = item.limit > 0 ? Math.min(100, Math.round((item.spent / item.limit) * 100)) : 0;
-        const itemCls  = item.p >= 100 ? 'over' : item.p >= 85 ? 'warn' : 'ok';
-        return `
-          <div style="margin-bottom:0.5rem;padding-left:0.75rem">
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.15rem">
-              <span style="font-size:0.78rem">${item.label}${periodBadgeHtml(item.period)}</span>
-              <span style="font-size:0.7rem;color:var(--text-secondary)">
-                ${fmt(item.spent)} / ${fmt(item.limit)} · ${item.p}%
-              </span>
-            </div>
-            <div style="width:${itemCPct}%;min-width:8%">
-              <div class="meter-bar-bg" style="height:8px">
-                <div class="meter-bar-fill ${itemCls}" style="width:${itemFPct}%"></div>
-              </div>
-            </div>
-          </div>`;
-      }).join('');
-
-      html += `
-        <div style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:var(--radius)">
-          <div class="meter-group-header" data-grp="${name}"
-            style="display:flex;align-items:center;padding:0.6rem 0.75rem;cursor:pointer;
-            user-select:none;background:rgba(59,130,246,0.05);
-            border-radius:${expanded ? 'var(--radius) var(--radius) 0 0' : 'var(--radius)'}">
-            <span style="font-size:0.85rem;font-weight:700;flex:0 0 auto;min-width:90px">${name}</span>
-            <div style="flex:1;margin:0 0.75rem">
-              <div style="width:${containerPct}%;min-width:30px">
-                <div class="meter-bar-bg" style="height:8px">
-                  <div class="meter-bar-fill ${grpCls}" style="width:${fillPct}%"></div>
-                </div>
-              </div>
-            </div>
-            <span style="font-size:0.75rem;color:var(--text-secondary);flex:0 0 auto;white-space:nowrap">
-              ${fmt(totalSpent)} / ${fmt(totalBudget)} · ${grpPct}%
-            </span>
-            <span data-grp-chev="${name}"
-              style="margin-left:0.5rem;font-size:0.7rem;color:var(--text-secondary);
-              transition:transform 0.3s;display:inline-block;
-              ${expanded ? '' : 'transform:rotate(-90deg)'}">▼</span>
-          </div>
-          <div data-grp-body="${name}" style="padding-top:0.5rem;padding-bottom:0.5rem;
-            ${expanded ? '' : 'display:none'}">
-            ${innerHtml}
-          </div>
-        </div>`;
-    });
-
-    grid.innerHTML = html;
-
-    grid.querySelectorAll('.meter-group-header').forEach(header => {
-      header.addEventListener('click', () => {
-        const grp       = header.dataset.grp;
-        const wasExpanded = meterGroupState[grp] !== false;
-        meterGroupState[grp] = !wasExpanded;
-        const body = grid.querySelector(`[data-grp-body="${grp}"]`);
-        const chev = grid.querySelector(`[data-grp-chev="${grp}"]`);
-        if (body) body.style.display = wasExpanded ? 'none' : '';
-        if (chev) chev.style.transform = wasExpanded ? 'rotate(-90deg)' : '';
-        header.style.borderRadius = wasExpanded
-          ? 'var(--radius)' : 'var(--radius) var(--radius) 0 0';
-      });
-    });
-  }
-
-  function initMeterToggle() {
-    document.querySelectorAll('[data-meter-view]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        meterView = btn.dataset.meterView;
-        document.querySelectorAll('[data-meter-view]').forEach(b =>
-          b.classList.toggle('active', b.dataset.meterView === meterView));
-        renderMeters(currentYM());
-      });
-    });
-
-    // E6: period filter
-    document.querySelectorAll('[data-meter-period]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        meterPeriodFilter = btn.dataset.meterPeriod;
-        document.querySelectorAll('[data-meter-period]').forEach(b =>
-          b.classList.toggle('active', b.dataset.meterPeriod === meterPeriodFilter));
-        renderMeters(currentYM());
-      });
-    });
-  }
-
-  /* ── E4: Sync panel init ── */
+  /* ── E4: Sync panel ── */
   function initSyncPanel() {
     const toggleBtn = document.getElementById('sync-toggle-btn');
     const panel     = document.getElementById('sync-panel');
@@ -1033,10 +1302,10 @@
 
     if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
 
-    toggleBtn?.addEventListener('click', () => {
+    toggleBtn?.addEventListener('click', e => {
+      e.stopPropagation();
       if (!panel) return;
-      const isOpen = panel.style.display !== 'none';
-      panel.style.display = isOpen ? 'none' : 'block';
+      panel.style.display = panel.style.display !== 'none' ? 'none' : 'block';
     });
 
     saveBtn?.addEventListener('click', async () => {
@@ -1065,7 +1334,8 @@
   /* ── E5: T1 view mode toggle ── */
   function initT1ViewMode() {
     document.querySelectorAll('[data-t1-mode]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
         t1ViewMode = btn.dataset.t1Mode;
         document.querySelectorAll('[data-t1-mode]').forEach(b =>
           b.classList.toggle('active', b.dataset.t1Mode === t1ViewMode));
@@ -1074,7 +1344,16 @@
     });
   }
 
-  /* ── Fix 5: Solution Playroom ── */
+  /* ── T2 back button ── */
+  function initT2Back() {
+    document.getElementById('t2-back-btn')?.addEventListener('click', e => {
+      e.stopPropagation();
+      t2DrillGroup = null;
+      renderT2();
+    });
+  }
+
+  /* ── Solution Playroom ── */
   function buildPlayroomCategoryOptions() {
     const sel = document.getElementById('playroom-cat-select');
     if (!sel) return;
@@ -1116,7 +1395,7 @@
       impact.style.display = 'block';
       if (diff < 0) {
         impact.className = 'playroom-impact saving';
-        impact.textContent = `Saving ${fmt(Math.abs(diff))}/month vs budget = ${fmt(perYear)}/year`;
+        impact.textContent = `Saving ${fmt(Math.abs(diff))}/month = ${fmt(perYear)}/year`;
       } else if (diff > 0) {
         impact.className = 'playroom-impact over';
         impact.textContent = `Over budget by ${fmt(diff)}/month = ${fmt(perYear)}/year extra`;
@@ -1126,7 +1405,7 @@
       }
     }
 
-    budIn?.addEventListener('input',  updateImpact);
+    budIn?.addEventListener('input', updateImpact);
     projIn?.addEventListener('input', updateImpact);
 
     saveBtn?.addEventListener('click', async () => {
@@ -1142,7 +1421,7 @@
         });
         if (msgEl) { msgEl.textContent = 'Budget saved!'; msgEl.style.color = '#22c55e'; msgEl.style.display = 'block'; }
         await loadAll();
-      } catch (e) {
+      } catch {
         if (msgEl) { msgEl.textContent = 'Save failed'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
       }
     });
@@ -1158,13 +1437,13 @@
     content.style.display = 'none';
 
     const now = new Date();
-    const start6m = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split('T')[0];
-    const months  = monthsBetween(start6m.slice(0, 7), currentYM());
+    const start6m  = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split('T')[0];
+    const months   = monthsBetween(start6m.slice(0, 7), currentYM());
 
     let txRes;
     try {
-      txRes = await fetch(`/api/transactions?start=${start6m}&limit=500`, { credentials: 'same-origin' });
-      txRes = await txRes.json();
+      const r = await fetch(`/api/transactions?start=${start6m}&limit=500`, { credentials: 'same-origin' });
+      txRes = await r.json();
     } catch { return; }
 
     const tx6m = (txRes.records || []).map(r => r.fields).filter(t => linkedId(t.category_id) === catId);
@@ -1189,11 +1468,8 @@
         datasets: [
           { label: 'Actual', data: months.map(m => spendByM[m] || 0),
             backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 3 },
-          ...(budAmt ? [{
-            label: 'Budget', data: months.map(() => budAmt), type: 'line',
-            borderColor: '#f59e0b', borderWidth: 2, borderDash: [4, 3],
-            pointRadius: 0, fill: false
-          }] : [])
+          ...(budAmt ? [{ label: 'Budget', data: months.map(() => budAmt), type: 'line',
+            borderColor: '#f59e0b', borderWidth: 2, borderDash: [4, 3], pointRadius: 0, fill: false }] : [])
         ]
       },
       options: {
@@ -1205,7 +1481,6 @@
         }
       }
     });
-
     content.style.display = 'block';
   }
 
@@ -1245,11 +1520,10 @@
       return { label: b.label || catMap[catId]?.name || '?', amt, paid };
     }).sort((a, b) => (a.paid ? 1 : -1) - (b.paid ? 1 : -1));
 
-    const daysLeft  = daysLeftInMonth();
-    const daysGone  = new Date().getDate();
-    const avgDaily  = daysGone > 0 ? alreadySpent / daysGone : 0;
+    const daysLeft   = daysLeftInMonth();
+    const daysGone   = new Date().getDate();
+    const avgDaily   = daysGone > 0 ? alreadySpent / daysGone : 0;
     const varEstimate = Math.round(avgDaily * daysLeft);
-
     const projectedBalance = totalLiquid - fixedDue - varEstimate;
     const isShortfall = projectedBalance < 0;
     const daysUntilZero = avgDaily > 0 ? Math.floor(totalLiquid / avgDaily) : 999;
@@ -1265,22 +1539,23 @@
       <div style="font-size:1rem;font-weight:700;margin-bottom:0.5rem">
         Total liquid: <span class="big">${fmt(totalLiquid)}</span>
       </div>
-      <div style="margin-bottom:0.25rem">Already spent this month: <strong>${fmt(alreadySpent)}</strong></div>
-      <div style="margin-top:0.75rem;margin-bottom:0.25rem;font-weight:600;font-size:0.85rem">Fixed commitments this month:</div>
+      <div>Already spent this month: <strong>${fmt(alreadySpent)}</strong></div>
+      <div style="margin-top:0.75rem;margin-bottom:0.25rem;font-weight:600;font-size:0.85rem">Fixed commitments:</div>
       ${rowsHtml || '<div style="font-size:0.82rem;color:var(--text-secondary)">No FP budgets found</div>'}
       <div style="margin-top:0.5rem;display:flex;justify-content:space-between;font-size:0.85rem">
         <span>Still due: <strong style="color:#ef4444">${fmt(fixedDue)}</strong></span>
         <span>Already paid: ${fmt(fixedPaid)}</span>
       </div>
       <div style="margin-top:0.5rem;font-size:0.85rem">
-        Variable estimate (${daysLeft}d left × ${fmt(avgDaily)}/day avg): <strong>${fmt(varEstimate)}</strong>
+        Variable estimate (${daysLeft}d × ${fmt(avgDaily)}/day avg): <strong>${fmt(varEstimate)}</strong>
       </div>
-      <div style="margin-top:0.75rem;padding:0.6rem;border-radius:6px;background:${isShortfall ? '#fee2e2' : '#dcfce7'};color:${isShortfall ? '#991b1b' : '#166534'}">
-        <strong>Projected month-end balance: ${fmt(projectedBalance)}</strong>
+      <div style="margin-top:0.75rem;padding:0.6rem;border-radius:6px;
+        background:${isShortfall ? '#fee2e2' : '#dcfce7'};color:${isShortfall ? '#991b1b' : '#166534'}">
+        <strong>Projected month-end: ${fmt(projectedBalance)}</strong>
         ${isShortfall ? ' — SHORTFALL' : ' — Surplus'}
       </div>
       <div style="margin-top:0.4rem;font-size:0.82rem;color:var(--text-secondary)">
-        At current burn rate: cash lasts <strong>${daysUntilZero}</strong> more days
+        At current burn: cash lasts <strong>${daysUntilZero}</strong> more days
       </div>`;
   }
 
@@ -1309,58 +1584,35 @@
         <strong style="color:${newNet < 0 ? '#ef4444' : '#22c55e'}">${fmt(newNet)}</strong></div>
       <div style="margin-top:0.3rem">Total extra over ${months} month${months > 1 ? 's' : ''}:
         <strong>${fmt(extra * months)}</strong></div>
-      ${newNet < 0 ? '<div style="color:#ef4444;margin-top:0.5rem;font-weight:600">Cash flow turns negative.</div>'
-                   : '<div style="color:#22c55e;margin-top:0.5rem">Cash flow stays positive.</div>'}`;
-  }
-
-  /* ── Period buttons ── */
-  function initPeriodButtons() {
-    document.querySelectorAll('.period-btn[data-range]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.period-btn[data-range]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        activeRange  = btn.dataset.range;
-        t2DrillGroup = null;
-        loadAll().catch(console.error);
-      });
-    });
+      ${newNet < 0
+        ? '<div style="color:#ef4444;margin-top:0.5rem;font-weight:600">Cash flow turns negative.</div>'
+        : '<div style="color:#22c55e;margin-top:0.5rem">Cash flow stays positive.</div>'}`;
   }
 
   /* ── Modals ── */
   function initModals() {
     const simBackdrop = document.getElementById('sim-backdrop');
-    document.getElementById('open-simulator')?.addEventListener('click', () => simBackdrop?.classList.add('open'));
     document.getElementById('sim-close')?.addEventListener('click', () => simBackdrop?.classList.remove('open'));
     simBackdrop?.addEventListener('click', e => { if (e.target === simBackdrop) simBackdrop.classList.remove('open'); });
-
     document.getElementById('run-sim')?.addEventListener('click', runCashSim);
     document.getElementById('run-extra-sim')?.addEventListener('click', runExtraSim);
 
     const pBackdrop = document.getElementById('playroom-backdrop');
     const pPanel    = document.getElementById('playroom-panel');
     const closePlay = () => { pBackdrop?.classList.remove('open'); pPanel?.classList.remove('open'); };
-    document.getElementById('open-playroom')?.addEventListener('click', () => {
-      pBackdrop?.classList.add('open'); pPanel?.classList.add('open');
-    });
     document.getElementById('playroom-close')?.addEventListener('click', closePlay);
     pBackdrop?.addEventListener('click', closePlay);
-
-    document.getElementById('t2-back-btn')?.addEventListener('click', () => {
-      t2DrillGroup = null;
-      renderT2();
-    });
   }
 
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', async () => {
-    initPeriodButtons();
-    initMeterToggle();
+    initGraphPanels();
+    initT1ViewMode();
+    initT2Back();
+    initSyncPanel();
     initModals();
     initPlayroom();
-    initPanelCollapses();   // E7
-    initSyncPanel();        // E4
-    initT1ViewMode();       // E5
-    await loadSyncPoint();  // E4
+    await loadSyncPoint();
     loadAll().catch(err => console.error('Dashboard load failed:', err));
   });
 })();
