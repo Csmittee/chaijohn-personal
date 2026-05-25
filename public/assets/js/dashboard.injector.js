@@ -1965,9 +1965,9 @@
 
   /* ── Dismiss / restore budgets from forecast (session-only) ── */
   function _rerenderT1() {
-    const body = document.getElementById('t1-body');
+    const body = document.getElementById('content-body');
     if (body) renderT1Content(body);
-    const canvas = document.getElementById('t1-canvas');
+    const canvas = document.getElementById('t1-chart');
     if (canvas) {
       if (t1Chart) { t1Chart.destroy(); t1Chart = null; }
       if (activeRange === '1m') renderT1DailyForecast(canvas);
