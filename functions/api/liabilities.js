@@ -48,6 +48,7 @@ export async function onRequestPost(context) {
   if (body.loan_size !== undefined) fields.loan_size = Number(body.loan_size);
   if (body.interest_rate !== undefined) fields.interest_rate = Number(body.interest_rate);
   if (body.monthly_payment !== undefined) fields.monthly_payment = Number(body.monthly_payment);
+  if (body.payment_due_day !== undefined) fields.payment_due_day = Number(body.payment_due_day);
   if (body.start_date) fields.start_date = body.start_date;
   if (body.notes) fields.notes = body.notes;
 

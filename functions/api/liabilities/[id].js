@@ -97,11 +97,11 @@ export async function onRequestPatch(context) {
   // Regular field update
   const fields = {};
   const allowed = ['name', 'creditor_type', 'loan_size', 'current_balance',
-    'interest_rate', 'monthly_payment', 'start_date', 'active', 'notes'];
+    'interest_rate', 'monthly_payment', 'payment_due_day', 'start_date', 'active', 'notes'];
 
   for (const key of allowed) {
     if (body[key] !== undefined) {
-      const numFields = ['loan_size', 'current_balance', 'interest_rate', 'monthly_payment'];
+      const numFields = ['loan_size', 'current_balance', 'interest_rate', 'monthly_payment', 'payment_due_day'];
       fields[key] = numFields.includes(key) ? Number(body[key]) : body[key];
     }
   }

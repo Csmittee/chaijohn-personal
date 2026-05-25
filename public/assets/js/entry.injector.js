@@ -771,15 +771,16 @@
         loan_size:       Number(document.getElementById('liab-loan-size')?.value  || 0) || undefined,
         current_balance: Number(document.getElementById('liab-balance')?.value    || 0) || undefined,
         interest_rate:   Number(document.getElementById('liab-rate')?.value       || 0) || undefined,
-        monthly_payment: Number(document.getElementById('liab-monthly')?.value    || 0) || undefined,
-        start_date:      document.getElementById('liab-start')?.value || undefined,
-        notes:           document.getElementById('liab-notes')?.value || ''
+        monthly_payment:  Number(document.getElementById('liab-monthly')?.value    || 0) || undefined,
+        payment_due_day:  Number(document.getElementById('liab-due-day')?.value    || 0) || undefined,
+        start_date:       document.getElementById('liab-start')?.value || undefined,
+        notes:            document.getElementById('liab-notes')?.value || ''
       };
       Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
       try {
         await api('/api/liabilities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         showMsg('liab-msg', 'Liability added!');
-        ['liab-name','liab-loan-size','liab-balance','liab-rate','liab-monthly','liab-start','liab-notes']
+        ['liab-name','liab-loan-size','liab-balance','liab-rate','liab-monthly','liab-due-day','liab-start','liab-notes']
           .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         loadLiabilityTab();
       } catch (err) {
@@ -817,7 +818,7 @@
               </div>
             </div>
             <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.1rem">
-              ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}
+              ${l.creditor_type || ''} · ${l.interest_rate || 0}% p.a. · Monthly: ${fmt(l.monthly_payment)}${l.payment_due_day ? ` · Due ${l.payment_due_day}th` : ''}
             </div>
             <div style="height:4px;background:var(--border);border-radius:2px;margin-top:0.4rem;overflow:hidden">
               <div style="height:100%;width:${paidPct}%;background:#22c55e;border-radius:2px"></div>
@@ -908,10 +909,17 @@
                 style="font-size:0.85rem;padding:0.3rem 0.5rem">
             </div>
           </div>
-          <div class="form-group">
-            <label style="font-size:0.78rem;color:var(--text-secondary)">Notes</label>
-            <input type="text" class="le-notes" value="${(l.notes || '').replace(/"/g,'&quot;')}"
-              style="font-size:0.85rem;padding:0.3rem 0.5rem">
+          <div class="form-row">
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Payment Due Day (1–31)</label>
+              <input type="number" class="le-due-day" min="1" max="31" value="${l.payment_due_day || ''}"
+                placeholder="e.g. 5" style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
+            <div class="form-group">
+              <label style="font-size:0.78rem;color:var(--text-secondary)">Notes</label>
+              <input type="text" class="le-notes" value="${(l.notes || '').replace(/"/g,'&quot;')}"
+                style="font-size:0.85rem;padding:0.3rem 0.5rem">
+            </div>
           </div>
           <div style="display:flex;gap:0.5rem;margin-top:0.25rem">
             <button class="btn btn-primary le-save" style="flex:1;font-size:0.85rem;padding:0.35rem 1rem">Save Changes</button>
@@ -987,8 +995,9 @@
       loan_size:       Number(panel.querySelector('.le-loan')?.value    || 0) || undefined,
       current_balance: Number(panel.querySelector('.le-balance')?.value || 0),
       interest_rate:   Number(panel.querySelector('.le-rate')?.value    || 0) || undefined,
-      monthly_payment: Number(panel.querySelector('.le-monthly')?.value || 0) || undefined,
-      notes:           panel.querySelector('.le-notes')?.value || ''
+      monthly_payment:  Number(panel.querySelector('.le-monthly')?.value  || 0) || undefined,
+      payment_due_day:  Number(panel.querySelector('.le-due-day')?.value  || 0) || undefined,
+      notes:            panel.querySelector('.le-notes')?.value || ''
     };
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
     try {
