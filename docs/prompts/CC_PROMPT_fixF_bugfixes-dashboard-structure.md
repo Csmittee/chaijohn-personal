@@ -1,3 +1,5 @@
+✅ COMPLETE — 2026-05-25 — F1 category group 422 fix, F2 debts liability→Income tx, F3 transaction DELETE endpoint + delete button, F4 budget meter active/period filter fix, F5-F6 dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow/T2 Expense/T3 Debt/T4 Annual Plan). All committed directly to main.
+
 # CC_PROMPT_fixF_bugfixes-dashboard-structure
 
 Before writing any code, read fresh from repo:

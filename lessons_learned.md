@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
-> Last updated: 2026-05-24
-> Current highest lesson: L026
+> Last updated: 2026-05-25
+> Current highest lesson: L030
 
 ---
 
@@ -180,3 +180,27 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Rule:** For monthly display: `if period === 'Annual' → use amount ÷ 12`. Show badge "Annual" next to label so user knows it's a derived figure. One-time budgets only show if today falls within `start_date`–`end_date`. Filter toggle (All/Monthly/Annual/One-time) lets user isolate categories relevant to their current review.
 **Tag:** #budgets #dashboard #ux
 
+
+---
+
+## FIX F — Bugfixes + Dashboard Structure Overhaul (2026-05-25)
+
+### L027 — Airtable singleSelect PATCH must send only `{name}` for existing choices
+**Problem:** When `ensureGroupChoice()` patched the `group` singleSelect field, it mapped existing choices as `{ id, name, color }`. If any existing choice had no color, Airtable returned 422 Unprocessable Entity — rejected the entire PATCH even though the new choice was valid.
+**Rule:** When PATCHing a singleSelect/multipleSelect field's choices via Airtable Meta API, always map existing choices to `{ name: c.name }` only — never include `id` or `color`. Airtable infers the rest. Including undefined fields causes 422.
+**Tag:** #airtable #meta-api #categories
+
+### L028 — Airtable `active` field can return numeric 0 (not boolean false)
+**Problem:** Budget meter filter used `b.active !== false` to exclude inactive budgets. Airtable sometimes returns `active: 0` (numeric) for unchecked checkbox fields. The filter passed numeric 0 as truthy, showing inactive budgets in the meters.
+**Rule:** Always guard Airtable boolean fields with both `!== false && !== 0`. Defensive form: `b.active !== false && b.active !== 0`. Alternatively: `Boolean(b.active)`.
+**Tag:** #airtable #budgets #filters
+
+### L029 — Debts table uses different field names than Liabilities table
+**Problem:** Both tables track loans but use different field names: Liabilities uses `name` + `loan_size`; Debts uses `creditor_name` + `original_amount`. The F2 Income-tx creation for new debts had to use the Debts field names, not Liabilities field names.
+**Rule:** When extending cashflow logic to a second "liability-like" table, always re-read that table's actual field names from source before writing. Do not assume they match a sibling table.
+**Tag:** #debts #liabilities #airtable
+
+### L030 — Dashboard content zone pattern: active panel drives dynamic content
+**Problem:** The old dashboard used a fixed 4-panel CSS grid that showed all panels simultaneously. This cramped every chart and made the page non-scalable for adding new content types.
+**Rule:** New pattern — two zones: (1) GRAPH ZONE: horizontal-scroll flex row of fixed-width chart panels (380 px, `flex-shrink: 0`). Clicking a panel sets it `.active` (blue border). (2) CONTENT ZONE: `#content-controls` + `#content-body` re-rendered by JS on every panel switch. Content controls include period toggle (T1/T2), year selector (T3/T4), filter chips, and modal trigger buttons. Each panel gets its own `renderT#Content(body)` function. `loadContentZone(panelId)` is called from `activatePanel()` and from `loadAll()` (using current `activePanel`). This decouples chart rendering from tabular/card content rendering and keeps each function focused.
+**Tag:** #dashboard #architecture #ux

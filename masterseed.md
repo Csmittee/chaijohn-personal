@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-24 — Fix A/B/C/D/E complete; prompts archived to docs/prompts/
+> Last Updated: 2026-05-25 — Fix F complete; prompts A–F archived to docs/prompts/
 
 ---
 
@@ -237,6 +237,7 @@ functions/
 | Fix C | Fix 14 (Budget meter proportional scale) + Fix 15–17 (Utilities YoY charts + FT note + import script v2) | ✅ COMPLETE |
 | Fix D | D1 Dropzone text files · D2 Diary AI undo · D3 Forecast cashflow · D4 Alert bubbles · D5 Category create · D6 One-time budget + T4 panel | ✅ COMPLETE |
 | Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
+| Fix F | F1 Category group 422 fix · F2 Debts liability→Income tx · F3 Transaction DELETE button · F4 Budget meter active/period filter · F5-F6 Dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow / T2 Expense / T3 Debt / T4 Annual Plan) | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -248,8 +249,8 @@ functions/
 **Working and confirmed:**
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
-- Dashboard: T1 cashflow (30-day, netflow + in-vs-out toggle, KV sync point), T2 Pareto, T3 Liabilities, T4 Budget vs Actual — all four in single top-row grid (2:1:1:1), collapsible panels. Budget Meters (period filter: all/monthly/annual/one-time, annual÷12 normalisation). Risk Simulator, Solution Playroom, Alert chips ✅
-- Entry: Transactions (entity autocomplete datalist) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
+- Dashboard (Fix F complete): Horizontal-scroll GRAPH ZONE (4 chart panels at 380 px, active panel highlighted with blue border). Dynamic CONTENT ZONE switches view on panel click: T1=Cashflow Breakdown, T2=Expense Intelligence (budget comparison + unbudgeted), T3=Debt Overview (expandable cards + lazy-load payment history), T4=Annual Financial Plan (4 collapsible sections). Content controls render period toggle or year selector per active panel. Risk Simulator + Solution Playroom modal buttons in content controls. ✅
+- Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
 - Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
@@ -278,7 +279,7 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-1. QA Fix E live: confirm category create with new group, entity autocomplete, liability cashflow transactions, KV sync balance, in-vs-out toggle, period meter filter, 4-panel layout
+1. QA Fix F live: confirm graph train scrolling, content zone switching per panel, T1/T2/T3/T4 content renders, delete button on transactions, category group create (no 422), debts create Income tx
 2. Collection module full test + buyer tags
 3. AI Advisor full test + verify financial context loads
 
