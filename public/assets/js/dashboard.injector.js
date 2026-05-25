@@ -21,6 +21,7 @@
   let dismissedAlerts = new Set();
   let syncPoint    = null;
   let t1ViewMode   = 'netflow';
+  let t2CutoffDate = null;
 
   /* ── Date helpers ── */
   function rangeStart(range) {
@@ -130,6 +131,16 @@
     return map;
   }
 
+  // Returns per-month budget rate for any period type
+  function monthlyBudgetRate(b) {
+    const amount = Number(b.amount || 0);
+    const period = b.period || 'Monthly';
+    if (period === 'Annual')  return amount / 12;
+    if (period === '3x-year') return (amount * 3) / 12;
+    if (period === '6x-year') return (amount * 6) / 12;
+    return amount; // Monthly / One-time
+  }
+
   /* ── F5-F6: Graph panel clicks ── */
   function initGraphPanels() {
     document.querySelectorAll('.graph-panel').forEach(panel => {
@@ -202,6 +213,15 @@
     }
 
     if (panelId === 't2') {
+      html += `<div style="display:flex;align-items:center;gap:0.3rem">
+        <span style="font-size:0.74rem;color:var(--text-secondary)">From:</span>
+        <input type="date" id="t2-cutoff-date" value="${t2CutoffDate || ''}"
+          style="font-size:0.76rem;padding:0.18rem 0.35rem;border:1px solid var(--border);
+          border-radius:4px;background:var(--bg-card);color:var(--text-primary);font-family:inherit">
+        ${t2CutoffDate ? `<button id="t2-cutoff-clear" style="font-size:0.72rem;color:var(--text-secondary);
+          background:none;border:none;cursor:pointer;font-family:inherit;line-height:1;padding:0.1rem 0.25rem;
+          border:1px solid var(--border);border-radius:4px">✕</button>` : ''}
+      </div>`;
       html += `<div class="period-toggle">
         <button class="period-btn${t2ContentFilter === 'group'   ? ' active' : ''}" data-t2-filter="group">By Group</button>
         <button class="period-btn${t2ContentFilter === 'all'     ? ' active' : ''}" data-t2-filter="all">All</button>
@@ -238,6 +258,20 @@
         const body = document.getElementById('content-body');
         if (body) renderT2Content(body);
       });
+    });
+
+    // Wire T2 cut-off date
+    ctrl.querySelector('#t2-cutoff-date')?.addEventListener('change', e => {
+      t2CutoffDate = e.target.value || null;
+      renderContentControls('t2');
+      const body = document.getElementById('content-body');
+      if (body) renderT2Content(body);
+    });
+    ctrl.querySelector('#t2-cutoff-clear')?.addEventListener('click', () => {
+      t2CutoffDate = null;
+      renderContentControls('t2');
+      const body = document.getElementById('content-body');
+      if (body) renderT2Content(body);
     });
 
     // Wire year selector
@@ -322,11 +356,16 @@
 
   /* ── F6: T2 Content — Expense Intelligence ── */
   function renderT2Content(body) {
-    const nowYM = currentYM();
-    const start = rangeStart(activeRange);
+    const nowYM  = currentYM();
+    const today  = new Date().toISOString().split('T')[0];
+    const start  = t2CutoffDate || rangeStart(activeRange);
+    // nMonths: auto from cutoff date, or from period toggle
+    const nMonths = t2CutoffDate
+      ? Math.max(1, monthsBetween(start.slice(0, 7), currentYM()).length)
+      : (activeRange === '1m' ? 1 : activeRange === '3m' ? 3 : activeRange === '6m' ? 6 : 12);
 
     const periodExp = txData.filter(t =>
-      t.type === 'Expense' && t.date >= start && t.date <= new Date().toISOString().split('T')[0]
+      t.type === 'Expense' && t.date >= start && t.date <= today
     );
 
     const catMap = {};
@@ -353,7 +392,10 @@
       const cat    = catMap[catId] || {};
       const spent  = spendByCat[catId] || 0;
       const period = b.period || 'Monthly';
-      const limit  = period === 'Annual' ? Number(b.amount || 0) / 12 : Number(b.amount || 0);
+      // For One-time, use full amount regardless of nMonths
+      const limit  = period === 'One-time'
+        ? Number(b.amount || 0)
+        : monthlyBudgetRate(b) * nMonths;
       const label  = b.label || cat.name || 'Budget';
       const p      = pct(spent, limit);
       return { b, catId, cat, spent, limit, p, label, period };
@@ -373,7 +415,9 @@
 
     function periodBadge(period) {
       if (!period || period === 'Monthly') return '';
-      if (period === 'Annual') return `<span class="period-badge period-badge-annual">Annual÷12</span>`;
+      if (period === 'Annual')   return `<span class="period-badge period-badge-annual">÷12</span>`;
+      if (period === '3x-year')  return `<span class="period-badge period-badge-annual">3×/yr</span>`;
+      if (period === '6x-year')  return `<span class="period-badge period-badge-annual">6×/yr</span>`;
       if (period === 'One-time') return `<span class="period-badge period-badge-onetime">One-time</span>`;
       return `<span class="period-badge period-badge-annual">${period}</span>`;
     }
@@ -428,10 +472,14 @@
         </div>`;
       }
 
+      const periodLabel = t2CutoffDate
+        ? `From ${t2CutoffDate}`
+        : (activeRange === '1m' ? '1 month' : activeRange === '3m' ? '3 months' : activeRange === '6m' ? '6 months' : '12 months');
       body.innerHTML = `
         <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.5rem">
           ${overCount > 0 ? `<span style="color:#ef4444;font-weight:700">${overCount} over</span> · ` : ''}
-          ${grps.length} groups · Total spent ${fmt(totalSpent)}
+          ${grps.length} groups · Total spent ${fmt(totalSpent)} · Budget window: ${nMonths}mo
+          ${t2CutoffDate ? `<span style="color:#6366f1">· From ${t2CutoffDate}</span>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:0.4rem;height:220px">
           <div style="display:flex;gap:0.4rem;flex:${row2.length ? 55 : 100}">
@@ -452,7 +500,8 @@
       <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.6rem">
         ${overCount > 0 ? `<span style="color:#ef4444;font-weight:700">${overCount} over</span> · ` : ''}
         ${unbudgeted.length > 0 ? `${unbudgeted.length} unbudgeted · ` : ''}
-        Total spent ${fmt(totalSpent)}
+        Total spent ${fmt(totalSpent)} · Budget window: ${nMonths}mo
+        ${t2CutoffDate ? `<span style="color:#6366f1">· From ${t2CutoffDate}</span>` : ''}
       </div>
 
       ${mosaicData.length === 0 ? '<div class="content-card" style="color:var(--text-secondary)">No budgets match filter.</div>' : ''}
