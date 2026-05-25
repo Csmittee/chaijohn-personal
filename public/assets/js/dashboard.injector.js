@@ -11,6 +11,7 @@
   let t2ContentFilter = 'all';   // F6 T2 content filter
   let txData       = [];
   let budgets      = [];
+  let budgetMap    = {};
   let liabilities  = [];
   let categories   = [];
   let t1Chart, t2Chart, t3Chart, t4Chart, playroomChart;
@@ -96,6 +97,8 @@
     ]);
     txData      = (txRes.records     || []).map(r => ({ _id: r.id, ...r.fields }));
     budgets     = (budgetRes.records  || []).map(r => ({ id: r.id, ...r.fields }));
+    budgetMap   = {};
+    budgets.forEach(b => { budgetMap[b.id] = b; });
     liabilities = (liabRes.records    || []).map(r => ({ id: r.id, ...r.fields }));
     categories  = (catRes.records     || []).map(r => ({ id: r.id, ...r.fields }));
 
@@ -112,6 +115,11 @@
   function linkedId(field) {
     if (!field) return null;
     return Array.isArray(field) ? (field[0] || null) : field;
+  }
+  function resolveCatId(t) {
+    const bid = linkedId(t.budget_id);
+    const budget = bid ? budgetMap[bid] : null;
+    return budget ? linkedId(budget.category_id) : linkedId(t.category_id);
   }
   function groupSum(arr, keyFn) {
     const map = {};
@@ -273,7 +281,7 @@
     function txRows(list) {
       if (list.length === 0) return '<div class="cashflow-row" style="color:var(--text-secondary);font-size:0.8rem">None in this period</div>';
       return list.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(t => {
-        const catId = linkedId(t.category_id);
+        const catId = resolveCatId(t);
         const cat   = catMap[catId];
         const isInc = t.type === 'Income';
         return `<div class="cashflow-row">
@@ -348,7 +356,7 @@
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
-    const spendByCat = groupSum(periodExp, t => linkedId(t.category_id));
+    const spendByCat = groupSum(periodExp, t => resolveCatId(t));
 
     // Filter budgets based on t2ContentFilter
     let visibleBudgets = budgets.filter(b => b.active !== false && b.active !== 0);
@@ -378,7 +386,8 @@
     // Find unbudgeted expenses
     const budgetedCatIds = new Set(visibleBudgets.map(b => linkedId(b.category_id)).filter(Boolean));
     const unbudgeted = periodExp.filter(t => {
-      const cid = linkedId(t.category_id);
+      if (linkedId(t.budget_id)) return false;
+      const cid = resolveCatId(t);
       return !cid || !budgetedCatIds.has(cid);
     });
     const unbudgetedTotal = unbudgeted.reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -428,7 +437,7 @@
           ⚡ Unbudgeted Expenses — ${fmt(unbudgetedTotal)}
         </div>
         ${unbudgeted.slice(0, 10).map(t => {
-          const cat = catMap[linkedId(t.category_id)];
+          const cat = catMap[resolveCatId(t)];
           return `<div class="content-card" style="border-left:3px solid #f59e0b">
             <div style="display:flex;justify-content:space-between">
               <span style="font-size:0.83rem">${t.description || t.entity || '—'}</span>
@@ -581,7 +590,7 @@
     });
     const expActualByCat = groupSum(
       yearTx.filter(t => t.type === 'Expense' && t.source !== 'LiabilityPayment'),
-      t => linkedId(t.category_id)
+      t => resolveCatId(t)
     );
     const expActualTotal = Object.values(expActualByCat).reduce((s, v) => s + v, 0);
 
@@ -728,7 +737,7 @@
 
     const redChips = [], amberChips = [], blueChips = [];
     const nowExpenses = txData.filter(t => toYM(t.date) === nowYM && t.type === 'Expense');
-    const spendByCat  = groupSum(nowExpenses, t => linkedId(t.category_id));
+    const spendByCat  = groupSum(nowExpenses, t => resolveCatId(t));
 
     budgets.forEach(b => {
       if (!b.active) return;
@@ -1120,7 +1129,7 @@
       if (subtitle) subtitle.textContent = t2DrillGroup;
       const sumByCat = {};
       expenses.forEach(t => {
-        const catId = linkedId(t.category_id);
+        const catId = resolveCatId(t);
         const cat   = catMap[catId];
         if (!cat || cat.group !== t2DrillGroup) return;
         sumByCat[catId] = (sumByCat[catId] || 0) + Number(t.amount || 0);
@@ -1138,7 +1147,7 @@
       if (subtitle) subtitle.textContent = 'By group — click to drill in';
       const sumByGroup = {};
       expenses.forEach(t => {
-        const catId = linkedId(t.category_id);
+        const catId = resolveCatId(t);
         const grp   = catMap[catId]?.group || 'Other';
         sumByGroup[grp] = (sumByGroup[grp] || 0) + Number(t.amount || 0);
       });
@@ -1446,7 +1455,7 @@
       txRes = await r.json();
     } catch { return; }
 
-    const tx6m = (txRes.records || []).map(r => r.fields).filter(t => linkedId(t.category_id) === catId);
+    const tx6m = (txRes.records || []).map(r => r.fields).filter(t => resolveCatId(t) === catId);
     const spendByM = {};
     tx6m.forEach(t => {
       const ym = toYM(t.date);
@@ -1498,7 +1507,7 @@
 
     const catsPaidThisMonth = new Set();
     nowTx.filter(t => t.type === 'Expense').forEach(t => {
-      const cid = linkedId(t.category_id);
+      const cid = resolveCatId(t);
       if (cid) catsPaidThisMonth.add(cid);
     });
 
