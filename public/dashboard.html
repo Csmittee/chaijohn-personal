@@ -63,7 +63,7 @@
     }
 
     /* ── Content Zone ── */
-    #content-zone { padding: 0.75rem; }
+    #content-zone { padding: 0.75rem; overflow-x: hidden; }
     #content-controls {
       display: flex;
       gap: 0.5rem;
@@ -157,7 +157,7 @@
     /* ── Compact mosaic grid (T2 budgets) ── */
     .budget-mosaic {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
       gap: 0.35rem;
       align-items: start;
     }
@@ -169,12 +169,13 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      min-width: 0;
     }
 
     /* ── Mini transaction cards (T1) ── */
     .tx-mini-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 0.3rem;
     }
     .tx-mini-card {
@@ -186,12 +187,13 @@
       justify-content: space-between;
       align-items: center;
       gap: 0.3rem;
+      min-width: 0;
     }
 
-    /* ── 3-col grid for T3 liabilities ── */
+    /* ── Responsive grid for T3 liabilities ── */
     .liab-content-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 0.45rem;
       align-items: start;
     }
