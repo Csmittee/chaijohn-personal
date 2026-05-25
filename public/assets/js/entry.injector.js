@@ -101,6 +101,15 @@
 
     // G6: budget-category only shows Expense categories
     renderCatSelect('budget-category', expenses);
+
+    // Populate group dropdown for New Category form from loaded categories
+    const groupSel = document.getElementById('cat-group');
+    if (groupSel) {
+      const currentVal = groupSel.value;
+      const groups = [...new Set(categories.map(c => c.group).filter(Boolean))].sort();
+      groupSel.innerHTML = '<option value="">— Select group —</option>' +
+        groups.map(g => `<option value="${g}"${g === currentVal ? ' selected' : ''}>${g}</option>`).join('');
+    }
   }
 
   /* ── G3: render budget options grouped by category_group ── */
