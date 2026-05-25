@@ -391,34 +391,53 @@
       });
       const grps = Object.values(grpMap).sort((a, b) => b.totalLimit - a.totalLimit);
 
+      // Split into 2 rows: row1 = groups covering first ~50% of total budget, row2 = rest
+      const totalAll = grps.reduce((s, g) => s + g.totalLimit, 0);
+      let splitIdx = 0, cumul = 0;
+      while (splitIdx < grps.length - 1) {
+        cumul += grps[splitIdx].totalLimit;
+        splitIdx++;
+        if (cumul >= totalAll * 0.50) break;
+      }
+      const row1 = grps.slice(0, splitIdx);
+      const row2 = grps.slice(splitIdx);
+
+      // sqrt flex so large groups don't completely swallow small ones within a row
+      const sqFlex = g => Math.max(Math.sqrt(g.totalLimit), 1).toFixed(1);
+
+      function grpBox(g) {
+        const gp  = pct(g.spent, g.totalLimit);
+        const clr = g.worst >= 100 ? '#ef4444' : g.worst >= 80 ? '#f59e0b' : '#22c55e';
+        return `<div style="flex:${sqFlex(g)};border:1px solid var(--border);border-radius:var(--radius);
+          padding:0.5rem 0.55rem;background:var(--bg-card);border-top:3px solid ${clr};
+          display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-width:0">
+          <div>
+            <div style="font-weight:700;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.name}</div>
+            <div style="font-size:0.63rem;color:var(--text-secondary)">${g.count} budget${g.count > 1 ? 's' : ''}</div>
+          </div>
+          <div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:0.22rem">
+              <div style="height:100%;width:${Math.min(gp,100)}%;background:${clr};border-radius:2px"></div>
+            </div>
+            <div style="font-size:0.63rem;display:flex;justify-content:space-between;gap:0.2rem">
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmt(g.spent)}</span>
+              <span style="color:${clr};font-weight:700;flex-shrink:0">${gp}%</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${fmt(g.totalLimit)}</span>
+            </div>
+          </div>
+        </div>`;
+      }
+
       body.innerHTML = `
         <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.5rem">
           ${overCount > 0 ? `<span style="color:#ef4444;font-weight:700">${overCount} over</span> · ` : ''}
           ${grps.length} groups · Total spent ${fmt(totalSpent)}
         </div>
-        <div style="display:flex;gap:0.4rem;height:150px;align-items:stretch">
-          ${grps.map(g => {
-            const gp  = pct(g.spent, g.totalLimit);
-            const clr = g.worst >= 100 ? '#ef4444' : g.worst >= 80 ? '#f59e0b' : '#22c55e';
-            return `<div style="flex:${Math.max(g.totalLimit,1)};border:1px solid var(--border);border-radius:var(--radius);
-              padding:0.5rem 0.55rem;background:var(--bg-card);border-top:3px solid ${clr};
-              display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-width:0">
-              <div>
-                <div style="font-weight:700;font-size:0.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.name}</div>
-                <div style="font-size:0.62rem;color:var(--text-secondary)">${g.count} budget${g.count > 1 ? 's' : ''}</div>
-              </div>
-              <div>
-                <div style="height:4px;background:var(--border);border-radius:2px;margin-bottom:0.22rem">
-                  <div style="height:100%;width:${Math.min(gp,100)}%;background:${clr};border-radius:2px"></div>
-                </div>
-                <div style="font-size:0.62rem;display:flex;justify-content:space-between;gap:0.2rem">
-                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmt(g.spent)}</span>
-                  <span style="color:${clr};font-weight:700;flex-shrink:0">${gp}%</span>
-                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${fmt(g.totalLimit)}</span>
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
+        <div style="display:flex;flex-direction:column;gap:0.4rem;height:220px">
+          <div style="display:flex;gap:0.4rem;flex:${row2.length ? 55 : 100}">
+            ${row1.map(grpBox).join('')}
+          </div>
+          ${row2.length ? `<div style="display:flex;gap:0.4rem;flex:45">${row2.map(grpBox).join('')}</div>` : ''}
         </div>`;
       return;
     }
