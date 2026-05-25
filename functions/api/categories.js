@@ -27,7 +27,7 @@ async function ensureGroupChoice(apiKey, groupValue) {
         body: JSON.stringify({
           options: {
             choices: [
-              ...existingChoices.map(c => ({ id: c.id, name: c.name, color: c.color })),
+              ...existingChoices.map(c => ({ name: c.name })),
               { name: groupValue }
             ]
           }
