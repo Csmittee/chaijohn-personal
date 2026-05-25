@@ -14,7 +14,7 @@
   let budgetMap    = {};
   let liabilities  = [];
   let categories   = [];
-  let t1Chart, t2Chart, t3Chart, t4Chart, playroomChart;
+  let t1Chart, t1ZoomChart, t2Chart, t3Chart, t4Chart, playroomChart;
   let t2DrillGroup = null;
   let playroomBudgetId = null;
   let t4Range      = '1m';
@@ -958,52 +958,59 @@
     return bal;
   }
 
-  function renderT1DailyForecast(canvas) {
-    const subtitle = document.getElementById('t1-subtitle');
-    if (subtitle) subtitle.textContent = t1ViewMode === 'invsout'
-      ? 'Daily — Income vs Expense (15 days)'
-      : 'Daily cash flow + 15-day forecast';
+  function renderT1DailyForecast(canvas, isZoom = false) {
+    const isInOut = t1ViewMode === 'invsout';
+    const subtitle = isZoom
+      ? document.getElementById('t1-zoom-subtitle')
+      : document.getElementById('t1-subtitle');
+    if (subtitle) subtitle.textContent = isInOut
+      ? 'Daily — Income vs Expense + 15-day budget forecast'
+      : 'Daily net balance + 15-day budget forecast';
 
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     const pastDays = [], futureDays = [];
     for (let i = 14; i >= 0; i--) pastDays.push(dateOffset(todayStr, -i));
     for (let i = 1; i <= 15; i++) futureDays.push(dateOffset(todayStr, i));
-    const allDays = [...pastDays, ...futureDays];
 
     const incByDay = {}, expByDay = {};
     txData.forEach(t => {
       if (!pastDays.includes(t.date)) return;
       const amt = Number(t.amount || 0);
-      if (t.type === 'Income')       incByDay[t.date]  = (incByDay[t.date]  || 0) + amt;
-      else if (t.type === 'Expense') expByDay[t.date]  = (expByDay[t.date]  || 0) + amt;
+      if (t.type === 'Income')       incByDay[t.date] = (incByDay[t.date] || 0) + amt;
+      else if (t.type === 'Expense') expByDay[t.date] = (expByDay[t.date] || 0) + amt;
     });
 
-    const totalInc   = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
-    const totalExp   = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
-    const avgDailyInc = totalInc / Math.max(1, pastDays.length);
-    const avgDailyExp = totalExp / Math.max(1, pastDays.length);
-
-    // Budget-based daily forecast rates
+    // Budget-based daily forecast
     const catMapFcD = {};
     categories.forEach(c => { catMapFcD[c.id] = c; });
-    const budgetFcDInc = budgets
-      .filter(b => b.active !== false)
+    const budgetFcDInc  = budgets.filter(b => b.active !== false)
       .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Earn')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
-    const budgetFcDExp = budgets
-      .filter(b => b.active !== false && b.active !== 0)
+    const budgetFcDExp  = budgets.filter(b => b.active !== false && b.active !== 0)
       .filter(b => catMapFcD[linkedId(b.category_id)]?.type === 'Expense')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
-    const budgetFcDLoan = liabilities
-      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
+    const budgetFcDLoan = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
       .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
+    const totalInc      = pastDays.reduce((s, d) => s + (incByDay[d] || 0), 0);
+    const totalExp      = pastDays.reduce((s, d) => s + (expByDay[d] || 0), 0);
+    const avgDailyInc   = totalInc / Math.max(1, pastDays.length);
+    const avgDailyExp   = totalExp / Math.max(1, pastDays.length);
     const fcastDailyInc = budgetFcDInc > 0 ? budgetFcDInc / 30 : avgDailyInc;
     const fcastDailyExp = (budgetFcDExp + budgetFcDLoan) > 0 ? (budgetFcDExp + budgetFcDLoan) / 30 : avgDailyExp;
 
-    const labels     = allDays.map(d => d.slice(5));
-    const todayIdx   = 14;
+    // Balance curve (past actual)
+    let runBal = syncPoint ? getSyncStartingBalance(pastDays[0]) : 0;
+    const balPast = pastDays.map(d => {
+      runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
+      return runBal;
+    });
+    const balForecast = [balPast[balPast.length - 1]];
+    futureDays.forEach(() => {
+      balForecast.push(balForecast[balForecast.length - 1] + fcastDailyInc - fcastDailyExp);
+    });
 
+    const todayIdx = 14;
     const todayLinePlugin = {
       id: 'todayLine',
       afterDraw(chart) {
@@ -1018,43 +1025,10 @@
         ctx.restore();
       }
     };
-
-    if (t1ViewMode === 'invsout') {
-      t1Chart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: pastDays.map(d => d.slice(5)),
-          datasets: [
-            { label: 'Income',  data: pastDays.map(d => incByDay[d] || 0),
-              backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 2 },
-            { label: 'Expense', data: pastDays.map(d => expByDay[d] || 0),
-              backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 2 }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
-          scales: { x: { ticks: { font: { size: 9 } } },
-            y: { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } } }
-        }
-      });
-      return;
-    }
-
-    let runBal = syncPoint ? getSyncStartingBalance(pastDays[0]) : 0;
-    const balPast = pastDays.map(d => {
-      runBal += (incByDay[d] || 0) - (expByDay[d] || 0);
-      return runBal;
-    });
-    const balForecast = [balPast[balPast.length - 1]];
-    futureDays.forEach(() => {
-      balForecast.push(balForecast[balForecast.length - 1] + fcastDailyInc - fcastDailyExp);
-    });
-
-    let syncLinePlugin = null;
+    const plugins = [todayLinePlugin];
     if (syncPoint && pastDays.includes(syncPoint.date)) {
       const spIdx = pastDays.indexOf(syncPoint.date);
-      syncLinePlugin = {
+      plugins.push({
         id: 'syncLine',
         afterDraw(chart) {
           const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
@@ -1067,69 +1041,77 @@
           ctx.fillText('📍sync', xPos + 2, top + 10);
           ctx.restore();
         }
-      };
+      });
     }
 
-    const plugins = [todayLinePlugin];
-    if (syncLinePlugin) plugins.push(syncLinePlugin);
+    const allLabels = [...pastDays.map(d => d.slice(5)), ...futureDays.map(d => d.slice(5))];
+    const tinyY = { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } };
+    const tooltipOpts = {
+      mode: 'index', intersect: false,
+      callbacks: {
+        title: items => items[0]?.label || '',
+        afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ') ? ['Budget-based forecast'] : []
+      }
+    };
+    const legendOpts = { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
+      filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } };
 
-    t1Chart = new Chart(canvas, {
+    let datasets, scales;
+    if (isInOut) {
+      datasets = [
+        { label: 'Income',       data: [...pastDays.map(d => incByDay[d] || 0), ...new Array(15).fill(null)],
+          backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 2 },
+        { label: 'Expense',      data: [...pastDays.map(d => expByDay[d] || 0), ...new Array(15).fill(null)],
+          backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 2 },
+        { label: '~ Budget Inc', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyInc)],
+          backgroundColor: 'rgba(34,197,94,0.25)', borderRadius: 2 },
+        { label: '~ Budget Exp', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyExp)],
+          backgroundColor: 'rgba(239,68,68,0.25)', borderRadius: 2 }
+      ];
+      scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+    } else {
+      // Net: balance curve only — clean, single Y axis
+      datasets = [
+        { label: 'Balance', data: [...balPast, ...new Array(15).fill(null)], type: 'line',
+          borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3,
+          fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
+        { label: '~ Bal Forecast', data: [...new Array(14).fill(null), ...balForecast],
+          type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0,
+          borderDash: [4, 3], tension: 0.3, fill: false }
+      ];
+      scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+    }
+
+    const chartRef = isZoom ? t1ZoomChart : t1Chart;
+    if (chartRef) chartRef.destroy();
+    const chart = new Chart(canvas, {
       type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Income',  data: [...pastDays.map(d => incByDay[d] || 0), ...new Array(15).fill(null)],
-            backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 2 },
-          { label: 'Expense', data: [...pastDays.map(d => expByDay[d] || 0), ...new Array(15).fill(null)],
-            backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 2 },
-          { label: '~ Budget Inc', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyInc)],
-            backgroundColor: 'rgba(34,197,94,0.25)', borderRadius: 2 },
-          { label: '~ Budget Exp', data: [...new Array(15).fill(null), ...futureDays.map(() => fcastDailyExp)],
-            backgroundColor: 'rgba(239,68,68,0.25)', borderRadius: 2 },
-          { label: 'Balance', data: [...balPast, ...new Array(15).fill(null)], type: 'line',
-            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 1, tension: 0.3, yAxisID: 'y2',
-            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
-          { label: '~ Bal Forecast', data: [...new Array(14).fill(null), ...balForecast],
-            type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0,
-            borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
-            filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } },
-          tooltip: { callbacks: {
-            label: ctx => {
-              const isForecast = ctx.dataset.label.startsWith('~ ');
-              const v = Math.round(ctx.raw || 0);
-              return `${isForecast ? '~ Est: ' : ''}${ctx.dataset.label.replace('~ ', '')}: ฿${v.toLocaleString()}`;
-            },
-            afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ')
-              ? ['Estimated — based on 15-day average'] : []
-          }}
-        },
-        scales: {
-          x:  { ticks: { font: { size: 9 } } },
-          y:  { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
-          y2: { position: 'right', grid: { drawOnChartArea: false },
-                ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
-        }
-      },
+      data: { labels: allLabels, datasets },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: legendOpts, tooltip: tooltipOpts }, scales },
       plugins
     });
+    if (isZoom) t1ZoomChart = chart; else t1Chart = chart;
   }
 
-  function renderT1MonthlyForecast(canvas, startDate) {
-    const subtitle   = document.getElementById('t1-subtitle');
-    const nowYM      = currentYM();
-    const startYM    = startDate.slice(0, 7);
-    const forecastMonths = activeRange === '3m' ? 1 : activeRange === '6m' ? 3 : 6;
+  function renderT1MonthlyForecast(canvas, startDate, isZoom = false) {
+    const nowYM   = currentYM();
+    const isInOut = t1ViewMode === 'invsout';
+    const subtitle = isZoom
+      ? document.getElementById('t1-zoom-subtitle')
+      : document.getElementById('t1-subtitle');
+
+    // Past/forecast split: 3M=(1,1), 6M=(2,3), 12M=(3,8)
+    const pastCount  = activeRange === '3m' ? 1 : activeRange === '6m' ? 2 : 3;
+    const fcastCount = activeRange === '3m' ? 1 : activeRange === '6m' ? 3 : 8;
+
+    const d0 = new Date(); d0.setDate(1); d0.setMonth(d0.getMonth() - pastCount);
+    const startYM = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}`;
 
     const pastMonths   = monthsBetween(startYM, nowYM);
     const futureMonths = [];
     let [fy, fm] = nowYM.split('-').map(Number);
-    for (let i = 0; i < forecastMonths; i++) {
+    for (let i = 0; i < fcastCount; i++) {
       fm++; if (fm > 12) { fm = 1; fy++; }
       futureMonths.push(`${fy}-${String(fm).padStart(2, '0')}`);
     }
@@ -1144,52 +1126,24 @@
       else if (t.type === 'Expense') expByM[ym] = (expByM[ym] || 0) + amt;
     });
 
-    if (t1ViewMode === 'invsout') {
-      if (subtitle) subtitle.textContent = 'Monthly — Income vs Expense';
-      t1Chart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: pastMonths.map(monthLabel),
-          datasets: [
-            { label: 'Income',  data: pastMonths.map(m => incByM[m] || 0),
-              backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
-            { label: 'Expense', data: pastMonths.map(m => expByM[m] || 0),
-              backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
-          scales: { x: { ticks: { font: { size: 9 } } },
-            y: { min: 0, ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } } }
-        }
-      });
-      return;
-    }
-
-    if (subtitle) subtitle.textContent = `Monthly cash flow + ${forecastMonths}-month budget forecast`;
-
-    // Budget-based monthly forecast (prefer over recent average)
+    // Budget-based monthly forecast
     const catMapFc = {};
     categories.forEach(c => { catMapFc[c.id] = c; });
-    const budgetFcInc = budgets
-      .filter(b => b.active !== false)
+    const budgetFcInc  = budgets.filter(b => b.active !== false)
       .filter(b => catMapFc[linkedId(b.category_id)]?.type === 'Earn')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
-    const budgetFcExp = budgets
-      .filter(b => b.active !== false && b.active !== 0)
+    const budgetFcExp  = budgets.filter(b => b.active !== false && b.active !== 0)
       .filter(b => catMapFc[linkedId(b.category_id)]?.type === 'Expense')
       .reduce((s, b) => s + monthlyBudgetRate(b), 0);
-    const budgetFcLoan = liabilities
-      .filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
+    const budgetFcLoan = liabilities.filter(l => l.active !== false && Number(l.current_balance || 0) > 0)
       .reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
-    const recentM = pastMonths.slice(-3);
-    const avgInc  = recentM.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentM.length);
-    const avgExp  = recentM.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentM.length);
-    // Use budget when defined; fall back to recent average only if no budgets exist
-    const fcastInc = budgetFcInc  > 0 ? budgetFcInc  : avgInc;
+    const recentM  = pastMonths.slice(-3);
+    const avgInc   = recentM.reduce((s, m) => s + (incByM[m] || 0), 0) / Math.max(1, recentM.length);
+    const avgExp   = recentM.reduce((s, m) => s + (expByM[m] || 0), 0) / Math.max(1, recentM.length);
+    const fcastInc = budgetFcInc > 0 ? budgetFcInc : avgInc;
     const fcastExp = (budgetFcExp + budgetFcLoan) > 0 ? (budgetFcExp + budgetFcLoan) : avgExp;
 
+    // Balance curve (past actual)
     let running = 0;
     if (syncPoint) {
       const syncYM = syncPoint.date.slice(0, 7);
@@ -1202,7 +1156,8 @@
     const balForecast = [balPast[balPast.length - 1]];
     futureMonths.forEach(() => balForecast.push(balForecast[balForecast.length - 1] + fcastInc - fcastExp));
 
-    const todayIdx = pastMonths.length - 1;
+    const nPast    = pastMonths.length;
+    const todayIdx = nPast - 1;
     const todayLinePlugin = {
       id: 'todayLine',
       afterDraw(chart) {
@@ -1217,48 +1172,77 @@
         ctx.restore();
       }
     };
+    const plugins = [todayLinePlugin];
+    if (syncPoint) {
+      const syncYM = syncPoint.date.slice(0, 7);
+      const spIdx  = pastMonths.indexOf(syncYM);
+      if (spIdx >= 0) {
+        plugins.push({
+          id: 'syncLine',
+          afterDraw(chart) {
+            const { ctx, scales: { x }, chartArea: { top, bottom } } = chart;
+            if (!x) return;
+            const xPos = x.getPixelForValue(spIdx);
+            ctx.save();
+            ctx.strokeStyle = '#6366f1'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+            ctx.fillStyle = '#6366f1'; ctx.font = '8px system-ui';
+            ctx.fillText('📍sync', xPos + 2, top + 10);
+            ctx.restore();
+          }
+        });
+      }
+    }
 
-    const nPast = pastMonths.length;
-    t1Chart = new Chart(canvas, {
+    const tinyY = { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } };
+    const tooltipOpts = {
+      mode: 'index', intersect: false,
+      callbacks: {
+        title: items => items[0]?.label || '',
+        afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ') ? ['Budget-based forecast'] : []
+      }
+    };
+    const legendOpts = { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
+      filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } };
+
+    let datasets, scales;
+    if (isInOut) {
+      if (subtitle) subtitle.textContent = `Monthly — Income vs Expense (+${fcastCount}mo budget forecast)`;
+      datasets = [
+        { label: 'Income',       data: [...pastMonths.map(m => incByM[m] || 0), ...new Array(fcastCount).fill(null)],
+          backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
+        { label: 'Expense',      data: [...pastMonths.map(m => expByM[m] || 0), ...new Array(fcastCount).fill(null)],
+          backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 },
+        { label: '~ Budget Inc', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastInc)],
+          backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 3 },
+        { label: '~ Budget Exp', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastExp)],
+          backgroundColor: 'rgba(239,68,68,0.28)', borderRadius: 3 }
+      ];
+      scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+    } else {
+      if (subtitle) subtitle.textContent = `Monthly cash flow · ${pastCount} past + ${fcastCount} forecast months`;
+      // Net: balance curve only — clean single-axis view
+      datasets = [
+        { label: 'Balance', data: [...balPast, ...new Array(fcastCount).fill(null)], type: 'line',
+          borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3, tension: 0.3,
+          fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
+        { label: '~ Bal Forecast', data: [...new Array(nPast - 1).fill(null), ...balForecast],
+          type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 1,
+          borderDash: [4, 3], tension: 0.3, fill: false }
+      ];
+      scales = { x: { ticks: { font: { size: 9 } } }, y: tinyY };
+    }
+
+    const chartRef = isZoom ? t1ZoomChart : t1Chart;
+    if (chartRef) chartRef.destroy();
+    const chart = new Chart(canvas, {
       type: 'bar',
-      data: {
-        labels: allMonths.map(monthLabel),
-        datasets: [
-          { label: 'Income',  data: [...pastMonths.map(m => incByM[m] || 0), ...new Array(forecastMonths).fill(null)],
-            backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 3 },
-          { label: 'Expense', data: [...pastMonths.map(m => expByM[m] || 0), ...new Array(forecastMonths).fill(null)],
-            backgroundColor: 'rgba(239,68,68,0.75)', borderRadius: 3 },
-          { label: '~ Budget Inc', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastInc)],
-            backgroundColor: 'rgba(34,197,94,0.28)', borderRadius: 3 },
-          { label: '~ Budget Exp', data: [...new Array(nPast).fill(null), ...futureMonths.map(() => fcastExp)],
-            backgroundColor: 'rgba(239,68,68,0.28)', borderRadius: 3 },
-          { label: 'Balance', data: [...balPast, ...new Array(forecastMonths).fill(null)], type: 'line',
-            borderColor: '#3b82f6', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y2',
-            fill: { target: { value: 0 }, above: 'rgba(59,130,246,0.08)', below: 'rgba(239,68,68,0.18)' } },
-          { label: '~ Bal Forecast', data: [...new Array(nPast - 1).fill(null), ...balForecast],
-            type: 'line', borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 1,
-            borderDash: [4, 3], tension: 0.3, yAxisID: 'y2', fill: false }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 },
-            filter: item => !item.text.startsWith('~ ') || item.text === '~ Bal Forecast' } },
-          tooltip: { callbacks: {
-            afterBody: ctx => ctx[0]?.dataset.label.startsWith('~ ')
-              ? ['Budget-based forecast'] : []
-          }}
-        },
-        scales: {
-          x:  { ticks: { font: { size: 9 } } },
-          y:  { ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
-          y2: { position: 'right', grid: { drawOnChartArea: false },
-                ticks: { font: { size: 9 }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
-        }
-      },
-      plugins: [todayLinePlugin]
+      data: { labels: allMonths.map(monthLabel), datasets },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: legendOpts, tooltip: tooltipOpts }, scales },
+      plugins
     });
+    if (isZoom) t1ZoomChart = chart; else t1Chart = chart;
   }
 
   /* ── T2 Expense Pareto chart ── */
@@ -1500,6 +1484,30 @@
         renderT1(rangeStart(activeRange));
       });
     });
+  }
+
+  /* ── T1 Zoom ── */
+  function initT1Zoom() {
+    const btn      = document.getElementById('t1-zoom-btn');
+    const backdrop = document.getElementById('t1-zoom-backdrop');
+    const closeBtn = document.getElementById('t1-zoom-close');
+
+    function openZoom() {
+      backdrop.classList.add('open');
+      const canvas = document.getElementById('t1-zoom-canvas');
+      if (!canvas) return;
+      if (t1ZoomChart) { t1ZoomChart.destroy(); t1ZoomChart = null; }
+      const start = rangeStart(activeRange);
+      if (activeRange === '1m') renderT1DailyForecast(canvas, true);
+      else renderT1MonthlyForecast(canvas, start, true);
+    }
+    function closeZoom() {
+      backdrop.classList.remove('open');
+      if (t1ZoomChart) { t1ZoomChart.destroy(); t1ZoomChart = null; }
+    }
+    btn?.addEventListener('click', e => { e.stopPropagation(); openZoom(); });
+    closeBtn?.addEventListener('click', closeZoom);
+    backdrop?.addEventListener('click', e => { if (e.target === backdrop) closeZoom(); });
   }
 
   /* ── T2 back button ── */
@@ -1766,6 +1774,7 @@
   document.addEventListener('DOMContentLoaded', async () => {
     initGraphPanels();
     initT1ViewMode();
+    initT1Zoom();
     initT2Back();
     initSyncPanel();
     initModals();
