@@ -5,19 +5,28 @@
   const fmt = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
 
   let categories         = [];
-  let allBudgets         = [];
+  let allBudgets         = [];   // expense budgets with category enrichment
   let budgetsData        = [];   // loaded budgets for inline edit
   let activeBudgetEditId = null;
   let activeLiabDetailId = null;
   let budgetView         = 'row';
   let budgetGroup        = 'all';
-  let budgetGroupState   = {};   // groupName → collapsed bool
-  let lastSpendByCat     = {};   // cached for re-render on view/group toggle
+  let budgetGroupState   = {};
+  let lastSpendByBudget  = {};   // keyed by budget.id
+  let lastSpendByCat     = {};   // keyed by category ID (legacy fallback)
   let txType      = 'Expense';
   let txPeriod    = 'daily';
-  let txMap       = {};   // record ID → tx fields (Fix 6)
+  let txMap       = {};
   let elecChart, waterChart;
   let budgetActiveFilter = 'active';
+
+  function periodShort(p) {
+    if (p === 'Monthly')  return 'mo';
+    if (p === 'Annual')   return 'yr';
+    if (p === 'One-time') return 'once';
+    if (p === '3x-year')  return '3x/yr';
+    return p || '';
+  }
 
   /* ── API helpers ── */
   async function api(path, opts = {}) {
@@ -63,26 +72,53 @@
     });
   }
 
-  /* ── Categories ── */
+  /* ── Categories (for earn dropdown + budget category form) ── */
   async function loadCategories() {
     const res = await api('/api/categories?active=false');
     categories = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
     populateCategoryDropdowns();
   }
 
+  /* ── Budgets — G3: fetch expense budgets with category enrichment ── */
   async function loadBudgets() {
     try {
-      const res = await api('/api/budgets?active_only=true');
+      const res = await api('/api/budgets?expense_only=true&active_only=true');
       allBudgets = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
     } catch { allBudgets = []; }
   }
 
+  /* ── G6: populate dropdowns correctly ── */
   function populateCategoryDropdowns() {
     const earns    = categories.filter(c => c.type === 'Earn');
     const expenses = categories.filter(c => c.type === 'Expense');
-    const loans    = categories.filter(c => c.type === 'Loan' || c.type === 'Investment');
-    renderCatSelect('tx-category', txType === 'Income' ? earns : expenses);
-    renderCatSelect('budget-category', [...earns, ...expenses, ...loans]);
+
+    // G3: expense tx uses budget list; earn tx uses earn categories
+    if (txType === 'Expense') {
+      renderBudgetSelect('tx-category', allBudgets);
+    } else {
+      renderCatSelect('tx-category', earns);
+    }
+
+    // G6: budget-category only shows Expense categories
+    renderCatSelect('budget-category', expenses);
+  }
+
+  /* ── G3: render budget options grouped by category_group ── */
+  function renderBudgetSelect(selId, buds) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const grouped = {};
+    buds.forEach(b => {
+      const g = b.category_group || 'Other';
+      if (!grouped[g]) grouped[g] = [];
+      grouped[g].push(b);
+    });
+    sel.innerHTML = '<option value="">— Select Budget —</option>' +
+      Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([grp, items]) =>
+        `<optgroup label="${grp}">` +
+        items.map(b => `<option value="${b.id}">${b.label} — ${fmt(b.amount)}/${periodShort(b.period)}</option>`).join('') +
+        '</optgroup>'
+      ).join('');
   }
 
   function renderCatSelect(selId, cats) {
@@ -102,19 +138,15 @@
       ).join('');
   }
 
-  /* ── Fix 8: Budget bar on category select ── */
-  async function updateBudgetBar(catId) {
+  /* ── G3: Budget bar — now keyed by budget ID ── */
+  async function updateBudgetBar(selectedId) {
     const bar = document.getElementById('tx-budget-bar');
     if (!bar) return;
-    if (!catId) { bar.style.display = 'none'; return; }
+    if (!selectedId || txType !== 'Expense') { bar.style.display = 'none'; return; }
 
-    const budget = allBudgets.find(b => {
-      const bCat = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-      return bCat === catId;
-    });
+    const budget = allBudgets.find(b => b.id === selectedId);
     if (!budget) { bar.style.display = 'none'; return; }
 
-    const cat   = categories.find(c => c.id === catId);
     const limit = Number(budget.amount || 0);
     const now   = new Date();
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -123,16 +155,19 @@
     try {
       const res = await api(`/api/transactions?start=${startOfMonth}&limit=500`);
       spent = (res.records || []).map(r => r.fields)
-        .filter(t => t.type === 'Expense' &&
-          (Array.isArray(t.category_id) ? t.category_id[0] : t.category_id) === catId)
+        .filter(t => {
+          if (t.type !== 'Expense') return false;
+          const bid = Array.isArray(t.budget_id) ? t.budget_id[0] : t.budget_id;
+          return bid === selectedId;
+        })
         .reduce((s, t) => s + Number(t.amount || 0), 0);
-    } catch { /* show bar with 0 spent */ }
+    } catch { /* show with 0 spent */ }
 
     const p   = limit > 0 ? Math.round((spent / limit) * 100) : 0;
     const clr = p >= 100 ? '#ef4444' : p >= 85 ? '#f59e0b' : '#22c55e';
     bar.style.display = 'block';
     bar.innerHTML = `
-      <span>${cat?.name || ''} — ${fmt(spent)} spent / ${fmt(limit)} budget (${p}%)</span>
+      <span>${budget.label} — ${fmt(spent)} spent / ${fmt(limit)} budget (${p}%)</span>
       <div style="height:5px;background:var(--border,#e2e8f0);border-radius:3px;overflow:hidden;margin-top:0.2rem">
         <div style="height:100%;width:${Math.min(p, 100)}%;background:${clr};border-radius:3px;transition:width 0.4s"></div>
       </div>`;
@@ -151,10 +186,17 @@
       txType = type;
       if (btnIncome)  btnIncome.className  = 'btn btn-lg ' + (type === 'Income'  ? 'btn-success' : 'btn-outline');
       if (btnExpense) btnExpense.className = 'btn btn-lg ' + (type === 'Expense' ? 'btn-danger'  : 'btn-outline');
-      renderCatSelect('tx-category', type === 'Income'
-        ? categories.filter(c => c.type === 'Earn')
-        : categories.filter(c => c.type === 'Expense'));
-      // Hide budget bar when type changes
+
+      // G3/G6: update label and dropdown based on type
+      const catLabel = document.querySelector('label[for="tx-category"]');
+      if (catLabel) catLabel.textContent = type === 'Expense' ? 'Budget' : 'Income Source';
+
+      if (type === 'Expense') {
+        renderBudgetSelect('tx-category', allBudgets);
+      } else {
+        renderCatSelect('tx-category', categories.filter(c => c.type === 'Earn'));
+      }
+
       const bar = document.getElementById('tx-budget-bar');
       if (bar) bar.style.display = 'none';
     }
@@ -163,26 +205,35 @@
     btnExpense?.addEventListener('click', () => setType('Expense'));
     setType('Expense');
 
-    // Fix 8: budget bar on category change
+    // G3: budget bar on selection change
     document.getElementById('tx-category')?.addEventListener('change', () => {
-      const catId = document.getElementById('tx-category')?.value;
-      updateBudgetBar(catId || '');
+      const selectedId = document.getElementById('tx-category')?.value;
+      updateBudgetBar(selectedId || '');
     });
 
     ensureMsgEl('tx-msg', 'save-tx');
 
     document.getElementById('save-tx')?.addEventListener('click', async () => {
-      const amount     = document.getElementById('tx-amount')?.value;
-      const categoryId = document.getElementById('tx-category')?.value;
+      const amount      = document.getElementById('tx-amount')?.value;
+      const selectedId  = document.getElementById('tx-category')?.value;
       const description = document.getElementById('tx-description')?.value || '';
-      const entity     = document.getElementById('tx-entity')?.value || '';
-      const date       = document.getElementById('tx-date')?.value || today;
-      const note       = document.getElementById('tx-note')?.value || '';
+      const entity      = document.getElementById('tx-entity')?.value || '';
+      const date        = document.getElementById('tx-date')?.value || today;
+      const note        = document.getElementById('tx-note')?.value || '';
 
       if (!amount || Number(amount) <= 0) return alert('Amount is required');
 
+      // G3: require budget for expense
+      if (txType === 'Expense' && !selectedId) return alert('Please select a budget for this expense');
+
       const body = { date, amount: Number(amount), type: txType, description, entity, note, source: 'Manual' };
-      if (categoryId) body.category_id = [categoryId];
+
+      // G3: send budget_id for expense, category_id for earn
+      if (txType === 'Expense') {
+        if (selectedId) body.budget_id = [selectedId];
+      } else {
+        if (selectedId) body.category_id = [selectedId];
+      }
 
       try {
         await api('/api/transactions', {
@@ -195,15 +246,14 @@
         document.getElementById('tx-note').value = '';
         loadTransactions();
         loadEntitySuggestions();
-        // Refresh budget bar
-        if (categoryId) updateBudgetBar(categoryId);
+        if (txType === 'Expense' && selectedId) updateBudgetBar(selectedId);
       } catch (err) {
         showMsg('tx-msg', err.message, false);
       }
     });
   }
 
-  /* ── Fix 6: Transaction list with edit ── */
+  /* ── G4: Transaction list with budget-aware display ── */
   async function loadTransactions() {
     const list = document.getElementById('tx-list');
     if (!list) return;
@@ -219,8 +269,10 @@
       start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     }
 
-    const catMap = {};
+    const catMap    = {};
+    const budgetMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
+    allBudgets.forEach(b => { budgetMap[b.id] = b; });
     txMap = {};
 
     try {
@@ -250,9 +302,31 @@
               <span style="color:${dayTotal >= 0 ? '#22c55e' : '#ef4444'}">${fmt(dayTotal)}</span>
             </div>
             ${txs.map(t => {
-              const catId   = Array.isArray(t.category_id) ? t.category_id[0] : t.category_id;
-              const cat     = catMap[catId];
-              const isIncome = t.type === 'Income';
+              const isIncome  = t.type === 'Income';
+              const isLiab    = t.source === 'LiabilityPayment' || t.source === 'LiabilityCreation';
+
+              // G4: resolve display label via budget_id first
+              let subLabel = '';
+              if (isLiab) {
+                subLabel = 'Loan — ' + (t.entity || '');
+              } else if (t.budget_label) {
+                subLabel = (t.category_group ? t.category_group + ' — ' : '') + t.budget_label;
+              } else if (t.category_name) {
+                subLabel = (t.category_group ? t.category_group + ' — ' : '') + t.category_name;
+                if (t.legacy) subLabel += ' <span style="font-size:0.7rem;color:#94a3b8">(legacy)</span>';
+              } else {
+                // Local fallback
+                const bid    = Array.isArray(t.budget_id) ? t.budget_id[0] : t.budget_id;
+                const budget = budgetMap[bid];
+                const catId  = Array.isArray(t.category_id) ? t.category_id[0] : t.category_id;
+                const cat    = catMap[catId];
+                if (budget) {
+                  subLabel = (budget.category_group ? budget.category_group + ' — ' : '') + (budget.label || '');
+                } else if (cat) {
+                  subLabel = (cat.group ? cat.group + ' — ' : '') + cat.name;
+                }
+              }
+
               return `
                 <div class="tx-row" data-tx-id="${t._id}"
                   style="display:flex;justify-content:space-between;align-items:center;
@@ -262,8 +336,7 @@
                       ${t.description || t.entity || 'Transaction'}
                     </div>
                     <div style="font-size:0.75rem;color:var(--text-secondary)">
-                      ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''}
-                      ${t.note ? ' · ' + t.note : ''}
+                      ${subLabel}${t.note ? ' · ' + t.note : ''}
                     </div>
                   </div>
                   <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;margin-left:0.5rem">
@@ -280,7 +353,6 @@
           </div>`;
       }).join('');
 
-      // Wire up edit buttons
       list.querySelectorAll('.tx-edit-btn').forEach(btn => {
         btn.addEventListener('click', () => showEditForm(btn.dataset.id));
       });
@@ -289,32 +361,50 @@
     }
   }
 
+  /* ── G3+G4: Edit form — budget select for expense, earn cat for income ── */
   function showEditForm(txId) {
     const tx  = txMap[txId];
     const row = document.querySelector(`.tx-row[data-tx-id="${txId}"]`);
     if (!tx || !row) return;
 
-    const catId = Array.isArray(tx.category_id) ? tx.category_id[0] : tx.category_id;
-    const catOptions = categories.map(c =>
-      `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.group ? c.group + ' — ' : ''}${c.name}</option>`
-    ).join('');
+    const currentType = tx.type || 'Expense';
+    const budgetId    = Array.isArray(tx.budget_id) ? tx.budget_id[0] : tx.budget_id;
+    const catId       = Array.isArray(tx.category_id) ? tx.category_id[0] : tx.category_id;
+
+    let dropdownHtml = '';
+    if (currentType === 'Expense') {
+      const opts = allBudgets.map(b =>
+        `<option value="${b.id}" ${b.id === budgetId ? 'selected' : ''}>${b.category_group ? b.category_group + ' — ' : ''}${b.label} (${fmt(b.amount)}/${periodShort(b.period)})</option>`
+      ).join('');
+      dropdownHtml = `
+        <select class="ef-budget-cat" style="width:100%;font-size:0.82rem;padding:0.25rem;margin-bottom:0.4rem">
+          <option value="">— No budget —</option>${opts}
+        </select>`;
+    } else {
+      const earns = categories.filter(c => c.type === 'Earn');
+      const opts  = earns.map(c =>
+        `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.group ? c.group + ' — ' : ''}${c.name}</option>`
+      ).join('');
+      dropdownHtml = `
+        <select class="ef-budget-cat" style="width:100%;font-size:0.82rem;padding:0.25rem;margin-bottom:0.4rem">
+          <option value="">— No category —</option>${opts}
+        </select>`;
+    }
 
     row.innerHTML = `
       <div style="width:100%;padding:0.5rem 0">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;margin-bottom:0.4rem">
           <input type="date"   class="ef-date"   value="${tx.date || ''}" style="font-size:0.82rem;padding:0.25rem">
           <select class="ef-type" style="font-size:0.82rem;padding:0.25rem">
-            <option value="Income"  ${tx.type==='Income'  ? 'selected':''}>Income</option>
-            <option value="Expense" ${tx.type==='Expense' ? 'selected':''}>Expense</option>
+            <option value="Income"  ${currentType==='Income'  ? 'selected':''}>Income</option>
+            <option value="Expense" ${currentType==='Expense' ? 'selected':''}>Expense</option>
           </select>
           <input type="number" class="ef-amount" value="${tx.amount || ''}" style="font-size:0.82rem;padding:0.25rem">
         </div>
-        <select class="ef-cat" style="width:100%;font-size:0.82rem;padding:0.25rem;margin-bottom:0.4rem">
-          <option value="">— No category —</option>${catOptions}
-        </select>
-        <input type="text" class="ef-desc" value="${tx.description || ''}" placeholder="Description"
+        ${dropdownHtml}
+        <input type="text" class="ef-desc" value="${(tx.description || '').replace(/"/g,'&quot;')}" placeholder="Description"
           style="width:100%;font-size:0.82rem;padding:0.25rem;margin-bottom:0.4rem">
-        <input type="text" class="ef-note" value="${tx.note || ''}" placeholder="Note"
+        <input type="text" class="ef-note" value="${(tx.note || '').replace(/"/g,'&quot;')}" placeholder="Note"
           style="width:100%;font-size:0.82rem;padding:0.25rem;margin-bottom:0.4rem">
         <div style="display:flex;gap:0.5rem">
           <button class="btn btn-primary ef-save" data-id="${txId}" style="flex:1;font-size:0.82rem;padding:0.3rem">Save</button>
@@ -342,16 +432,23 @@
   }
 
   async function saveEditTx(txId, row) {
-    const msgEl = row.querySelector('.ef-msg');
+    const msgEl    = row.querySelector('.ef-msg');
+    const editType = row.querySelector('.ef-type')?.value;
+    const bcVal    = row.querySelector('.ef-budget-cat')?.value;
+
     const fields = {
       date:        row.querySelector('.ef-date')?.value,
-      type:        row.querySelector('.ef-type')?.value,
+      type:        editType,
       amount:      Number(row.querySelector('.ef-amount')?.value || 0),
       description: row.querySelector('.ef-desc')?.value,
       note:        row.querySelector('.ef-note')?.value
     };
-    const catVal = row.querySelector('.ef-cat')?.value;
-    if (catVal) fields.category_id = [catVal];
+
+    // G3: send budget_id for expense, category_id for earn
+    if (bcVal) {
+      if (editType === 'Expense') fields.budget_id   = [bcVal];
+      else                        fields.category_id = [bcVal];
+    }
 
     try {
       await api(`/api/transactions/${txId}`, {
@@ -420,7 +517,6 @@
     if (!tableEl) return;
     try {
       const now = new Date();
-      // Fix 15: fetch all records (no year filter) for YoY charts
       const [yearRes, allRes] = await Promise.all([
         api(`/api/utilities?year=${now.getFullYear()}`),
         api('/api/utilities')
@@ -431,7 +527,6 @@
       if (records.length === 0) {
         tableEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No utility records yet.</div>';
       } else {
-        // Fix 16: add FT column to table
         tableEl.innerHTML = `
           <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
             <thead><tr style="border-bottom:1px solid var(--border)">
@@ -462,21 +557,17 @@
         renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
       }
 
-      // Fix 15: render YoY charts
       renderYoYCharts(yoyAllRecords);
     } catch (err) {
       tableEl.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
   }
 
-  /* ── Fix 15: YoY trend charts ── */
   const YOY_COLORS = { 2023:'#6366f1', 2024:'#22c55e', 2025:'#f59e0b', 2026:'#3b82f6' };
   const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
   function renderYoYCharts(records) {
     if (!records || records.length === 0) return;
-
-    // Build data grouped by year → month(1-12) → value
     const byYear = {};
     records.forEach(r => {
       const d = r.month || '';
@@ -490,7 +581,6 @@
     const years = Object.keys(byYear).map(Number).sort();
     if (years.length === 0) return;
 
-    // Populate year selects
     const fromSel = document.getElementById('yoy-from-year');
     const toSel   = document.getElementById('yoy-to-year');
     if (fromSel && fromSel.options.length === 0) {
@@ -630,7 +720,6 @@
     const pdateEl = document.getElementById('payment-date');
     if (pdateEl) pdateEl.value = today;
 
-    // Fix 18: collapse/expand "Add New Liability" form
     const liabToggle  = document.getElementById('liab-form-toggle');
     const liabBody    = document.getElementById('liab-form-body');
     const liabChevron = document.getElementById('liab-form-chevron');
@@ -692,7 +781,6 @@
     });
   }
 
-  /* ── Fix 19: Liabilities expandable rows ── */
   function renderLiabilitiesList() {
     const table = document.getElementById('active-liabilities-table');
     if (!table) return;
@@ -739,7 +827,6 @@
   }
 
   async function openLiabDetailPanel(liabId) {
-    // Toggle: clicking same row closes it
     if (activeLiabDetailId === liabId) {
       const panel = document.querySelector(`.liab-detail-panel[data-liab-panel="${liabId}"]`);
       if (panel) panel.style.display = 'none';
@@ -748,7 +835,6 @@
       activeLiabDetailId = null;
       return;
     }
-    // Close previous
     if (activeLiabDetailId) {
       const prev = document.querySelector(`.liab-detail-panel[data-liab-panel="${activeLiabDetailId}"]`);
       if (prev) prev.style.display = 'none';
@@ -772,8 +858,6 @@
     panel.innerHTML = `
       <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;
         margin-bottom:0.5rem;background:rgba(59,130,246,0.02)">
-
-        <!-- Section A: Edit Fields -->
         <div style="margin-bottom:1.25rem">
           <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
             margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Edit</div>
@@ -826,7 +910,6 @@
           <div class="le-msg" style="display:none;font-size:0.82rem;margin-top:0.4rem"></div>
         </div>
 
-        <!-- Section B: Balance Comparison Bar -->
         <div style="margin-bottom:1.25rem">
           <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
             margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Balance</div>
@@ -859,7 +942,6 @@
           `}
         </div>
 
-        <!-- Section C: Payment History -->
         <div>
           <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);
             margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Payment History</div>
@@ -946,8 +1028,7 @@
     const budgetList = document.getElementById('budgets-list');
     if (!budgetList) return;
     const now = new Date();
-    const nowYM        = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const startOfMonth = nowYM + '-01';
+    const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
     try {
       const budgetUrl = budgetActiveFilter === 'all' ? '/api/budgets?all=true' : '/api/budgets?active_only=true';
@@ -958,40 +1039,39 @@
       const buds = (budgetRes.records || []).map(r => ({ id: r.id, ...r.fields }));
       const txs  = (txRes.records || []).map(r => r.fields).filter(t => t.type === 'Expense');
 
-      const spendByCat = {};
+      // G3: track spend by budget_id (new) AND by category_id (legacy fallback)
+      const spendByBudget = {};
+      const spendByCat    = {};
       txs.forEach(t => {
+        const bid   = Array.isArray(t.budget_id)   ? t.budget_id[0]   : t.budget_id;
         const catId = Array.isArray(t.category_id) ? t.category_id[0] : t.category_id;
-        if (catId) spendByCat[catId] = (spendByCat[catId] || 0) + Number(t.amount || 0);
+        if (bid)   spendByBudget[bid]   = (spendByBudget[bid]   || 0) + Number(t.amount || 0);
+        else if (catId) spendByCat[catId] = (spendByCat[catId] || 0) + Number(t.amount || 0);
       });
-
-      const catMap = {};
-      categories.forEach(c => { catMap[c.id] = c; });
 
       if (buds.length === 0) {
         budgetList.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No budgets yet.</div>';
         return;
       }
 
-      budgetsData    = buds; // store for inline edit access
-      lastSpendByCat = spendByCat;
+      budgetsData       = buds;
+      lastSpendByBudget = spendByBudget;
+      lastSpendByCat    = spendByCat;
 
-      // Render using current view/group state
-      renderBudgetListWithSpend(budgetList, catMap, spendByCat);
+      renderBudgetListWithSpend(budgetList, spendByBudget, spendByCat);
     } catch (err) {
       budgetList.innerHTML = `<div style="color:#ef4444">${err.message}</div>`;
     }
   }
 
-  /* ── Fix 21: Budget inline edit ── */
+  /* ── Budget inline edit ── */
   function openBudgetEditPanel(budgetId) {
-    // Toggle: clicking same pencil closes it
     if (activeBudgetEditId === budgetId) {
       const panel = document.querySelector(`.budget-edit-panel[data-budget-panel="${budgetId}"]`);
       if (panel) panel.style.display = 'none';
       activeBudgetEditId = null;
       return;
     }
-    // Close any previously open panel
     if (activeBudgetEditId) {
       const prev = document.querySelector(`.budget-edit-panel[data-budget-panel="${activeBudgetEditId}"]`);
       if (prev) prev.style.display = 'none';
@@ -1003,7 +1083,9 @@
     if (!b || !panel) return;
 
     const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-    const catOptions = categories.map(c =>
+    // G6: budget edit category dropdown — expense only
+    const expenseCats = categories.filter(c => c.type === 'Expense');
+    const catOptions  = expenseCats.map(c =>
       `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.group ? c.group + ' — ' : ''}${c.name}</option>`
     ).join('');
 
@@ -1017,7 +1099,7 @@
               style="font-size:0.85rem;padding:0.35rem 0.5rem">
           </div>
           <div class="form-group">
-            <label style="font-size:0.8rem;color:var(--text-secondary)">Category</label>
+            <label style="font-size:0.8rem;color:var(--text-secondary)">Category (Expense)</label>
             <select class="be-category" style="font-size:0.85rem;padding:0.35rem 0.5rem">
               <option value="">— None —</option>${catOptions}
             </select>
@@ -1032,8 +1114,8 @@
           <div class="form-group">
             <label style="font-size:0.8rem;color:var(--text-secondary)">Period</label>
             <select class="be-period" style="font-size:0.85rem;padding:0.35rem 0.5rem">
-              <option value="Monthly" ${b.period === 'Monthly' ? 'selected' : ''}>Monthly</option>
-              <option value="Annual"  ${b.period === 'Annual'  ? 'selected' : ''}>Annual</option>
+              <option value="Monthly"  ${b.period === 'Monthly'  ? 'selected' : ''}>Monthly</option>
+              <option value="Annual"   ${b.period === 'Annual'   ? 'selected' : ''}>Annual</option>
               <option value="One-time" ${b.period === 'One-time' ? 'selected' : ''}>One-time</option>
             </select>
           </div>
@@ -1064,7 +1146,6 @@
       </div>`;
 
     panel.style.display = 'block';
-
     panel.querySelector('.be-save').addEventListener('click', () => saveBudgetEdit(budgetId, panel));
     panel.querySelector('.be-cancel').addEventListener('click', () => {
       panel.style.display = 'none';
@@ -1077,10 +1158,10 @@
     const msgEl  = panel.querySelector('.be-msg');
     const catVal = panel.querySelector('.be-category')?.value;
     const body   = {
-      label:      panel.querySelector('.be-label')?.value?.trim(),
-      amount:     Number(panel.querySelector('.be-amount')?.value || 0),
-      period:     panel.querySelector('.be-period')?.value,
-      active:     panel.querySelector('.be-active')?.checked
+      label:  panel.querySelector('.be-label')?.value?.trim(),
+      amount: Number(panel.querySelector('.be-amount')?.value || 0),
+      period: panel.querySelector('.be-period')?.value,
+      active: panel.querySelector('.be-active')?.checked
     };
     const startVal = panel.querySelector('.be-start')?.value;
     const endVal   = panel.querySelector('.be-end')?.value;
@@ -1115,7 +1196,7 @@
     }
   }
 
-  /* ── Fix 22: Budget view/group controls ── */
+  /* ── Budget view/group controls ── */
   function initBudgetControls() {
     document.querySelectorAll('[data-budget-view]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1146,7 +1227,6 @@
       renderBudgetList();
     });
 
-    // D6A: Active/All filter toggle
     document.querySelectorAll('[data-budget-active]').forEach(btn => {
       btn.addEventListener('click', () => {
         budgetActiveFilter = btn.dataset.budgetActive;
@@ -1157,69 +1237,65 @@
     });
   }
 
-  function getBudgetGroupName(cat) {
+  function getBudgetGroupName(b) {
+    const grp = b.category_group || '';
+    if (grp) return grp;
+    // Legacy fallback using category name heuristics
+    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+    const cat   = categories.find(c => c.id === catId);
     if (!cat) return 'Other';
     const n = (cat.name || '').toLowerCase();
     const g = (cat.group || '').toLowerCase();
     if (n.includes('car') || g.includes('car')) return 'Car';
-    if (n.includes('family') || n.includes('child') || n.includes('school') || g.includes('family')) return 'Family';
-    if (n.includes('ais') || n.includes('fiber') || n.includes('internet') ||
-        g.includes('basic it') || g.includes('basic_it')) return 'Basic IT';
-    if (n.includes('anthropic') || n.includes('claude') ||
-        g.includes('bus it') || g.includes('bus_it') || g.includes('business it')) return 'Bus IT';
+    if (n.includes('family') || g.includes('family')) return 'Family';
+    if (g.includes('basic it') || g.includes('basic_it')) return 'Basic IT';
+    if (g.includes('bus it') || g.includes('bus_it')) return 'Bus IT';
     if (n.includes('investment') || g.includes('investment')) return 'Investment';
     if (n.includes('business') || g.includes('business')) return 'Business';
-    if (n.includes('personal') || n.includes('coffee') || n.includes('cigarette') ||
-        n.includes('food') || g.includes('personal')) return 'Personal';
+    if (g.includes('personal')) return 'Personal';
     return 'Other';
   }
 
   function getBudgetGroups() {
-    const catMap = {};
-    categories.forEach(c => { catMap[c.id] = c; });
     const groups = {};
     budgetsData.forEach(b => {
-      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-      const cat   = catMap[catId];
-      const grp   = getBudgetGroupName(cat);
+      const grp = getBudgetGroupName(b);
       if (!groups[grp]) groups[grp] = [];
       groups[grp].push(b);
     });
     return groups;
   }
 
-  // Re-render budget list with current view/group state (uses cached budgetsData)
   function renderBudgetList() {
     const budgetList = document.getElementById('budgets-list');
     if (!budgetList || budgetsData.length === 0) return;
-
-    const now           = new Date();
-    const startOfMonth  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-    const catMap        = {};
-    categories.forEach(c => { catMap[c.id] = c; });
-
-    // Recompute spendByCat from cached allBudgets data isn't available here
-    // We'll use a stored spendByCat from the last loadBudgetTab call
-    renderBudgetListWithSpend(budgetList, catMap, lastSpendByCat);
+    renderBudgetListWithSpend(budgetList, lastSpendByBudget, lastSpendByCat);
   }
 
-  function renderBudgetListWithSpend(budgetList, catMap, spendByCat) {
+  function renderBudgetListWithSpend(budgetList, spendByBudget, spendByCat) {
     if (budgetGroup === 'byCategory') {
-      renderBudgetGrouped(budgetList, catMap, spendByCat);
+      renderBudgetGrouped(budgetList, spendByBudget, spendByCat);
     } else if (budgetView === 'card') {
-      renderBudgetCards(budgetList, budgetsData, catMap, spendByCat);
+      renderBudgetCards(budgetList, budgetsData, spendByBudget, spendByCat);
     } else {
-      renderBudgetRows(budgetList, budgetsData, catMap, spendByCat);
+      renderBudgetRows(budgetList, budgetsData, spendByBudget, spendByCat);
     }
   }
 
-  function budgetRowHTML(b, cat, spent, limit, p, clr) {
+  function getBudgetSpent(b, spendByBudget, spendByCat) {
+    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
+    return spendByBudget[b.id] || spendByCat[catId] || 0;
+  }
+
+  function budgetRowHTML(b, spent, limit, p, clr) {
+    const label = b.label || b.category_name || 'Budget';
+    const sub   = b.category_group ? b.category_group + ' — ' + (b.category_name || '') : (b.category_name || '');
     return `
       <div class="budget-row-wrap">
         <div style="margin-bottom:0.5rem">
           <div style="display:flex;justify-content:space-between;font-size:0.88rem;
             font-weight:600;align-items:center">
-            <span>${b.label || (cat ? cat.name : 'Budget')}</span>
+            <span>${label}</span>
             <div style="display:flex;align-items:center;gap:0.5rem">
               <span>${fmt(spent)} / ${fmt(limit)}</span>
               <button class="budget-edit-btn" data-id="${b.id}"
@@ -1229,7 +1305,7 @@
             </div>
           </div>
           <div style="font-size:0.73rem;color:var(--text-secondary);margin-bottom:0.3rem">
-            ${cat ? (cat.group ? cat.group + ' — ' : '') + cat.name : ''} · ${b.period || 'Monthly'}
+            ${sub} · ${b.period || 'Monthly'}
           </div>
           <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
             <div style="height:100%;width:${p}%;background:${clr};border-radius:4px;
@@ -1241,7 +1317,8 @@
       </div>`;
   }
 
-  function budgetCardHTML(b, cat, spent, limit, p, clr) {
+  function budgetCardHTML(b, spent, limit, p, clr) {
+    const label = b.label || b.category_name || 'Budget';
     return `
       <div style="border:1px solid var(--border);border-radius:var(--radius);
         padding:0.9rem;background:var(--bg-card);position:relative">
@@ -1251,10 +1328,10 @@
           color:var(--text-secondary);font-size:0.75rem;padding:0.1rem 0.35rem;
           line-height:1.6">✏️</button>
         <div style="font-weight:700;font-size:0.9rem;padding-right:2rem;margin-bottom:0.4rem">
-          ${b.label || (cat ? cat.name : 'Budget')}
+          ${label}
         </div>
         <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem;flex-wrap:wrap">
-          ${cat ? `<span class="badge badge-primary" style="font-size:0.7rem">${cat.name}</span>` : ''}
+          ${b.category_name ? `<span class="badge badge-primary" style="font-size:0.7rem">${b.category_name}</span>` : ''}
           <span class="badge badge-gray" style="font-size:0.7rem">${b.period || 'Monthly'}</span>
         </div>
         <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-bottom:0.4rem">
@@ -1269,36 +1346,32 @@
       </div>`;
   }
 
-  function renderBudgetRows(container, buds, catMap, spendByCat) {
+  function renderBudgetRows(container, buds, spendByBudget, spendByCat) {
     container.innerHTML = buds.map(b => {
-      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-      const cat   = catMap[catId];
-      const spent = spendByCat[catId] || 0;
+      const spent = getBudgetSpent(b, spendByBudget, spendByCat);
       const limit = Number(b.amount || 0);
       const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
       const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
-      return budgetRowHTML(b, cat, spent, limit, p, clr);
+      return budgetRowHTML(b, spent, limit, p, clr);
     }).join('');
     wireBudgetEditBtns(container);
   }
 
-  function renderBudgetCards(container, buds, catMap, spendByCat) {
+  function renderBudgetCards(container, buds, spendByBudget, spendByCat) {
     container.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
         ${buds.map(b => {
-          const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-          const cat   = catMap[catId];
-          const spent = spendByCat[catId] || 0;
+          const spent = getBudgetSpent(b, spendByBudget, spendByCat);
           const limit = Number(b.amount || 0);
           const p     = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
           const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
-          return budgetCardHTML(b, cat, spent, limit, p, clr);
+          return budgetCardHTML(b, spent, limit, p, clr);
         }).join('')}
       </div>`;
     wireBudgetEditBtns(container);
   }
 
-  function renderBudgetGrouped(container, catMap, spendByCat) {
+  function renderBudgetGrouped(container, spendByBudget, spendByCat) {
     const groupOrder = ['Car','Family','Basic IT','Bus IT','Personal','Business','Investment','Other'];
     const groups = getBudgetGroups();
 
@@ -1308,10 +1381,7 @@
       if (!grpBuds || grpBuds.length === 0) return;
 
       const totalBudget = grpBuds.reduce((s, b) => s + Number(b.amount || 0), 0);
-      const totalSpent  = grpBuds.reduce((s, b) => {
-        const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-        return s + (spendByCat[catId] || 0);
-      }, 0);
+      const totalSpent  = grpBuds.reduce((s, b) => s + getBudgetSpent(b, spendByBudget, spendByCat), 0);
       const grpPct = totalBudget > 0 ? Math.min(100, Math.round((totalSpent / totalBudget) * 100)) : 0;
       const grpClr = grpPct >= 100 ? '#ef4444' : grpPct >= 80 ? '#f59e0b' : '#22c55e';
       const collapsed = !!budgetGroupState[grpName];
@@ -1345,40 +1415,27 @@
               ${budgetView === 'card'
                 ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem">
                     ${grpBuds.map(b => {
-                      const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-                      const cat   = catMap[catId];
-                      const spent = spendByCat[catId] || 0;
+                      const spent = getBudgetSpent(b, spendByBudget, spendByCat);
                       const limit = Number(b.amount || 0);
                       const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
                       const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
-                      return budgetCardHTML(b, cat, spent, limit, p, clr);
+                      return budgetCardHTML(b, spent, limit, p, clr);
                     }).join('')}
                   </div>`
                 : grpBuds.map(b => {
-                    const catId = Array.isArray(b.category_id) ? b.category_id[0] : b.category_id;
-                    const cat   = catMap[catId];
-                    const spent = spendByCat[catId] || 0;
+                    const spent = getBudgetSpent(b, spendByBudget, spendByCat);
                     const limit = Number(b.amount || 0);
                     const p     = limit > 0 ? Math.min(100, Math.round((spent/limit)*100)) : 0;
                     const clr   = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
-                    return budgetRowHTML(b, cat, spent, limit, p, clr);
+                    return budgetRowHTML(b, spent, limit, p, clr);
                   }).join('')}
             </div>
           </div>
         </div>`;
     });
 
-    // Any groups not in groupOrder
-    Object.keys(groups).forEach(grpName => {
-      if (!groupOrder.includes(grpName)) {
-        const grpBuds = groups[grpName];
-        // render as Other
-      }
-    });
-
     container.innerHTML = html;
 
-    // Wire group header toggles
     container.querySelectorAll('.budget-group-header').forEach(header => {
       header.addEventListener('click', () => {
         const grp  = header.dataset.grp;
@@ -1403,7 +1460,7 @@
     });
   }
 
-  /* ── E1+D5: Category create form ── */
+  /* ── Category create form ── */
   function initCategoryForm() {
     const toggle  = document.getElementById('cat-form-toggle');
     const body    = document.getElementById('cat-form-body');
@@ -1416,7 +1473,6 @@
       });
     }
 
-    // Show/hide expense_type field based on flow type
     document.getElementById('cat-type')?.addEventListener('change', function () {
       const etGroup = document.getElementById('cat-expense-type-group');
       if (etGroup) etGroup.style.display = this.value === 'Expense' ? 'block' : 'none';
@@ -1450,7 +1506,7 @@
     });
   }
 
-  /* ── E2: Entity autocomplete ── */
+  /* ── Entity autocomplete ── */
   async function loadEntitySuggestions() {
     try {
       const res = await api('/api/transactions?limit=500');
@@ -1468,14 +1524,15 @@
     } catch { /* non-fatal */ }
   }
 
+  /* ── G5+G6: Budget create form ── */
   function initBudgetForm() {
     ensureMsgEl('budget-msg', 'save-budget');
 
-    // D6A: show one-time note when period = One-time
     document.getElementById('budget-period')?.addEventListener('change', function () {
       const note = document.getElementById('budget-onetime-note');
       if (note) note.style.display = this.value === 'One-time' ? 'block' : 'none';
     });
+
     document.getElementById('save-budget')?.addEventListener('click', async () => {
       const label      = document.getElementById('budget-label')?.value?.trim();
       const categoryId = document.getElementById('budget-category')?.value;
@@ -1486,17 +1543,19 @@
       if (!label || !amount) return alert('Label and amount are required');
       const body = { label, amount: Number(amount), period, active: true };
       if (categoryId) body.category_id = [categoryId];
-      if (startDate) body.start_date = startDate;
-      if (endDate)   body.end_date   = endDate;
+      if (startDate)  body.start_date  = startDate;
+      if (endDate)    body.end_date    = endDate;
       try {
         await api('/api/budgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        showMsg('budget-msg', 'Budget created!');
+        showMsg('budget-msg', 'Budget item added!');
+        // G5: only clear on success
         ['budget-label','budget-amount','budget-start','budget-end'].forEach(id => {
           const el = document.getElementById(id); if (el) el.value = '';
         });
-        await loadBudgets(); // refresh allBudgets cache
+        await loadBudgets();
         loadBudgetTab();
       } catch (err) {
+        // G5: show error, do NOT clear form — let user correct
         showMsg('budget-msg', err.message, false);
       }
     });
