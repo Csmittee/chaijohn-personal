@@ -266,81 +266,56 @@
 
     const periodTx = txData.filter(t => t.date >= start && t.date <= end);
 
-    const cashIn    = periodTx.filter(t => t.type === 'Income' && t.source !== 'LiabilityCreation');
-    const loanIn    = periodTx.filter(t => t.source === 'LiabilityCreation');
-    const trueExp   = periodTx.filter(t => t.type === 'Expense' && t.source !== 'LiabilityPayment');
-    const loanPay   = periodTx.filter(t => t.source === 'LiabilityPayment');
+    const cashIn  = periodTx.filter(t => t.type === 'Income' && t.source !== 'LiabilityCreation');
+    const loanIn  = periodTx.filter(t => t.source === 'LiabilityCreation');
+    const trueExp = periodTx.filter(t => t.type === 'Expense' && t.source !== 'LiabilityPayment');
+    const loanPay = periodTx.filter(t => t.source === 'LiabilityPayment');
 
-    const totalIn   = [...cashIn, ...loanIn].reduce((s, t) => s + Number(t.amount || 0), 0);
-    const totalOut  = [...trueExp, ...loanPay].reduce((s, t) => s + Number(t.amount || 0), 0);
-    const netFlow   = totalIn - totalOut;
+    const totalIn  = [...cashIn, ...loanIn].reduce((s, t) => s + Number(t.amount || 0), 0);
+    const totalOut = [...trueExp, ...loanPay].reduce((s, t) => s + Number(t.amount || 0), 0);
+    const netFlow  = totalIn - totalOut;
 
     const catMap = {};
     categories.forEach(c => { catMap[c.id] = c; });
 
-    function txRows(list) {
-      if (list.length === 0) return '<div class="cashflow-row" style="color:var(--text-secondary);font-size:0.8rem">None in this period</div>';
+    function miniCards(list, isIncome) {
+      if (list.length === 0) return `<div style="grid-column:1/-1;color:var(--text-secondary);font-size:0.78rem">None</div>`;
       return list.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(t => {
-        const catId = resolveCatId(t);
-        const cat   = catMap[catId];
-        const isInc = t.type === 'Income';
-        return `<div class="cashflow-row">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:0.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${t.description || t.entity || '—'}
-            </div>
-            <div style="font-size:0.72rem;color:var(--text-secondary)">
-              ${t.date || ''} ${cat ? '· ' + (cat.group ? cat.group + ' — ' : '') + cat.name : ''}
-              ${t.entity ? '· ' + t.entity : ''}
-            </div>
+        const cat   = catMap[resolveCatId(t)];
+        const label = t.description || t.entity || '—';
+        const sub   = t.date + (cat ? ' · ' + cat.name : '') + (t.entity && !t.description ? '' : t.entity ? ' · ' + t.entity : '');
+        const clr   = isIncome ? '#22c55e' : '#ef4444';
+        return `<div class="tx-mini-card">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:0.78rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>
+            <div style="font-size:0.64rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sub}</div>
           </div>
-          <span style="font-weight:700;color:${isInc ? '#22c55e' : '#ef4444'};margin-left:0.5rem;white-space:nowrap">
-            ${isInc ? '+' : '-'}${fmt(t.amount)}
+          <span style="font-weight:700;color:${clr};font-size:0.8rem;white-space:nowrap;flex-shrink:0">
+            ${isIncome ? '+' : '-'}${fmt(t.amount)}
           </span>
         </div>`;
       }).join('');
     }
 
+    function sectionLabel(text) {
+      return `<div style="grid-column:1/-1;font-size:0.7rem;font-weight:700;color:var(--text-secondary);
+        text-transform:uppercase;letter-spacing:0.05em;padding:0.3rem 0 0.1rem">${text}</div>`;
+    }
+
     body.innerHTML = `
-      <div style="margin-bottom:1rem">
-        <div class="cashflow-total" style="margin-bottom:0.35rem">
-          <span style="color:#22c55e">Cash In: ${fmt(totalIn)}</span>
-          <span style="color:#ef4444">Cash Out: ${fmt(totalOut)}</span>
-        </div>
-        <div class="cashflow-total"
-          style="padding:0.6rem 0.75rem;background:${netFlow >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'};
-          border-radius:var(--radius);margin-bottom:0">
-          <span style="font-size:1rem">Net Flow</span>
-          <span style="font-size:1.1rem;color:${netFlow >= 0 ? '#22c55e' : '#ef4444'}">${fmt(netFlow)}</span>
-        </div>
+      <div class="cashflow-total" style="margin-bottom:0.5rem">
+        <span style="color:#22c55e">In: ${fmt(totalIn)}</span>
+        <span style="color:${netFlow >= 0 ? '#22c55e' : '#ef4444'};font-weight:700">Net ${fmt(netFlow)}</span>
+        <span style="color:#ef4444">Out: ${fmt(totalOut)}</span>
       </div>
 
-      <div class="content-card">
-        <div class="cashflow-section-header" style="padding-top:0;margin-top:0">
-          💚 Cash In — ${fmt(totalIn)}
-        </div>
-        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;padding-top:0.1rem">Income / Sales</div>
-        ${txRows(cashIn)}
-        ${loanIn.length > 0 ? `
-          <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Loans Received</div>
-          ${txRows(loanIn)}
-        ` : ''}
-      </div>
-
-      <div class="content-card">
-        <div class="cashflow-section-header" style="padding-top:0;margin-top:0">
-          🔴 Cash Out — ${fmt(totalOut)}
-        </div>
-        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;padding-top:0.1rem">True Expenses</div>
-        ${txRows(trueExp)}
-        ${loanPay.length > 0 ? `
-          <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Loan Paybacks</div>
-          ${txRows(loanPay)}
-        ` : ''}
-        <div class="cashflow-section-header" style="font-size:0.72rem;color:var(--text-secondary);font-weight:500">Project Funding</div>
-        <div class="cashflow-row" style="color:var(--text-secondary);font-size:0.8rem">
-          ฿0 — No project funding recorded yet
-        </div>
+      <div class="tx-mini-grid">
+        ${sectionLabel('💚 Cash In')}
+        ${miniCards(cashIn, true)}
+        ${loanIn.length > 0 ? sectionLabel('Loans Received') + miniCards(loanIn, true) : ''}
+        ${sectionLabel('🔴 Cash Out')}
+        ${miniCards(trueExp, false)}
+        ${loanPay.length > 0 ? sectionLabel('Loan Repayments') + miniCards(loanPay, false) : ''}
       </div>`;
   }
 
@@ -402,50 +377,63 @@
       return `<span class="period-badge period-badge-annual">${period}</span>`;
     }
 
+    // Sort by budget amount desc for mosaic visual hierarchy
+    const mosaicData = [...withData].sort((a, b) => b.limit - a.limit);
+    const maxLimit   = mosaicData.length > 0 ? mosaicData[0].limit : 1;
+    // sqrt scaling: large budgets are taller, small ones still readable, min 78px
+    const cardH = (limit) => Math.max(78, Math.round(Math.sqrt(limit / maxLimit) * 200));
+
     body.innerHTML = `
-      <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem">
-        ${overCount} budget${overCount !== 1 ? 's' : ''} over limit ·
-        ${unbudgeted.length} unbudgeted item${unbudgeted.length !== 1 ? 's' : ''} ·
+      <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.6rem">
+        ${overCount > 0 ? `<span style="color:#ef4444;font-weight:700">${overCount} over</span> · ` : ''}
+        ${unbudgeted.length > 0 ? `${unbudgeted.length} unbudgeted · ` : ''}
         Total spent ${fmt(totalSpent)}
       </div>
 
-      ${withData.length === 0 ? '<div class="content-card" style="color:var(--text-secondary)">No budgets match filter.</div>' : ''}
+      ${mosaicData.length === 0 ? '<div class="content-card" style="color:var(--text-secondary)">No budgets match filter.</div>' : ''}
 
-      ${withData.map(({ cat, spent, limit, p, label, period }) => {
-        const cls = p >= 100 ? 'over' : p >= 80 ? 'warn' : 'ok';
-        const clr = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
-        return `<div class="content-card" style="border-left:3px solid ${clr}">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.35rem">
-            <span style="font-size:0.88rem;font-weight:600">
-              ${label}${periodBadge(period)}
-            </span>
-            <span style="font-size:0.85rem;color:${clr};font-weight:700">${p}%</span>
-          </div>
-          ${cat.group ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.3rem">${cat.group} — ${cat.name || ''}</div>` : ''}
-          <div class="meter-bar-bg" style="height:10px;margin-bottom:0.3rem">
-            <div class="meter-bar-fill ${cls}" style="width:${Math.min(p, 100)}%"></div>
-          </div>
-          <div style="font-size:0.75rem;color:var(--text-secondary);display:flex;justify-content:space-between">
-            <span>Spent: ${fmt(spent)}</span>
-            <span>Budget: ${fmt(limit)}</span>
-          </div>
-        </div>`;
-      }).join('')}
-
-      ${unbudgeted.length > 0 ? `
-        <div style="font-size:0.85rem;font-weight:700;color:#f59e0b;margin:0.75rem 0 0.35rem">
-          ⚡ Unbudgeted Expenses — ${fmt(unbudgetedTotal)}
-        </div>
-        ${unbudgeted.slice(0, 10).map(t => {
-          const cat = catMap[resolveCatId(t)];
-          return `<div class="content-card" style="border-left:3px solid #f59e0b">
-            <div style="display:flex;justify-content:space-between">
-              <span style="font-size:0.83rem">${t.description || t.entity || '—'}</span>
-              <span style="color:#ef4444;font-weight:700">-${fmt(t.amount)}</span>
+      <div class="budget-mosaic">
+        ${mosaicData.map(({ cat, spent, limit, p, label, period }) => {
+          const cls = p >= 100 ? 'over' : p >= 80 ? 'warn' : 'ok';
+          const clr = p >= 100 ? '#ef4444' : p >= 80 ? '#f59e0b' : '#22c55e';
+          const h   = cardH(limit);
+          return `<div class="budget-mosaic-card" style="border-left:3px solid ${clr};min-height:${h}px">
+            <div>
+              <div style="font-size:0.84rem;font-weight:700;line-height:1.3">
+                ${label}${periodBadge(period)}
+              </div>
+              ${cat.group ? `<div style="font-size:0.66rem;color:var(--text-secondary);margin-top:0.1rem">${cat.group}</div>` : ''}
             </div>
-            <div style="font-size:0.72rem;color:var(--text-secondary)">${t.date} ${cat ? '· ' + cat.name : ''}</div>
+            <div>
+              <div class="meter-bar-bg" style="height:6px;margin-bottom:0.25rem">
+                <div class="meter-bar-fill ${cls}" style="width:${Math.min(p, 100)}%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-secondary)">
+                <span>${fmt(spent)}</span>
+                <span style="color:${clr};font-weight:700">${p}%</span>
+                <span>${fmt(limit)}</span>
+              </div>
+            </div>
           </div>`;
         }).join('')}
+      </div>
+
+      ${unbudgeted.length > 0 ? `
+        <div style="font-size:0.8rem;font-weight:700;color:#f59e0b;margin:0.75rem 0 0.35rem">
+          ⚡ Unbudgeted — ${fmt(unbudgetedTotal)}
+        </div>
+        <div class="budget-mosaic">
+          ${unbudgeted.slice(0, 10).map(t => {
+            const cat = catMap[resolveCatId(t)];
+            return `<div class="budget-mosaic-card" style="border-left:3px solid #f59e0b;min-height:62px">
+              <div style="font-size:0.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.description || t.entity || '—'}</div>
+              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-secondary)">
+                <span>${t.date}${cat ? ' · ' + cat.name : ''}</span>
+                <span style="color:#ef4444;font-weight:700">-${fmt(t.amount)}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
       ` : ''}`;
   }
 
@@ -464,10 +452,10 @@
     }
 
     body.innerHTML = `
-      <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.75rem">
-        Total debt: ${fmt(totalDebt)} across ${active.length} loan${active.length !== 1 ? 's' : ''} ·
-        Monthly obligation: ${fmt(monthlyObl)}
+      <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.6rem">
+        Total debt: ${fmt(totalDebt)} · Monthly: ${fmt(monthlyObl)}
       </div>
+      <div class="liab-content-grid">
       ${active.map(l => {
         const bal    = Number(l.current_balance || 0);
         const loan   = Number(l.loan_size || bal);
@@ -499,7 +487,8 @@
               <div style="color:var(--text-secondary);font-size:0.82rem">Click to load history…</div>
             </div>
           </div>`;
-      }).join('')}`;
+      }).join('')}
+      </div>`;
 
     // Wire toggles
     body.querySelectorAll('[data-liab-toggle]').forEach(header => {

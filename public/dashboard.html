@@ -154,6 +154,49 @@
       font-size: 0.82rem;
     }
 
+    /* ── Compact mosaic grid (T2 budgets) ── */
+    .budget-mosaic {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.45rem;
+      align-items: start;
+    }
+    .budget-mosaic-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.6rem 0.7rem;
+      background: var(--bg-card);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* ── Mini transaction cards (T1) ── */
+    .tx-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.35rem;
+    }
+    .tx-mini-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.5rem;
+      background: var(--bg-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* ── 2-col grid for T3 liabilities ── */
+    .liab-content-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.45rem;
+      align-items: start;
+    }
+    .liab-content-grid .liab-content-card { margin-bottom: 0; }
+
     /* ── T4 plan sections ── */
     .plan-section {
       border: 1px solid var(--border);
