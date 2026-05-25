@@ -1,4 +1,4 @@
-# CC_PROMPT_fixG_transaction-budget-link
+# CC_PROMPT_fixG_transaction-budget-link ✅ COMPLETE
 
 Before writing any code, read fresh from repo:
 - masterseed.md

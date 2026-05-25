@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-25
-> Current highest lesson: L030
+> Current highest lesson: L034
 
 ---
 
@@ -204,3 +204,23 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** The old dashboard used a fixed 4-panel CSS grid that showed all panels simultaneously. This cramped every chart and made the page non-scalable for adding new content types.
 **Rule:** New pattern — two zones: (1) GRAPH ZONE: horizontal-scroll flex row of fixed-width chart panels (380 px, `flex-shrink: 0`). Clicking a panel sets it `.active` (blue border). (2) CONTENT ZONE: `#content-controls` + `#content-body` re-rendered by JS on every panel switch. Content controls include period toggle (T1/T2), year selector (T3/T4), filter chips, and modal trigger buttons. Each panel gets its own `renderT#Content(body)` function. `loadContentZone(panelId)` is called from `activatePanel()` and from `loadAll()` (using current `activePanel`). This decouples chart rendering from tabular/card content rendering and keeps each function focused.
 **Tag:** #dashboard #architecture #ux
+
+### L031 — Airtable linked record field migration: always add, never replace
+**Problem:** The Transactions table originally linked directly to Categories via `category_id`. When the new `budget_id` field (linking to Budgets) was introduced, the old `category_id` field had to stay in Airtable because (a) old records already have it set, and (b) Airtable linked record fields can't be renamed without breaking API access.
+**Rule:** When adding a new link field to an Airtable table, KEEP the old link field forever. Mark the old field as legacy in code comments and masterseed. Read the old field for display of legacy records. Never write to it again for new records. The new field is the source of truth going forward. Booking rules: Expense → budget_id required; Earn → category_id optional; LiabilityPayment → neither field needed.
+**Tag:** #airtable #data-model #migration
+
+### L032 — Resolve category via budget, not directly from transaction
+**Problem:** After introducing `budget_id`, expense transactions no longer have `category_id` set. Any code that did `linkedId(t.category_id)` for expense grouping would return null, breaking T2 Pareto, budget meters, alert chips, and cash simulation.
+**Rule:** For expense transaction grouping by category, always use `resolveCatId(t)`: resolve via `budget_id → Budget.category_id` first, fall back to `t.category_id` for legacy records only. Add `budgetMap` as a module-level variable populated immediately after `budgets` is fetched in `loadAll()`. The resolution chain is: `Transaction.budget_id → budgetMap[bid].category_id → catMap[catId]`.
+**Tag:** #dashboard #data-model #budget
+
+### L033 — Unbudgeted transaction detection must check budget_id first
+**Problem:** After G3, new expense transactions have `budget_id` set but `category_id` is null. The old "unbudgeted" detection filtered by checking if `linkedId(t.category_id)` was in the set of budgeted category IDs — this caused ALL new expense transactions to appear as unbudgeted since their `category_id` is null.
+**Rule:** Unbudgeted detection must check `budget_id` first: if `linkedId(t.budget_id)` is truthy, the transaction IS budgeted — skip it from the unbudgeted list immediately before any category lookup. Only apply legacy category-ID-based unbudgeted detection for records that have no `budget_id`.
+**Tag:** #entry #budgets #bug-prevention
+
+### L034 — API server-side enrichment: merge fields before returning
+**Problem:** Frontend was making multiple fetch calls (transactions + budgets + categories) and joining them client-side. As the data model got more complex (transaction → budget → category), client-side joining became brittle and hard to maintain.
+**Rule:** Enrich at the API layer. GET /api/transactions now returns `budget_label`, `category_name`, `category_group` merged into each record's fields (resolved via budget chain). GET /api/budgets returns `category_name`, `category_group`, `category_type` from linked Category. Use `Promise.allSettled` for parallel enrichment fetches so one failure doesn't break the whole response. Skip enrichment entirely (early return) if no records have any link fields — avoids unnecessary API calls.
+**Tag:** #api #airtable #performance #architecture

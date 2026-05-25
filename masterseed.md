@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-25 — Fix F complete; prompts A–F archived to docs/prompts/
+> Last Updated: 2026-05-25 — Fix G complete; prompts A–G archived to docs/prompts/
 
 ---
 
@@ -145,7 +145,7 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
 | Table | Key Fields | Notes |
 |---|---|---|
 | `Categories` | name, group, type (Earn/Expense/Loan/Investment), expense_type (FP-FV/FP-VV/VP-FV/VP-VV/Surprise), is_business, cash_flow, active | ~40 seeded rows |
-| `Transactions` | date, type, amount, category_id→Categories, entity, description, note, source (Manual/DropZone/Import), fixed_variable, period | Core financial record |
+| `Transactions` | date, type, amount, budget_id→Budgets (NEW — source of truth for expenses), category_id→Categories (LEGACY — read-only for old records), entity, description, note, source (Manual/DropZone/Import), fixed_variable, period | Core financial record |
 | `Liabilities` | name, creditor_type, loan_size, interest_rate, monthly_payment, current_balance, active | 6 seeded: Tisco, Watch interest, Thai credit, Kasikorn, KTC, Friend&Family |
 | `Liability_Payments` | liability_id→Liabilities, date, amount, note | Payment history per liability |
 | `Assets` | name, category (Collection-Knife/Vice/Plant/Doll etc), cost_price, estimated_value, status, velocity, date_acquired, sold_price, sold_date, cloudinary_image_url, notes | Collection registry |
@@ -238,6 +238,7 @@ functions/
 | Fix D | D1 Dropzone text files · D2 Diary AI undo · D3 Forecast cashflow · D4 Alert bubbles · D5 Category create · D6 One-time budget + T4 panel | ✅ COMPLETE |
 | Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
 | Fix F | F1 Category group 422 fix · F2 Debts liability→Income tx · F3 Transaction DELETE button · F4 Budget meter active/period filter · F5-F6 Dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow / T2 Expense / T3 Debt / T4 Annual Plan) | ✅ COMPLETE |
+| Fix G | G1 Transactions API reads/writes budget_id (GET enriches budget_label+category via budget; POST requires budget_id for Expense; PATCH accepts budget_id) · G2 Budgets API returns category_name/group/type + expense_only filter · G3 Transaction expense dropdown → Budget list grouped by category_group · G4 Transaction list display uses server-enriched budget fields + legacy fallback · G5 Budget creation enforces unique label+category_id (API 400 + UI keeps form on error) · G6 Budget category dropdown = Expense only; section renamed to "Add Budget Item" · G7 Dashboard resolves category via budget_id using resolveCatId() helper | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -250,7 +251,7 @@ functions/
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Dashboard (Fix F complete): Horizontal-scroll GRAPH ZONE (4 chart panels at 380 px, active panel highlighted with blue border). Dynamic CONTENT ZONE switches view on panel click: T1=Cashflow Breakdown, T2=Expense Intelligence (budget comparison + unbudgeted), T3=Debt Overview (expandable cards + lazy-load payment history), T4=Annual Financial Plan (4 collapsible sections). Content controls render period toggle or year selector per active panel. Risk Simulator + Solution Playroom modal buttons in content controls. ✅
-- Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
+- Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter, unique label enforcement, expense-only category dropdown, "Add Budget Item" form) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
 - Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
@@ -279,7 +280,7 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-1. QA Fix F live: confirm graph train scrolling, content zone switching per panel, T1/T2/T3/T4 content renders, delete button on transactions, category group create (no 422), debts create Income tx
+1. QA Fix G live: confirm expense dropdown shows budget list grouped by category, earn dropdown shows earn categories, transaction display shows "Basic Living — Food restaurant" format, legacy records show "(legacy)" tag, budget form shows "Add Budget Item", duplicate budget label returns 400 + form stays populated, dashboard T2/Pareto/alerts resolve category via budget_id
 2. Collection module full test + buyer tags
 3. AI Advisor full test + verify financial context loads
 
