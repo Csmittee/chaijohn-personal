@@ -1,6 +1,6 @@
 /**
  * dropzone.js — Floating Drop Zone panel injected on every protected page.
- * Handles drag-and-drop of receipts/photos/text → AI extraction → review cards.
+ * Handles drag-and-drop of receipts/photos/text → destination picker → AI extraction → review cards.
  * Does NOT handle auth — auth.js handles that separately.
  */
 (function () {
@@ -224,6 +224,70 @@
 .dz-btn-danger { background: #ef4444; color: white; }
 .dz-w-full { width: 100%; }
 #dz-approve-all { display: none; }
+
+/* ── Destination picker ── */
+.dz-picker-card {
+  background: var(--bg-surface, #252d3d);
+  border: 1px solid var(--color-primary, #3b82f6);
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.6rem;
+  animation: dzFadeIn 0.2s ease;
+}
+.dz-pick-filename {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.35rem;
+}
+.dz-pick-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  margin-bottom: 0.45rem;
+}
+.dz-pick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+.dz-pick-btn {
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.15));
+  background: var(--bg-card, #1e2433);
+  color: var(--text-primary, #f1f5f9);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+  line-height: 1.3;
+}
+.dz-pick-btn:hover {
+  background: rgba(59,130,246,0.12);
+  border-color: var(--color-primary, #3b82f6);
+}
+.dz-pick-btn.dz-pick-active {
+  background: rgba(59,130,246,0.2);
+  border-color: var(--color-primary, #3b82f6);
+  color: #60a5fa;
+}
+.dz-pick-sub {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.dz-pick-sub-label {
+  font-size: 0.68rem;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 `;
     document.head.appendChild(style);
   }
@@ -300,9 +364,9 @@
       ].join('');
     }
 
-    if (type === 'diary' || type === 'blog' || type === 'note' || type === 'idea' || type === 'project') {
+    if (type === 'diary' || type === 'blog' || type === 'note' || type === 'idea' || type === 'project' || type === 'story' || type === 'skill') {
       const entryTypes = ['Story', 'Idea', 'Blog', 'Project', 'Skill'];
-      const defaultEt = type === 'idea' ? 'Idea' : type === 'project' ? 'Project' : (prefilled.entry_type || 'Story');
+      const defaultEt = type === 'idea' ? 'Idea' : type === 'project' ? 'Project' : type === 'blog' ? 'Blog' : type === 'story' ? 'Story' : type === 'skill' ? 'Skill' : (prefilled.entry_type || 'Story');
       const etOptions = entryTypes.map(et => `<option value="${et}"${defaultEt === et ? ' selected' : ''}>${et}</option>`).join('');
       return [
         field('Title', `<input type="text" name="title" value="${escHtml(prefilled.title || '')}" placeholder="Entry title">`),
@@ -331,15 +395,57 @@
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  /* ─── Build destination picker card ─── */
+  function buildDestinationPicker(filename, onPick) {
+    const card = document.createElement('div');
+    card.className = 'dz-picker-card';
+    card.innerHTML = `
+<div class="dz-pick-filename">📎 ${escHtml(filename)}</div>
+<div class="dz-pick-label">Where should this go?</div>
+<div class="dz-pick-grid" id="dz-pick-primary">
+  <button class="dz-pick-btn" data-pick="Transaction">💰 Transaction</button>
+  <button class="dz-pick-btn dz-pick-has-sub" data-pick="Diary">📓 Diary / Blog ›</button>
+  <button class="dz-pick-btn" data-pick="Quote">💬 Quote</button>
+  <button class="dz-pick-btn" data-pick="Asset">🏷️ Asset</button>
+</div>
+<div class="dz-pick-sub" style="display:none">
+  <div class="dz-pick-sub-label">Diary type</div>
+  <div class="dz-pick-grid">
+    <button class="dz-pick-btn dz-pick-sub-btn" data-pick="Story">📖 Story</button>
+    <button class="dz-pick-btn dz-pick-sub-btn" data-pick="Idea">💡 Idea</button>
+    <button class="dz-pick-btn dz-pick-sub-btn" data-pick="Blog">🌐 Blog Post</button>
+    <button class="dz-pick-btn dz-pick-sub-btn" data-pick="Project">🗂️ Project</button>
+  </div>
+</div>
+`;
+
+    card.addEventListener('click', function (e) {
+      const btn = e.target.closest('.dz-pick-btn');
+      if (!btn) return;
+      const pick = btn.dataset.pick;
+
+      if (pick === 'Diary') {
+        const sub = card.querySelector('.dz-pick-sub');
+        const isOpen = sub.style.display !== 'none';
+        sub.style.display = isOpen ? 'none' : '';
+        btn.classList.toggle('dz-pick-active', !isOpen);
+        return;
+      }
+
+      onPick(pick);
+    });
+
+    return card;
+  }
+
   /* ─── Build spinner placeholder card ─── */
-  function buildSpinnerCard(filename) {
+  function buildSpinnerCard(msg) {
     const card = document.createElement('div');
     card.className = 'dz-spinner-card';
-    card.dataset.spinnerFor = filename;
     card.innerHTML = `
 <div style="display:flex;align-items:center;gap:0.6rem;justify-content:center">
   <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.15);border-top-color:#3b82f6;border-radius:50%;animation:dzSpin 0.7s linear infinite;flex-shrink:0"></div>
-  <span>Analyzing ${escHtml(filename || 'file')}…</span>
+  <span>${escHtml(msg || 'Processing…')}</span>
 </div>`;
     return card;
   }
@@ -452,34 +558,20 @@
     }
   }
 
-  /* ─── Process a text file (D1 new flow) ─── */
-  async function processTextFile(file) {
-    const container = document.getElementById('dz-cards-container');
-    if (!container) return;
-
-    const spinner = buildSpinnerCard(file.name);
+  /* ─── Call API to analyze image then build review card ─── */
+  async function analyzeImage(cloudinaryUrl, filename, mimeType, hintType, container) {
+    const spinner = buildSpinnerCard('AI reading ' + filename + '…');
     container.insertBefore(spinner, container.firstChild);
 
     let queueId = null;
     let aiResult = {};
 
     try {
-      const textContent = await new Promise(function (resolve, reject) {
-        const reader = new FileReader();
-        reader.onload = function (e) { resolve(e.target.result); };
-        reader.onerror = function () { reject(new Error('Failed to read file')); };
-        reader.readAsText(file);
-      });
-
       const dzRes = await fetch('/api/dropzone', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text_content: textContent,
-          filename: file.name,
-          mime_type: file.type || 'text/plain'
-        })
+        body: JSON.stringify({ cloudinary_url: cloudinaryUrl, filename: filename, mime_type: mimeType, hint_type: hintType })
       });
 
       if (dzRes.ok) {
@@ -488,12 +580,47 @@
         aiResult = dzData.ai_result || {};
       } else {
         queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-        aiResult = { suggested_type: 'Diary', description: 'Could not analyze — please fill manually', prefilled: {} };
+        aiResult = { suggested_type: hintType, description: 'Could not analyze — please fill manually', prefilled: {} };
       }
     } catch (e) {
-      if (spinner.parentNode) spinner.remove();
-      showFlash('Failed to process ' + file.name + ': ' + e.message, 'error');
-      return;
+      queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      aiResult = { suggested_type: hintType, description: 'Could not analyze — please fill manually', prefilled: {} };
+    }
+
+    if (spinner.parentNode) spinner.remove();
+    const card = buildReviewCard(queueId, cloudinaryUrl, aiResult, 'image');
+    container.insertBefore(card, container.firstChild);
+    pendingCount++;
+    updateBadge();
+  }
+
+  /* ─── Call API to analyze text then build review card ─── */
+  async function analyzeText(textContent, filename, mimeType, hintType, container) {
+    const spinner = buildSpinnerCard('AI reading ' + filename + '…');
+    container.insertBefore(spinner, container.firstChild);
+
+    let queueId = null;
+    let aiResult = {};
+
+    try {
+      const dzRes = await fetch('/api/dropzone', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text_content: textContent, filename: filename, mime_type: mimeType || 'text/plain', hint_type: hintType })
+      });
+
+      if (dzRes.ok) {
+        const dzData = await dzRes.json();
+        queueId  = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+        aiResult = dzData.ai_result || {};
+      } else {
+        queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        aiResult = { suggested_type: hintType, description: 'Could not analyze — please fill manually', prefilled: {} };
+      }
+    } catch (e) {
+      queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      aiResult = { suggested_type: hintType, description: 'Could not analyze — please fill manually', prefilled: {} };
     }
 
     if (spinner.parentNode) spinner.remove();
@@ -503,28 +630,50 @@
     updateBadge();
   }
 
-  /* ─── Process one uploaded image/PDF file ─── */
+  /* ─── Process a text file: read → picker → analyze ─── */
+  async function processTextFile(file) {
+    const container = document.getElementById('dz-cards-container');
+    if (!container) return;
+
+    let textContent = '';
+    try {
+      textContent = await new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function (e) { resolve(e.target.result); };
+        reader.onerror = function () { reject(new Error('Failed to read file')); };
+        reader.readAsText(file);
+      });
+    } catch (e) {
+      showFlash('Failed to read ' + file.name + ': ' + e.message, 'error');
+      return;
+    }
+
+    const picker = buildDestinationPicker(file.name, function (hintType) {
+      if (picker.parentNode) picker.remove();
+      analyzeText(textContent, file.name, file.type, hintType, container);
+    });
+    container.insertBefore(picker, container.firstChild);
+  }
+
+  /* ─── Process one uploaded image/PDF: upload → picker → analyze ─── */
   async function processFile(file) {
     const container = document.getElementById('dz-cards-container');
     if (!container) return;
 
-    // Reject unsupported types
     if (!isImageOrPdf(file) && !isTextFile(file)) {
       showFlash('File type not supported: ' + file.name, 'error');
       return;
     }
 
-    // Route text files to text flow
     if (isTextFile(file)) {
       return processTextFile(file);
     }
 
-    const spinner = buildSpinnerCard(file.name);
+    // Step 1: Upload to Cloudinary
+    const spinner = buildSpinnerCard('Uploading ' + file.name + '…');
     container.insertBefore(spinner, container.firstChild);
 
     let cloudinaryUrl = '';
-    let queueId = null;
-    let aiResult = {};
 
     try {
       const yyyymm = new Date().toISOString().slice(0, 7).replace('-', '');
@@ -545,33 +694,20 @@
 
       const uploadData = await uploadRes.json();
       cloudinaryUrl = uploadData.url || uploadData.secure_url || '';
-
-      const dzRes = await fetch('/api/dropzone', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cloudinary_url: cloudinaryUrl, filename: file.name, mime_type: file.type })
-      });
-
-      if (dzRes.ok) {
-        const dzData = await dzRes.json();
-        queueId  = dzData.queue_id || dzData.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2));
-        aiResult = dzData.ai_result || {};
-      } else {
-        queueId  = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-        aiResult = { suggested_type: 'Transaction', description: 'Could not analyze — please fill manually', prefilled: {} };
-      }
     } catch (e) {
       if (spinner.parentNode) spinner.remove();
-      showFlash('Failed to process ' + file.name + ': ' + e.message, 'error');
+      showFlash('Failed to upload ' + file.name + ': ' + e.message, 'error');
       return;
     }
 
+    // Step 2: Show destination picker
     if (spinner.parentNode) spinner.remove();
-    const card = buildReviewCard(queueId, cloudinaryUrl, aiResult, 'image');
-    container.insertBefore(card, container.firstChild);
-    pendingCount++;
-    updateBadge();
+
+    const picker = buildDestinationPicker(file.name, function (hintType) {
+      if (picker.parentNode) picker.remove();
+      analyzeImage(cloudinaryUrl, file.name, file.type, hintType, container);
+    });
+    container.insertBefore(picker, container.firstChild);
   }
 
   /* ─── Wire up all event listeners ─── */

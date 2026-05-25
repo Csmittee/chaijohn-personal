@@ -3,8 +3,69 @@ import { createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const QUEUE_TABLE = 'Drop_Zone_Queue';
 
-async function callClaude(apiKey, cloudinaryUrl) {
-  const prompt = `You are a data extraction assistant for a personal finance and diary app. Analyze this image and return ONLY a JSON object (no markdown, no explanation) with these fields: {"file_type": one of ["Receipt","Transfer slip","Product photo","Handwriting","Quote image","Other"], "extracted_text": "all visible text verbatim or empty string", "description": "one sentence describing what you see", "suggested_type": one of ["Transaction","Asset","Diary","Quote","Ignore"], "prefilled": {if Transaction: {date, type, amount, description, entity, note}, if Asset: {name, category, estimated_value, notes}, if Diary: {title, content, entry_type, tags}, if Quote: {text, author, source, mood_tag}, if Ignore: {}}}`;
+function buildImagePrompt(hintType, today) {
+  const prompts = {
+    Transaction: `Extract all financial data from this receipt or bill image. Return ONLY a valid JSON object (no markdown, no explanation):
+{"suggested_type":"Transaction","description":"one sentence describing the receipt","prefilled":{"date":"${today}","type":"Expense","amount":0,"description":"items purchased or service description","entity":"merchant or store name"}}
+Rules: amount must be total amount as a number (no currency symbol), date in YYYY-MM-DD format, entity is the shop/merchant name, description summarises what was bought.`,
+
+    Quote: `Extract the quote text, author, and source from this image. Return ONLY a valid JSON object:
+{"suggested_type":"Quote","description":"one sentence about the quote","prefilled":{"text":"full quote text verbatim","author":"who said it or empty string","source":"book or speech or empty string","mood_tag":"Motivational"}}`,
+
+    Asset: `Identify this item as a personal collectible or asset. Return ONLY a valid JSON object:
+{"suggested_type":"Asset","description":"one sentence about the item","prefilled":{"name":"item name","category":"Other","estimated_value":0,"notes":"any relevant details"}}`,
+
+    Story: `Read this image (handwriting, note, photo) and extract a personal diary story. Return ONLY a valid JSON object:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"entry title","content":"full extracted text content","entry_type":"Story","tags":""}}`,
+
+    Idea: `Read this image and extract an idea note or brainstorm. Return ONLY a valid JSON object:
+{"suggested_type":"Diary","description":"one sentence summary of the idea","prefilled":{"title":"idea title","content":"full extracted content","entry_type":"Idea","tags":""}}`,
+
+    Blog: `Read this image and extract a blog post draft or outline. Return ONLY a valid JSON object:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"blog post title","content":"full extracted content","entry_type":"Blog","tags":""}}`,
+
+    Project: `Read this image and extract a project note, plan, or outline. Return ONLY a valid JSON object:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"project title","content":"full extracted content","entry_type":"Project","tags":""}}`,
+
+    Diary: `Read this image (handwriting, note, etc.) and extract the content as a diary entry. Return ONLY a valid JSON object:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"entry title","content":"full extracted content","entry_type":"Story","tags":""}}`
+  };
+
+  return prompts[hintType] || prompts.Transaction;
+}
+
+function buildTextPrompt(hintType) {
+  const systemPrompts = {
+    Transaction: `Extract financial transaction data from this text. Return JSON only (no markdown):
+{"suggested_type":"Transaction","description":"one sentence","prefilled":{"date":"YYYY-MM-DD","type":"Expense","amount":0,"description":"what it was for","entity":"merchant name"}}`,
+
+    Quote: `Extract the quote, author, and source from this text. Return JSON only:
+{"suggested_type":"Quote","description":"one sentence","prefilled":{"text":"full quote","author":"author or empty","source":"source or empty","mood_tag":"Motivational"}}`,
+
+    Asset: `Extract asset details from this text. Return JSON only:
+{"suggested_type":"Asset","description":"one sentence","prefilled":{"name":"item name","category":"Other","estimated_value":0,"notes":"details"}}`,
+
+    Story: `Extract a personal diary story from this text. Return JSON only:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"title","content":"full content","entry_type":"Story","tags":""}}`,
+
+    Idea: `Extract an idea note from this text. Return JSON only:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"idea title","content":"full content","entry_type":"Idea","tags":""}}`,
+
+    Blog: `Extract a blog post draft from this text. Return JSON only:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"blog title","content":"full content","entry_type":"Blog","tags":""}}`,
+
+    Project: `Extract a project note or plan from this text. Return JSON only:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"project title","content":"full content","entry_type":"Project","tags":""}}`,
+
+    Diary: `Extract a diary entry from this text. Return JSON only:
+{"suggested_type":"Diary","description":"one sentence summary","prefilled":{"title":"title","content":"full content","entry_type":"Story","tags":""}}`
+  };
+
+  return systemPrompts[hintType] || systemPrompts.Diary;
+}
+
+async function callClaude(apiKey, cloudinaryUrl, hintType, today) {
+  const prompt = buildImagePrompt(hintType || 'Transaction', today);
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -33,21 +94,8 @@ async function callClaude(apiKey, cloudinaryUrl) {
   return JSON.parse(cleaned);
 }
 
-async function callClaudeText(apiKey, textContent, filename) {
-  const systemPrompt = `You are a personal diary assistant. The user dropped a text file.
-Classify it and extract structured data.
-Return JSON only (no markdown, no explanation):
-{
-  "suggested_type": "one of [Diary, Quote, Transaction, Idea, Project]",
-  "title": "string (max 80 chars)",
-  "content": "string (full text, cleaned)",
-  "tags": ["array", "of", "strings", "max 5"],
-  "entry_type": "for Diary/Idea/Project only — one of [Story, Idea, Blog, Project, Skill]",
-  "author": "for Quote only — string or null",
-  "amount": "for Transaction only — number or null",
-  "entity": "for Transaction only — string or null"
-}`;
-
+async function callClaudeText(apiKey, textContent, filename, hintType) {
+  const systemPrompt = buildTextPrompt(hintType || 'Diary');
   const userMsg = `File: ${filename}\n\nContent:\n${textContent.slice(0, 8000)}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -82,7 +130,7 @@ export async function onRequestPost(context) {
     return errorResponse('Invalid JSON body');
   }
 
-  const { cloudinary_url, filename, mime_type, text_content } = body;
+  const { cloudinary_url, filename, mime_type, text_content, hint_type } = body;
 
   if (!cloudinary_url && !text_content) {
     return errorResponse('cloudinary_url or text_content is required');
@@ -96,9 +144,9 @@ export async function onRequestPost(context) {
 
   try {
     if (isText) {
-      aiRaw = await callClaudeText(env.ANTHROPIC_API_KEY, text_content, filename || 'file.txt');
+      aiRaw = await callClaudeText(env.ANTHROPIC_API_KEY, text_content, filename || 'file.txt', hint_type);
     } else {
-      aiRaw = await callClaude(env.ANTHROPIC_API_KEY, cloudinary_url);
+      aiRaw = await callClaude(env.ANTHROPIC_API_KEY, cloudinary_url, hint_type, today);
     }
   } catch (err) {
     aiError = err.message;
@@ -107,47 +155,50 @@ export async function onRequestPost(context) {
 
   const queueFields = { date_received: today, status: 'Pending' };
   if (cloudinary_url) queueFields.cloudinary_url = cloudinary_url;
+  if (hint_type) queueFields.ai_suggested_type = hint_type;
 
   let aiResult = null;
 
   if (isText) {
     if (aiRaw) {
       const prefilled = {
-        title:      aiRaw.title   || '',
-        content:    aiRaw.content || text_content,
+        title:      aiRaw.title   || aiRaw.prefilled?.title   || '',
+        content:    aiRaw.content || aiRaw.prefilled?.content || text_content,
         tags:       Array.isArray(aiRaw.tags) ? aiRaw.tags.join(', ') : (aiRaw.tags || '')
       };
-      if (aiRaw.entry_type) prefilled.entry_type = aiRaw.entry_type;
-      if (aiRaw.author)     prefilled.author     = aiRaw.author;
-      if (aiRaw.amount)     prefilled.amount     = aiRaw.amount;
-      if (aiRaw.entity)     prefilled.entity     = aiRaw.entity;
+      if (aiRaw.entry_type || aiRaw.prefilled?.entry_type) prefilled.entry_type = aiRaw.entry_type || aiRaw.prefilled?.entry_type;
+      if (aiRaw.author     || aiRaw.prefilled?.author)     prefilled.author     = aiRaw.author     || aiRaw.prefilled?.author;
+      if (aiRaw.text       || aiRaw.prefilled?.text)       prefilled.text       = aiRaw.text       || aiRaw.prefilled?.text;
+      if (aiRaw.amount     || aiRaw.prefilled?.amount)     prefilled.amount     = aiRaw.amount     || aiRaw.prefilled?.amount;
+      if (aiRaw.entity     || aiRaw.prefilled?.entity)     prefilled.entity     = aiRaw.entity     || aiRaw.prefilled?.entity;
 
-      queueFields.file_type          = 'Text';
-      queueFields.ai_extracted_text  = text_content.slice(0, 2000);
-      queueFields.ai_description     = aiRaw.title || 'Text file';
-      queueFields.ai_suggested_type  = aiRaw.suggested_type || 'Diary';
-      queueFields.ai_prefilled_json  = JSON.stringify(prefilled);
+      const suggestedType = aiRaw.suggested_type || hint_type || 'Diary';
+      queueFields.file_type         = 'Text';
+      queueFields.ai_extracted_text = text_content.slice(0, 2000);
+      queueFields.ai_description    = aiRaw.description || aiRaw.title || 'Text file';
+      queueFields.ai_suggested_type = suggestedType;
+      queueFields.ai_prefilled_json = JSON.stringify(prefilled);
 
-      aiResult = {
-        suggested_type: aiRaw.suggested_type || 'Diary',
-        description:    aiRaw.title || 'Text file analyzed',
-        prefilled
-      };
+      aiResult = { suggested_type: suggestedType, description: aiRaw.description || aiRaw.title || 'Text file analyzed', prefilled };
     } else {
       queueFields.file_type     = 'Text';
       queueFields.ai_description = aiError ? `AI error: ${aiError}` : 'AI analysis not available';
+      aiResult = { suggested_type: hint_type || 'Diary', description: 'Could not analyze — please fill manually', prefilled: {} };
     }
   } else {
     if (aiRaw) {
-      queueFields.file_type          = aiRaw.file_type || 'Other';
-      queueFields.ai_extracted_text  = aiRaw.extracted_text || '';
-      queueFields.ai_description     = aiRaw.description || '';
-      queueFields.ai_suggested_type  = aiRaw.suggested_type || 'Ignore';
-      queueFields.ai_prefilled_json  = JSON.stringify(aiRaw.prefilled || {});
-      aiResult = aiRaw;
+      const prefilled   = aiRaw.prefilled || {};
+      const suggestedType = aiRaw.suggested_type || hint_type || 'Transaction';
+      queueFields.file_type         = aiRaw.file_type || 'Image';
+      queueFields.ai_extracted_text = aiRaw.extracted_text || '';
+      queueFields.ai_description    = aiRaw.description || '';
+      queueFields.ai_suggested_type = suggestedType;
+      queueFields.ai_prefilled_json = JSON.stringify(prefilled);
+      aiResult = { suggested_type: suggestedType, description: aiRaw.description || '', prefilled };
     } else {
-      queueFields.file_type     = 'Other';
+      queueFields.file_type     = 'Image';
       queueFields.ai_description = aiError ? `AI error: ${aiError}` : 'AI analysis not available';
+      aiResult = { suggested_type: hint_type || 'Transaction', description: 'Could not analyze — please fill manually', prefilled: {} };
     }
   }
 
