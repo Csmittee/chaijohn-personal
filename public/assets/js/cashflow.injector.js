@@ -1,6 +1,5 @@
 /* cashflow.injector.js — Cash Flow panel (M2.1)
- * Lazy-init on first panel activation via 'panelactivated' event.
- * 9B2 fixes: F1a period toggle class fix, F1b 30/70 range window, F1c list/card view toggle
+ * 9B3: card view → Cash In / Cash Out section bands, proportional sizing like expenses
  */
 (function () {
   'use strict';
@@ -18,27 +17,22 @@
     return r.json();
   }
 
-  /* F1b — range window: today sits at ~30% from left edge */
   function rangeWindow(range) {
     const n = new Date();
     let start, end;
     if (range === '1m') {
-      // Calendar month: 1st → last day of current month
       start = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split('T')[0];
       end   = new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().split('T')[0];
     } else if (range === '3m') {
-      // 1 month back + 2 months forward (today at ~33%)
       start = new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()).toISOString().split('T')[0];
       end   = new Date(n.getFullYear(), n.getMonth() + 2, n.getDate()).toISOString().split('T')[0];
     } else {
-      // 2 months back + 4 months forward (today at ~33%)
       start = new Date(n.getFullYear(), n.getMonth() - 2, n.getDate()).toISOString().split('T')[0];
       end   = new Date(n.getFullYear(), n.getMonth() + 4, n.getDate()).toISOString().split('T')[0];
     }
     return { start, end };
   }
 
-  /* ── Stats ── */
   function computeStats() {
     const totalIn  = txData.filter(t => t.type === 'Income' ).reduce((s,t) => s + Number(t.amount||0), 0);
     const totalOut = txData.filter(t => t.type === 'Expense').reduce((s,t) => s + Number(t.amount||0), 0);
@@ -58,7 +52,6 @@
       .filter(l => l.active !== false && Number(l.current_balance||0) > 0)
       .reduce((s,l) => s + Number(l.monthly_payment||0), 0);
 
-    const days = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
     const daysPassed = new Date().getDate();
     const avgDailyOut = daysPassed > 0 ? totalOut / daysPassed : 0;
     const dailyNet = -avgDailyOut - fcLoan / 30;
@@ -79,10 +72,10 @@
       ? futureEarns[0].date.slice(5) + ' ' + fmt(futureEarns[0].amount) : '—';
 
     const set = (id,v) => { const e = el(id); if (e) e.textContent = v; };
-    set('cf-days-zero',   daysToZeroStr);
-    set('cf-total-in',    fmt(totalIn));
-    set('cf-total-out',   fmt(totalOut));
-    set('cf-balance',     fmt(currentCash));
+    set('cf-days-zero',    daysToZeroStr);
+    set('cf-total-in',     fmt(totalIn));
+    set('cf-total-out',    fmt(totalOut));
+    set('cf-balance',      fmt(currentCash));
     set('cf-incoming-due', incomingDue);
 
     const balEl = el('cf-balance');
@@ -94,16 +87,15 @@
     return { currentCash, dailyNet };
   }
 
-  /* ── Chart — F1b: use rangeWindow end date ── */
   function renderChart(currentCash, dailyNet, endDateStr) {
     const canvas = el('cf-chart');
     if (!canvas) return;
     if (cfChart) { cfChart.destroy(); cfChart = null; }
 
-    const today     = new Date();
-    const todayStr  = today.toISOString().split('T')[0];
-    const rStart    = rangeWindow(activeRange).start;
-    const endDate   = new Date(endDateStr + 'T00:00:00');
+    const today    = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const rStart   = rangeWindow(activeRange).start;
+    const endDate  = new Date(endDateStr + 'T00:00:00');
 
     const dailyDelta = {};
     txData.forEach(t => {
@@ -118,7 +110,6 @@
       else    loanSpread += Number(l.monthly_payment) / 30;
     });
 
-    // Walk backwards from today to compute balance at range start
     let bal = currentCash;
     for (let d = new Date(today); d >= new Date(rStart + 'T00:00:00'); d.setDate(d.getDate() - 1)) {
       const ds = d.toISOString().split('T')[0];
@@ -132,7 +123,6 @@
     for (let d = new Date(rStart); d <= endDate; d.setDate(d.getDate() + 1)) {
       const ds = d.toISOString().split('T')[0];
       labels.push(ds.slice(5));
-
       if (ds <= todayStr) {
         bal += (dailyDelta[ds] || 0);
         hist.push(bal);
@@ -151,7 +141,7 @@
     cfChart = new Chart(canvas, {
       type: 'line',
       data: { labels, datasets: [
-        { label: 'Balance', data: hist, borderColor: '#3b82f6', borderWidth: 1.5, fill: false, pointRadius: 0, tension: 0.3 },
+        { label: 'Balance',  data: hist,  borderColor: '#3b82f6', borderWidth: 1.5, fill: false, pointRadius: 0, tension: 0.3 },
         { label: 'Forecast', data: fcast, borderColor: '#f5c518', borderWidth: 1.5, borderDash: [5,3], fill: false, pointRadius: 0, tension: 0.3 }
       ]},
       options: {
@@ -184,11 +174,11 @@
     }};
   }
 
-  /* ── Cards — F1c: list (default) and card views ── */
+  /* ── Cards — list: compact rows; card: Cash In / Cash Out section bands ── */
   function renderCards() {
     const zone = el('cf-cards');
     if (!zone) return;
-    const rows = [...txData].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 50);
+    const rows = [...txData].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 60);
     if (!rows.length) {
       zone.style.cssText = '';
       zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem 0">No transactions</p>';
@@ -196,20 +186,34 @@
     }
 
     if (cfView === 'card') {
-      zone.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;padding:0.5rem';
-      zone.innerHTML = rows.map(t => {
-        const isIn  = t.type === 'Income';
-        const label = t.budget_label || t.category_name || t.entity || t.description || '—';
-        return `<div class="tx-mini-card">
-          <div style="min-width:0;overflow:hidden">
-            <div style="font-size:0.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary,var(--text))">${esc(label)}</div>
-            <div style="font-size:0.66rem;color:var(--text-secondary,var(--text-dim))">${t.date.slice(5)}${t.entity ? ' · '+esc(t.entity) : ''}</div>
-          </div>
-          <div style="font-size:0.8rem;font-weight:700;white-space:nowrap;color:${isIn?'var(--color-income,var(--green))':'var(--color-expense,var(--red))'}">${isIn?'+':'-'}${fmt(t.amount)}</div>
-        </div>`;
-      }).join('');
+      const incomes  = rows.filter(t => t.type === 'Income').sort((a,b)  => Number(b.amount||0) - Number(a.amount||0));
+      const expenses = rows.filter(t => t.type === 'Expense').sort((a,b) => Number(b.amount||0) - Number(a.amount||0));
+      const maxAmt   = Math.max(...rows.map(t => Number(t.amount||0)), 1);
+
+      const renderSection = (items, sectionLabel, color) => {
+        if (!items.length) return '';
+        return `<div class="section-band" style="color:${color}">${sectionLabel}</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.75rem;margin-bottom:1rem">
+${items.map(t => {
+  const lbl = t.budget_label || t.category_name || t.entity || t.description || '—';
+  const h   = Math.max(72, Math.sqrt(Number(t.amount||0) / maxAmt) * 160);
+  return `<div class="liab-content-card" style="min-height:${h}px;display:flex;flex-direction:column;justify-content:space-between;background:var(--bg-card,var(--bg-raised))">
+  <div style="padding:0.7rem 0.85rem">
+    <div style="font-size:0.68rem;color:var(--text-dim)">${t.date.slice(5)}</div>
+    <div style="font-size:0.82rem;font-weight:600;color:var(--text,var(--text-primary));margin-top:0.1rem">${esc(lbl)}</div>
+    ${t.entity ? `<div style="font-size:0.68rem;color:var(--text-secondary,var(--text-dim))">${esc(t.entity)}</div>` : ''}
+  </div>
+  <div style="padding:0 0.85rem 0.7rem;text-align:right">
+    <div style="font-size:0.85rem;font-weight:700;color:${color}">${t.type==='Income'?'+':'-'}${fmt(t.amount)}</div>
+  </div>
+</div>`;
+}).join('')}
+</div>`;
+      };
+
+      zone.style.cssText = 'padding:0.25rem 0.5rem';
+      zone.innerHTML = renderSection(incomes, 'CASH IN', 'var(--green)') + renderSection(expenses, 'CASH OUT', 'var(--red)');
     } else {
-      // List view: compact rows
       zone.style.cssText = '';
       zone.innerHTML = rows.map(t => {
         const isIn  = t.type === 'Income';
@@ -225,7 +229,6 @@
     }
   }
 
-  /* F1a — range toggle: fix .period-btn → .range-btn, skip if already active */
   function initRangeToggle() {
     const tog = el('cf-range-toggle');
     if (!tog) return;
@@ -239,7 +242,6 @@
     });
   }
 
-  /* F1c — view toggle: List / Card */
   function initViewToggle() {
     const tog = el('cf-view-toggle');
     if (!tog) return;
@@ -253,7 +255,6 @@
     });
   }
 
-  /* ── Load ── */
   async function loadAndRender() {
     const { start, end } = rangeWindow(activeRange);
     const [txR, liR, syR] = await Promise.allSettled([

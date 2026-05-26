@@ -1,8 +1,5 @@
 /* expenses.injector.js — Expenses panel (M2.3)
- * Stats: spent, budget remaining, locked budgets, debt ratio
- * Charts: 6-month trend (left) + Pareto horizontal bar (right)
- * Cards: budget cards with list/card view toggle
- * 9B2 fixes: F2a chart order swap, F2b period selector, F2c responsive, F2d list/card view
+ * 9B3: trend bar for single-month, group section bands, Bundle/Details toggle
  */
 (function () {
   'use strict';
@@ -21,7 +18,7 @@
 
   let paretoChart = null, trendChart = null;
   let txData = [], budgets = [], categories = [], liabilities = [];
-  let activeExpPeriod = 'current', expView = 'card';
+  let activeExpPeriod = 'current', expView = 'card', expGroupBy = 'details';
   let initialized = false;
   function el(id) { return document.getElementById(id); }
 
@@ -31,7 +28,6 @@
     return r.json();
   }
 
-  /* F2b — period window */
   function periodRange() {
     const n = new Date();
     if (activeExpPeriod === '3m') {
@@ -42,14 +38,12 @@
       const d = new Date(n); d.setDate(d.getDate() - 180);
       return { start: d.toISOString().split('T')[0], months: 6 };
     }
-    // current month
     return {
       start: new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split('T')[0],
       months: 1
     };
   }
 
-  /* ── Stats ── */
   function renderStats(catMap, budgetMap, spendByBudget) {
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
@@ -64,16 +58,16 @@
     const debtRatio   = totalSpent > 0 ? Math.round(fcLoan / totalSpent * 100) : 0;
 
     const set = (id,v) => { const e = el(id); if (e) e.textContent = v; };
-    set('exp-spent',         fmt(totalSpent));
-    set('exp-remain',        fmt(remaining));
-    set('exp-locked',        locked + ' over limit');
-    set('exp-debt-ratio',    debtRatio + '% of spend');
+    set('exp-spent',      fmt(totalSpent));
+    set('exp-remain',     fmt(remaining));
+    set('exp-locked',     locked + ' over limit');
+    set('exp-debt-ratio', debtRatio + '% of spend');
 
     const spentEl = el('exp-spent');
     if (spentEl && totalSpent > totalBudget) spentEl.style.color = 'var(--red)';
   }
 
-  /* ── Trend chart (F2a: now on left) ── */
+  /* Trend — bar chart for single month, line for multi-month */
   async function renderTrend() {
     const canvas = el('exp-trend-chart');
     if (!canvas) return;
@@ -87,9 +81,8 @@
     } catch { return; }
 
     const now = new Date();
-    const numMonths = Math.max(months, 1);
     const mArr = [];
-    for (let i = numMonths - 1; i >= 0; i--) {
+    for (let i = months - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       mArr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
     }
@@ -103,11 +96,20 @@
       return new Date(y,mo-1,1).toLocaleDateString('en',{month:'short'});
     });
 
+    const isSingle = months === 1;
     trendChart = new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets: [{ label: 'Monthly Expenses', data: mArr.map(m=>totals[m]),
-        borderColor: '#ef4444', borderWidth: 2, fill: true, backgroundColor: 'rgba(239,68,68,0.08)',
-        pointRadius: 3, tension: 0.3 }]},
+      type: isSingle ? 'bar' : 'line',
+      data: { labels, datasets: [{
+        label: 'Monthly Expenses',
+        data: mArr.map(m => totals[m]),
+        borderColor: '#ef4444',
+        borderWidth: isSingle ? 0 : 2,
+        fill: !isSingle,
+        backgroundColor: isSingle ? '#ef4444' : 'rgba(239,68,68,0.08)',
+        pointRadius: isSingle ? 0 : 3,
+        tension: 0.3,
+        borderRadius: isSingle ? 4 : 0
+      }]},
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
@@ -119,7 +121,6 @@
     });
   }
 
-  /* ── Pareto chart (F2a: now on right) ── */
   function renderPareto(catMap, budgetMap, spendByBudget) {
     const canvas = el('exp-pareto-chart');
     if (!canvas) return;
@@ -138,7 +139,7 @@
       groupTotals[g] = (groupTotals[g] || 0) + Number(t.amount||0);
     });
 
-    const sorted = Object.entries(groupTotals).sort((a,b) => b[1]-a[1]).slice(0, 10);
+    const sorted  = Object.entries(groupTotals).sort((a,b) => b[1]-a[1]).slice(0, 10);
     const palette = ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#22c55e','#ec4899','#14b8a6','#64748b','#f97316','#0ea5e9'];
 
     paretoChart = new Chart(canvas, {
@@ -155,7 +156,7 @@
     });
   }
 
-  /* ── Budget cards — F2d: card (default) and list views ── */
+  /* ── Cards — list, card-details (grouped bands), card-bundle (group totals) ── */
   function renderCards(catMap, spendByBudget) {
     const zone = el('exp-cards');
     if (!zone) return;
@@ -168,6 +169,10 @@
       zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem">No active expense budgets</p>';
       return;
     }
+
+    /* show/hide group-by toggle only in card view */
+    const gbt = el('exp-groupby-toggle');
+    if (gbt) gbt.style.display = expView === 'card' ? 'flex' : 'none';
 
     if (expView === 'list') {
       zone.style.cssText = '';
@@ -192,36 +197,82 @@
           </div>
         </div>`;
       }).join('');
-    } else {
-      // Card view (default mosaic)
+      return;
+    }
+
+    if (expGroupBy === 'bundle') {
+      /* Bundle: one card per category group — aggregate totals */
+      const groupMap = {};
+      expB.forEach(b => {
+        const cat = catMap[lid(b.category_id)];
+        const grp = cat?.group || cat?.name || 'Other';
+        if (!groupMap[grp]) groupMap[grp] = { budgeted: 0, spent: 0, count: 0 };
+        groupMap[grp].budgeted += mbr(b);
+        groupMap[grp].spent    += spendByBudget[b.id] || 0;
+        groupMap[grp].count++;
+      });
+      const entries  = Object.entries(groupMap).sort((a,b) => b[1].budgeted - a[1].budgeted);
+      const maxAmt   = Math.max(...entries.map(([,g]) => g.budgeted), 1);
       zone.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.75rem;margin-bottom:1rem';
-      const maxAmt = Math.max(...expB.map(b => mbr(b)), 1);
-      zone.innerHTML = expB.map(b => {
-        const bAmt   = mbr(b);
-        const spent  = spendByBudget[b.id] || 0;
-        const pct    = bAmt > 0 ? Math.round(spent / bAmt * 100) : 0;
-        const barC   = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e';
-        const h      = Math.max(72, Math.sqrt(bAmt / maxAmt) * 160);
-        const cat    = catMap[lid(b.category_id)];
-        const grp    = cat?.group || cat?.name || '—';
+      zone.innerHTML = entries.map(([grp, g]) => {
+        const pct  = g.budgeted > 0 ? Math.round(g.spent / g.budgeted * 100) : 0;
+        const barC = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e';
+        const h    = Math.max(72, Math.sqrt(g.budgeted / maxAmt) * 160);
         return `<div class="liab-content-card" style="min-height:${h}px;display:flex;flex-direction:column;justify-content:space-between;background:var(--bg-card,var(--bg-raised))">
           <div style="padding:0.7rem 0.85rem">
-            <div style="font-size:0.68rem;color:var(--text-dim,var(--text-secondary))">${esc(grp)}</div>
-            <div style="font-size:0.82rem;font-weight:600;color:var(--text,var(--text-primary));margin-top:0.1rem">${esc(b.label||'—')}</div>
-            <div style="font-size:0.7rem;color:var(--text-dim,var(--text-secondary));margin-top:0.15rem">${fmt(spent)} / ${fmt(bAmt)}</div>
+            <div style="font-size:0.68rem;color:var(--text-dim)">${g.count} budget${g.count>1?'s':''}</div>
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text,var(--text-primary));margin-top:0.1rem">${esc(grp)}</div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.15rem">${fmt(g.spent)} / ${fmt(g.budgeted)}</div>
           </div>
           <div style="padding:0 0.85rem 0.7rem">
             <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
               <div style="width:${Math.min(pct,100)}%;height:100%;background:${barC};border-radius:3px;transition:width 0.4s"></div>
             </div>
-            <div style="font-size:0.68rem;text-align:right;margin-top:0.15rem;color:${pct>=100?'#ef4444':pct>=80?'#f59e0b':'var(--text-dim,var(--text-secondary))'}">${pct}%</div>
+            <div style="font-size:0.68rem;text-align:right;margin-top:0.15rem;color:${pct>=100?'#ef4444':pct>=80?'#f59e0b':'var(--text-dim)'}">${pct}%</div>
           </div>
         </div>`;
       }).join('');
+      return;
     }
+
+    /* Details: individual cards grouped by category group with section bands */
+    const groups = {};
+    expB.forEach(b => {
+      const cat = catMap[lid(b.category_id)];
+      const grp = cat?.group || cat?.name || 'Other';
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(b);
+    });
+    const maxAmt = Math.max(...expB.map(b => mbr(b)), 1);
+
+    zone.style.cssText = '';
+    zone.innerHTML = Object.entries(groups).map(([grp, items]) => {
+      const cards = items.map(b => {
+        const bAmt   = mbr(b);
+        const spent  = spendByBudget[b.id] || 0;
+        const pct    = bAmt > 0 ? Math.round(spent / bAmt * 100) : 0;
+        const barC   = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e';
+        const h      = Math.max(72, Math.sqrt(bAmt / maxAmt) * 160);
+        return `<div class="liab-content-card" style="min-height:${h}px;display:flex;flex-direction:column;justify-content:space-between;background:var(--bg-card,var(--bg-raised))">
+          <div style="padding:0.7rem 0.85rem">
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text,var(--text-primary))">${esc(b.label||'—')}</div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.15rem">${fmt(spent)} / ${fmt(bAmt)}</div>
+          </div>
+          <div style="padding:0 0.85rem 0.7rem">
+            <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="width:${Math.min(pct,100)}%;height:100%;background:${barC};border-radius:3px;transition:width 0.4s"></div>
+            </div>
+            <div style="font-size:0.68rem;text-align:right;margin-top:0.15rem;color:${pct>=100?'#ef4444':pct>=80?'#f59e0b':'var(--text-dim)'}">${pct}%</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="section-band">${esc(grp.toUpperCase())}</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.75rem;margin-bottom:1rem">
+${cards}
+</div>`;
+    }).join('');
   }
 
-  /* F2b — period toggle */
   function initPeriodToggle() {
     const tog = el('exp-period-toggle');
     if (!tog) return;
@@ -235,7 +286,6 @@
     });
   }
 
-  /* F2d — view toggle */
   function initExpViewToggle() {
     const tog = el('exp-view-toggle');
     if (!tog) return;
@@ -245,17 +295,33 @@
       tog.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       expView = btn.dataset.view;
-      const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
-      const spendByBudget = {};
-      txData.filter(t => t.type==='Expense').forEach(t => {
-        const bid = lid(t.budget_id);
-        if (bid) spendByBudget[bid] = (spendByBudget[bid] || 0) + Number(t.amount||0);
-      });
-      renderCards(catMap, spendByBudget);
+      reRenderCards();
     });
   }
 
-  /* ── Load ── */
+  function initGroupByToggle() {
+    const tog = el('exp-groupby-toggle');
+    if (!tog) return;
+    tog.addEventListener('click', e => {
+      const btn = e.target.closest('[data-groupby]');
+      if (!btn || btn.classList.contains('active')) return;
+      tog.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      expGroupBy = btn.dataset.groupby;
+      reRenderCards();
+    });
+  }
+
+  function reRenderCards() {
+    const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+    const spendByBudget = {};
+    txData.filter(t => t.type==='Expense').forEach(t => {
+      const bid = lid(t.budget_id);
+      if (bid) spendByBudget[bid] = (spendByBudget[bid] || 0) + Number(t.amount||0);
+    });
+    renderCards(catMap, spendByBudget);
+  }
+
   async function loadAndRender() {
     const { start } = periodRange();
     const [txR, bR, cR, lR] = await Promise.allSettled([
@@ -287,6 +353,7 @@
     if (initialized) return; initialized = true;
     initPeriodToggle();
     initExpViewToggle();
+    initGroupByToggle();
     loadAndRender().catch(console.error);
   }
 

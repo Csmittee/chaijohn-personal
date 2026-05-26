@@ -143,6 +143,14 @@
     .chart-wrap { height: 220px; position: relative; }
     .chart-wrap-tall { height: 280px; position: relative; }
 
+    /* ─── Section band (group headers for card zones) ─── */
+    .section-band { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; padding: 0.6rem 0 0.3rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; }
+
+    /* ─── Entry FAB top-right ─── */
+    #entry-fab { position: fixed; top: 0.7rem; right: 1rem; z-index: 400; }
+    #entry-fab button { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; padding: 0.4rem 0.85rem; background: var(--yellow); color: #0a0a10; border: none; border-radius: var(--radius); cursor: pointer; letter-spacing: 0.04em; box-shadow: 0 2px 8px rgba(0,0,0,0.4); transition: opacity var(--transition); }
+    #entry-fab button:hover { opacity: 0.88; }
+
     /* ─── Cards zone ─── */
     .cards-zone { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
     .liab-content-card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -200,12 +208,14 @@
     #entry-drawer {
       position: fixed; top: 0; right: 0;
       width: var(--drawer-w); height: 100vh;
-      background: var(--bg-raised);
+      background: rgba(12,12,20,0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border-left: 1px solid var(--border-strong);
       z-index: 200; display: flex; flex-direction: column;
       transform: translateX(100%);
       transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
-      box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+      box-shadow: -4px 0 32px rgba(0,0,0,0.5);
     }
     #entry-drawer.open { transform: translateX(0); }
     .drawer-topbar {
@@ -323,6 +333,11 @@
     </div>
   </div>
 
+  <!-- ── Entry FAB top-right ── -->
+  <div id="entry-fab">
+    <button onclick="toggleDrawer()">⊕ Entry</button>
+  </div>
+
   <!-- ── Entry Drawer ── -->
   <div id="entry-drawer">
     <div class="drawer-topbar">
@@ -424,7 +439,7 @@
             <button class="range-btn" data-util-chart="water">Water</button>
           </div>
           <div style="margin-top:0.5rem">
-            <div class="chart-container" id="util-chart-wrap" style="height:140px"><canvas id="elec-chart"></canvas></div>
+            <div class="chart-container" id="util-chart-wrap" style="height:220px"><canvas id="elec-chart"></canvas></div>
             <div style="display:none"><canvas id="water-chart"></canvas></div>
           </div>
           <div id="yoy-section" style="margin-top:1.5rem">
@@ -754,9 +769,15 @@
           <div class="chart-wrap"><canvas id="exp-pareto-chart"></canvas></div>
         </div>
       </div>
-      <div id="exp-view-toggle" class="range-toggle">
-        <button class="range-btn" data-view="list">List</button>
-        <button class="range-btn active" data-view="card">Card</button>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem">
+        <div id="exp-view-toggle" class="range-toggle" style="margin-bottom:0">
+          <button class="range-btn" data-view="list">List</button>
+          <button class="range-btn active" data-view="card">Card</button>
+        </div>
+        <div id="exp-groupby-toggle" class="range-toggle" style="margin-bottom:0">
+          <button class="range-btn active" data-groupby="details">Details</button>
+          <button class="range-btn" data-groupby="bundle">Bundle</button>
+        </div>
       </div>
       <div id="exp-cards"></div>
     </div>
