@@ -1,90 +1,895 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chaijohn Dashboard — Login</title>
-  <link rel="stylesheet" href="/assets/css/global.css">
+  <title>CHAIJOHN OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
-    .login-wrap {
+    /* ── Chairit OS Design Tokens ── */
+    :root {
+      --font-display: 'Syne', sans-serif;
+      --font-body:    'Space Grotesk', sans-serif;
+      --font-mono:    'IBM Plex Mono', monospace;
+
+      /* dark (default) */
+      --bg:            #0d0d14;
+      --bg-raised:     #13131f;
+      --bg-card:       #1a1a2e;
+      --border:        rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.16);
+      --text:          #e8e8f0;
+      --text-dim:      rgba(232,232,240,0.45);
+      --text-muted:    rgba(232,232,240,0.65);
+
+      /* brand */
+      --yellow: #f5c518;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --blue:   #3b82f6;
+      --purple: #a78bfa;
+
+      /* sidebar */
+      --sidebar-w:          220px;
+      --sidebar-bg:         #0a0a10;
+      --nav-hover:          rgba(255,255,255,0.05);
+      --nav-active-bg:      rgba(245,197,24,0.12);
+      --nav-active-border:  #f5c518;
+
+      --radius:    8px;
+      --radius-lg: 12px;
+      --transition: 0.18s ease;
+    }
+
+    [data-theme="light"] {
+      --bg:            #f0f0f5;
+      --bg-raised:     #ffffff;
+      --bg-card:       #ffffff;
+      --border:        rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.16);
+      --text:          #1a1a2e;
+      --text-dim:      rgba(26,26,46,0.4);
+      --text-muted:    rgba(26,26,46,0.6);
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+    }
+
+    /* ─────────────────────────────────────
+       SIDEBAR
+    ───────────────────────────────────── */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .sidebar-brand {
+      padding: 1.25rem 1rem 1rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: 0.04em;
+      color: var(--yellow);
+      line-height: 1.2;
+    }
+
+    .brand-sub {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 0.5rem 0;
+      overflow-y: auto;
+    }
+
+    .nav-section-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      padding: 0.9rem 1rem 0.3rem;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.48rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background: var(--nav-hover);
+      color: var(--text);
+    }
+
+    .nav-item.active {
+      background: var(--nav-active-bg);
+      color: var(--yellow);
+      border-left-color: var(--nav-active-border);
+      font-weight: 600;
+    }
+
+    .nav-icon {
+      font-size: 0.85rem;
+      width: 1rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .nav-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nav-group-header {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.48rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+      user-select: none;
+    }
+
+    .nav-group-header:hover {
+      background: var(--nav-hover);
+      color: var(--text);
+    }
+
+    .nav-group-chevron {
+      margin-left: auto;
+      font-size: 0.65rem;
+      transition: transform var(--transition);
+      flex-shrink: 0;
+    }
+
+    .nav-group.open .nav-group-chevron {
+      transform: rotate(90deg);
+    }
+
+    .nav-group-children {
+      display: none;
+      padding-left: 0.75rem;
+    }
+
+    .nav-group.open .nav-group-children {
+      display: block;
+    }
+
+    .sidebar-footer {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.35rem 0;
+      transition: color var(--transition);
+      user-select: none;
+    }
+
+    .theme-toggle:hover { color: var(--text); }
+
+    /* ─────────────────────────────────────
+       MAIN CONTENT
+    ───────────────────────────────────── */
+    #main {
+      margin-left: var(--sidebar-w);
+      min-height: 100vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+    }
+
+    .route-panel { display: none; }
+    .route-panel.active { display: block; }
+
+    .panel-header { margin-bottom: 1.25rem; }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.4rem;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .panel-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
+
+    .conclusion-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.6rem 0.9rem;
+      min-width: 120px;
+    }
+
+    .chip-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.2rem;
+    }
+
+    .chip-value {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.6rem 0.75rem;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    .detail-section {
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+
+    .coming-soon {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      padding: 2.5rem 0;
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+    }
+
+    /* ─────────────────────────────────────
+       AUTH OVERLAY
+    ───────────────────────────────────── */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
+      z-index: 1000;
     }
-    .login-card {
-      width: min(380px, 100%);
-      padding: 2rem;
+
+    #auth-overlay.hidden { display: none; }
+
+    .auth-card {
+      width: min(360px, 90vw);
+      background: var(--bg-raised);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1.75rem;
     }
-    .login-logo {
+
+    .auth-logo {
       text-align: center;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.75rem;
     }
-    .login-logo h1 {
-      font-size: 1.6rem;
-      font-weight: 700;
-      color: var(--color-primary);
+
+    .auth-logo-name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.5rem;
+      color: var(--yellow);
+      letter-spacing: 0.04em;
+    }
+
+    .auth-logo-sub {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      margin-top: 4px;
+    }
+
+    .auth-field { margin-bottom: 1rem; }
+
+    .auth-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       margin-bottom: 0.4rem;
     }
-    .login-logo p {
+
+    .auth-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 0.7rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      letter-spacing: 0.35em;
+      color: var(--text);
+      text-align: center;
+      outline: none;
+      transition: border-color var(--transition);
+    }
+
+    .auth-input:focus { border-color: var(--yellow); }
+
+    .auth-btn {
+      width: 100%;
+      background: var(--yellow);
+      color: #0a0a10;
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.75rem;
+      font-family: var(--font-body);
       font-size: 0.9rem;
-      color: var(--text-secondary);
-    }
-    #pin-input {
-      text-align: center;
-      font-size: 1.5rem;
-      letter-spacing: 0.4em;
       font-weight: 700;
+      cursor: pointer;
+      transition: opacity var(--transition);
+      margin-top: 0.25rem;
     }
-    #auth-error {
-      color: var(--color-expense);
-      font-size: 0.85rem;
-      text-align: center;
-      padding: 0.5rem;
-      background: rgba(239, 68, 68, 0.08);
+
+    .auth-btn:hover   { opacity: 0.88; }
+    .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .auth-msg {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
       border-radius: var(--radius);
+      padding: 0.45rem 0.7rem;
       margin-bottom: 0.75rem;
+      display: none;
     }
-    #setup-msg {
-      color: var(--color-warning);
-      font-size: 0.85rem;
-      text-align: center;
-      padding: 0.5rem;
-      background: rgba(245, 158, 11, 0.08);
-      border-radius: var(--radius);
-      margin-bottom: 0.75rem;
+
+    .auth-msg.error {
+      color: var(--red);
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
     }
+
+    .auth-msg.setup {
+      color: var(--yellow);
+      background: rgba(245,197,24,0.08);
+      border: 1px solid rgba(245,197,24,0.2);
+    }
+
+    .auth-msg a { color: inherit; }
   </style>
 </head>
 <body>
-  <div class="login-wrap">
-    <div class="card login-card">
-      <div class="login-logo">
-        <h1>🏠 Chaijohn Dashboard</h1>
-        <p>Personal Finance &amp; Command Center</p>
+
+  <!-- ── Auth Overlay ── -->
+  <div id="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-logo-name">CHAIJOHN OS</div>
+        <div class="auth-logo-sub">personal finance · life</div>
       </div>
-
-      <div id="auth-error" class="hidden"></div>
-      <div id="setup-msg" class="hidden">No PIN set — visit <a href="/setup.html">/setup.html</a> first</div>
-
+      <div id="auth-error" class="auth-msg error"></div>
+      <div id="auth-setup" class="auth-msg setup">No PIN set — visit <a href="/setup.html">/setup.html</a> first</div>
       <form id="pin-form" autocomplete="off">
-        <div class="form-group">
-          <label for="pin-input">PIN</label>
-          <input
-            type="password"
-            id="pin-input"
-            maxlength="6"
-            inputmode="numeric"
-            placeholder="Enter PIN"
-            autocomplete="off"
-          >
+        <div class="auth-field">
+          <label class="auth-label" for="pin-input">PIN</label>
+          <input type="password" id="pin-input" class="auth-input"
+            maxlength="6" inputmode="numeric" placeholder="••••••" autocomplete="off">
         </div>
-        <button type="submit" class="btn btn-primary w-full btn-lg" id="enter-btn">Enter</button>
+        <button type="submit" id="enter-btn" class="auth-btn">Enter</button>
       </form>
     </div>
   </div>
 
-  <script src="/assets/js/auth.js" defer></script>
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-name">CHAIJOHN OS</div>
+      <div class="brand-sub">personal finance · life</div>
+    </div>
+
+    <nav class="sidebar-nav">
+
+      <!-- M1 standalone -->
+      <div class="nav-item" data-route="dashboard">
+        <span class="nav-icon">⬡</span>
+        <span class="nav-label">Dashboard</span>
+      </div>
+
+      <!-- M2 FINANCE — expanded by default -->
+      <div class="nav-section-label">Finance</div>
+      <div class="nav-group open" id="group-finance">
+        <div class="nav-group-header">
+          <span class="nav-icon">◈</span>
+          <span>Finance</span>
+          <span class="nav-group-chevron">›</span>
+        </div>
+        <div class="nav-group-children">
+          <div class="nav-item" data-route="cashflow">
+            <span class="nav-icon">⟡</span>
+            <span class="nav-label">Cash Flow</span>
+          </div>
+          <div class="nav-item" data-route="sales">
+            <span class="nav-icon">↑</span>
+            <span class="nav-label">Sales</span>
+          </div>
+          <div class="nav-item" data-route="expenses">
+            <span class="nav-icon">↓</span>
+            <span class="nav-label">Expenses</span>
+          </div>
+          <div class="nav-item" data-route="projects">
+            <span class="nav-icon">◧</span>
+            <span class="nav-label">Projects</span>
+          </div>
+          <div class="nav-item" data-route="budget">
+            <span class="nav-icon">◻</span>
+            <span class="nav-label">Budget</span>
+          </div>
+          <div class="nav-item" data-route="liabilities">
+            <span class="nav-icon">⧖</span>
+            <span class="nav-label">Liabilities</span>
+          </div>
+          <div class="nav-item" data-route="entry">
+            <span class="nav-icon">⊕</span>
+            <span class="nav-label">Entry</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- M3 ASSETS — collapsed -->
+      <div class="nav-section-label">Assets</div>
+      <div class="nav-group" id="group-assets">
+        <div class="nav-group-header">
+          <span class="nav-icon">◈</span>
+          <span>Assets</span>
+          <span class="nav-group-chevron">›</span>
+        </div>
+        <div class="nav-group-children">
+          <div class="nav-item" data-route="ideas">
+            <span class="nav-icon">◎</span>
+            <span class="nav-label">Ideas</span>
+          </div>
+          <div class="nav-item" data-route="collection">
+            <span class="nav-icon">◈</span>
+            <span class="nav-label">Collection</span>
+          </div>
+          <div class="nav-item" data-route="hard-assets">
+            <span class="nav-icon">◫</span>
+            <span class="nav-label">Hard Assets</span>
+          </div>
+          <div class="nav-item" data-route="proj-assets">
+            <span class="nav-icon">◬</span>
+            <span class="nav-label">Project Assets</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- M4 TOOLS — collapsed -->
+      <div class="nav-section-label">Tools</div>
+      <div class="nav-group" id="group-tools">
+        <div class="nav-group-header">
+          <span class="nav-icon">◈</span>
+          <span>Tools</span>
+          <span class="nav-group-chevron">›</span>
+        </div>
+        <div class="nav-group-children">
+          <div class="nav-item" data-route="ai">
+            <span class="nav-icon">⬡</span>
+            <span class="nav-label">AI</span>
+          </div>
+          <div class="nav-item" data-route="mindmap">
+            <span class="nav-icon">◎</span>
+            <span class="nav-label">Mind Map</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- M5 LIFE — standalone -->
+      <div class="nav-section-label">Life</div>
+      <div class="nav-item" data-route="life">
+        <span class="nav-icon">○</span>
+        <span class="nav-label">Life</span>
+      </div>
+
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="theme-toggle" id="theme-toggle">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark mode</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main id="main">
+
+    <div class="route-panel" id="panel-dashboard">
+      <div class="panel-header">
+        <div class="panel-title">Dashboard</div>
+        <div class="panel-subtitle">// overview · today</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">cash balance</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">this month in</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">this month out</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">days to ฿0</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · range · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">dashboard — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-cashflow">
+      <div class="panel-header">
+        <div class="panel-title">Cash Flow</div>
+        <div class="panel-subtitle">// forecast · transactions</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">net this month</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">forecast 30d</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · range · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">cashflow — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-sales">
+      <div class="panel-header">
+        <div class="panel-title">Sales</div>
+        <div class="panel-subtitle">// income · clients · pipeline</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total this month</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · range · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">sales — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-expenses">
+      <div class="panel-header">
+        <div class="panel-title">Expenses</div>
+        <div class="panel-subtitle">// spending · categories</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total this month</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · range · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">expenses — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-projects">
+      <div class="panel-header">
+        <div class="panel-title">Projects</div>
+        <div class="panel-subtitle">// active · pipeline · archive</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">active projects</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · status · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">projects — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-budget">
+      <div class="panel-header">
+        <div class="panel-title">Budget</div>
+        <div class="panel-subtitle">// plan · actuals · variance</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">monthly budget</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">spent</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · period · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">budget — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-liabilities">
+      <div class="panel-header">
+        <div class="panel-title">Liabilities</div>
+        <div class="panel-subtitle">// loans · obligations</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total owed</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">monthly payment</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · active · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">liabilities — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-entry">
+      <div class="panel-header">
+        <div class="panel-title">Entry</div>
+        <div class="panel-subtitle">// record transactions · quick add</div>
+      </div>
+      <div class="conclusion-row"></div>
+      <div class="filter-bar">type · category · date — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">entry — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-ideas">
+      <div class="panel-header">
+        <div class="panel-title">Ideas</div>
+        <div class="panel-subtitle">// concept log · wishlist</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total ideas</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · status · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">ideas — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-collection">
+      <div class="panel-header">
+        <div class="panel-title">Collection</div>
+        <div class="panel-subtitle">// inventory · valuables</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">items</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">est. value</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · category · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">collection — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-hard-assets">
+      <div class="panel-header">
+        <div class="panel-title">Hard Assets</div>
+        <div class="panel-subtitle">// property · vehicles · physical</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total value</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · type · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">hard-assets — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-proj-assets">
+      <div class="panel-header">
+        <div class="panel-title">Project Assets</div>
+        <div class="panel-subtitle">// digital · IP · tools</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">total items</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · type · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">proj-assets — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-ai">
+      <div class="panel-header">
+        <div class="panel-title">AI</div>
+        <div class="panel-subtitle">// assistant · analysis · automation</div>
+      </div>
+      <div class="conclusion-row"></div>
+      <div class="filter-bar">mode · context · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">ai — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-mindmap">
+      <div class="panel-header">
+        <div class="panel-title">Mind Map</div>
+        <div class="panel-subtitle">// visual thinking · connections</div>
+      </div>
+      <div class="conclusion-row"></div>
+      <div class="filter-bar">view · mode · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">mindmap — coming in Part 2</div></div>
+    </div>
+
+    <div class="route-panel" id="panel-life">
+      <div class="panel-header">
+        <div class="panel-title">Life</div>
+        <div class="panel-subtitle">// goals · health · journal</div>
+      </div>
+      <div class="conclusion-row">
+        <div class="stat-chip"><span class="chip-label">open goals</span><span class="chip-value">—</span></div>
+      </div>
+      <div class="filter-bar">filter · period · options — coming in Part 2</div>
+      <div class="detail-section"><div class="coming-soon">life — coming in Part 2</div></div>
+    </div>
+
+  </main>
+
+  <script>
+    /* ─────────────────────────────────────
+       CHAIJOHN OS — Shell v1 (Part 1)
+       Theme · Nav groups · Router · Auth
+    ───────────────────────────────────── */
+
+    /* ── Theme (runs before paint) ── */
+    (function () {
+      const saved = localStorage.getItem('chaijohn-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      const icon  = document.getElementById('theme-icon');
+      const label = document.getElementById('theme-label');
+      if (saved === 'light') {
+        if (icon)  icon.textContent  = '☀️';
+        if (label) label.textContent = 'Light mode';
+      }
+    })();
+
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next    = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('chaijohn-theme', next);
+      document.getElementById('theme-icon').textContent  = next === 'dark' ? '🌙' : '☀️';
+      document.getElementById('theme-label').textContent = next === 'dark' ? 'Dark mode' : 'Light mode';
+    });
+
+    /* ── Collapsible groups ── */
+    document.querySelectorAll('.nav-group-header').forEach(function (header) {
+      header.addEventListener('click', function () {
+        header.closest('.nav-group').classList.toggle('open');
+      });
+    });
+
+    /* ── Router ── */
+    var ROUTES = [
+      'dashboard','cashflow','sales','expenses','projects',
+      'budget','liabilities','entry','ideas','collection',
+      'hard-assets','proj-assets','ai','mindmap','life'
+    ];
+
+    function navigate(route) {
+      if (!ROUTES.includes(route)) route = 'dashboard';
+
+      document.querySelectorAll('.route-panel').forEach(function (p) {
+        p.classList.toggle('active', p.id === 'panel-' + route);
+      });
+
+      document.querySelectorAll('.nav-item[data-route]').forEach(function (item) {
+        const match = item.dataset.route === route;
+        item.classList.toggle('active', match);
+        if (match) {
+          var group = item.closest('.nav-group');
+          if (group) group.classList.add('open');
+        }
+      });
+
+      if (location.hash !== '#' + route) {
+        history.replaceState(null, '', '#' + route);
+      }
+    }
+
+    document.querySelectorAll('.nav-item[data-route]').forEach(function (item) {
+      item.addEventListener('click', function () { navigate(item.dataset.route); });
+    });
+
+    window.addEventListener('hashchange', function () {
+      navigate(location.hash.replace('#', '') || 'dashboard');
+    });
+
+    /* ── Auth ── */
+    (function () {
+      var overlay   = document.getElementById('auth-overlay');
+      var form      = document.getElementById('pin-form');
+      var pinInput  = document.getElementById('pin-input');
+      var errEl     = document.getElementById('auth-error');
+      var setupEl   = document.getElementById('auth-setup');
+      var submitBtn = document.getElementById('enter-btn');
+
+      function showError(msg) {
+        errEl.textContent = msg;
+        errEl.style.display = 'block';
+        setupEl.style.display = 'none';
+      }
+
+      function showSetup() {
+        setupEl.style.display = 'block';
+        errEl.style.display = 'none';
+      }
+
+      function revealShell() {
+        overlay.classList.add('hidden');
+        navigate(location.hash.replace('#', '') || 'dashboard');
+      }
+
+      async function doLogin() {
+        var pin = (pinInput.value || '').trim();
+        if (!pin) { showError('Please enter your PIN.'); return; }
+        errEl.style.display = 'none';
+        setupEl.style.display = 'none';
+        submitBtn.disabled = true;
+        try {
+          var r = await fetch('/api/auth/verify', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: pin })
+          });
+          if (r.ok) {
+            revealShell();
+          } else if (r.status === 404) {
+            showSetup();
+          } else {
+            var msg = 'Incorrect PIN';
+            try { var d = await r.json(); if (d && d.error) msg = d.error; } catch (e) {}
+            showError(msg);
+          }
+        } catch (e) {
+          showError('Connection error. Please try again.');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      }
+
+      form.addEventListener('submit', function (e) { e.preventDefault(); doLogin(); });
+      if (pinInput) pinInput.focus();
+
+      /* already logged in? skip overlay */
+      fetch('/api/auth/check', { credentials: 'same-origin' })
+        .then(function (r) { if (r.ok) revealShell(); })
+        .catch(function () { /* stay on overlay */ });
+    })();
+  </script>
+
 </body>
 </html>
