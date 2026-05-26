@@ -136,6 +136,7 @@
 
     /* ─── Panel chart layout ─── */
     .panel-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .panel-charts > * { min-width: 0; }
     @media (max-width: 768px) { .panel-charts { grid-template-columns: 1fr; } }
     .chart-panel { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; }
     .chart-panel-title { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -411,11 +412,20 @@
           <button class="btn btn-primary w-full" id="save-util">Save Utilities</button>
         </div>
         <div class="card">
-          <div class="section-header"><span class="section-title">Last 12 Months</span></div>
+          <div class="section-header" style="cursor:pointer" id="util-history-toggle">
+            <span class="section-title">Last 12 Months</span>
+            <span id="util-history-chevron" style="font-size:0.82rem;color:var(--text-dim)">▶ Show history</span>
+          </div>
+          <div id="util-history-summary" style="font-size:0.8rem;color:var(--text-muted);padding:0.25rem 0 0.5rem"></div>
+          <div id="util-history-body" style="display:none">
           <div id="util-history-table"></div>
-          <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-            <div class="chart-container" style="height:140px"><canvas id="elec-chart"></canvas></div>
-            <div class="chart-container" style="height:140px"><canvas id="water-chart"></canvas></div>
+          <div id="util-chart-toggle-bar" class="range-toggle" style="margin-top:1rem">
+            <button class="range-btn active" data-util-chart="electricity">Electricity</button>
+            <button class="range-btn" data-util-chart="water">Water</button>
+          </div>
+          <div style="margin-top:0.5rem">
+            <div class="chart-container" id="util-chart-wrap" style="height:140px"><canvas id="elec-chart"></canvas></div>
+            <div style="display:none"><canvas id="water-chart"></canvas></div>
           </div>
           <div id="yoy-section" style="margin-top:1.5rem">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
@@ -435,6 +445,7 @@
               <div><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Water Charge ฿</div><div class="chart-container" style="height:140px"><canvas id="yoy-water-charge"></canvas></div></div>
             </div>
           </div>
+          </div><!-- /util-history-body -->
         </div>
       </div>
 
@@ -698,6 +709,10 @@
         <div class="chart-panel-title">balance forecast</div>
         <div class="chart-wrap-tall"><canvas id="cf-chart"></canvas></div>
       </div>
+      <div id="cf-view-toggle" class="range-toggle">
+        <button class="range-btn active" data-view="list">List</button>
+        <button class="range-btn" data-view="card">Card</button>
+      </div>
       <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
         <div id="cf-cards"></div>
       </div>
@@ -724,17 +739,26 @@
         <div class="stat-chip"><span class="chip-label">budgets over limit</span><span class="chip-value" id="exp-locked">—</span></div>
         <div class="stat-chip"><span class="chip-label">debt payback ratio</span><span class="chip-value" id="exp-debt-ratio">—</span></div>
       </div>
+      <div id="exp-period-toggle" class="range-toggle">
+        <button class="range-btn active" data-period="current">Current Month</button>
+        <button class="range-btn" data-period="3m">Last 3M</button>
+        <button class="range-btn" data-period="6m">Last 6M</button>
+      </div>
       <div class="panel-charts">
+        <div class="chart-panel">
+          <div class="chart-panel-title">expense trend</div>
+          <div class="chart-wrap"><canvas id="exp-trend-chart"></canvas></div>
+        </div>
         <div class="chart-panel">
           <div class="chart-panel-title">top spend by group (pareto)</div>
           <div class="chart-wrap"><canvas id="exp-pareto-chart"></canvas></div>
         </div>
-        <div class="chart-panel">
-          <div class="chart-panel-title">6-month expense trend</div>
-          <div class="chart-wrap"><canvas id="exp-trend-chart"></canvas></div>
-        </div>
       </div>
-      <div class="cards-zone" id="exp-cards"></div>
+      <div id="exp-view-toggle" class="range-toggle">
+        <button class="range-btn" data-view="list">List</button>
+        <button class="range-btn active" data-view="card">Card</button>
+      </div>
+      <div id="exp-cards"></div>
     </div>
 
     <!-- ─── Projects ─── -->
@@ -782,12 +806,12 @@
       </div>
       <div class="panel-charts">
         <div class="chart-panel">
-          <div class="chart-panel-title">balance by liability (T3)</div>
-          <div class="chart-wrap"><canvas id="liab-bar-chart"></canvas></div>
-        </div>
-        <div class="chart-panel">
           <div class="chart-panel-title">24-month paydown projection</div>
           <div class="chart-wrap"><canvas id="liab-trend-chart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-panel-title">balance by liability (T3)</div>
+          <div class="chart-wrap"><canvas id="liab-bar-chart"></canvas></div>
         </div>
       </div>
       <div class="cards-zone" id="liab-cards"></div>
