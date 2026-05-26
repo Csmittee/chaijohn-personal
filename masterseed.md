@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-26 — Fix 9B complete; M2 panels wired; entry drawer; Time Management stub; dash-overview; redirects added
+> Last Updated: 2026-05-26 — Fix 9B2 complete; cashflow/expenses/liabilities/entry-utility QA fixes applied
 
 ---
 
@@ -246,6 +246,7 @@ functions/
 | Fix G | G1 Transactions API reads/writes budget_id (GET enriches budget_label+category via budget; POST requires budget_id for Expense; PATCH accepts budget_id) · G2 Budgets API returns category_name/group/type + expense_only filter · G3 Transaction expense dropdown → Budget list grouped by category_group · G4 Transaction list display uses server-enriched budget fields + legacy fallback · G5 Budget creation enforces unique label+category_id (API 400 + UI keeps form on error) · G6 Budget category dropdown = Expense only; section renamed to "Add Budget Item" · G7 Dashboard resolves category via budget_id using resolveCatId() helper | ✅ COMPLETE |
 | Fix 9A | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
 | Fix 9B | Sidebar Shell Part 2 — M2 panel stat chips + charts + cards wired; entry drawer (pin-able, context-aware); dashboard overview + mini charts; Time Management stub; redirects for dashboard.html + entry.html; budget delete typed confirm | ✅ COMPLETE |
+| Fix 9B2 | QA fixes: F1a/b/c cashflow toggle+range+view; F2a-d expenses chart order+period+responsive+view; F3a liabilities chart swap; F4a/b entry utility chart toggle+collapse | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -258,7 +259,11 @@ functions/
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer (pin-able, context-aware tabs), Time Management placeholder, dashboard overview mini charts ✅
-- M2 panels wired: Cashflow (T1 chart + 5 stats + tx cards), Expenses (Pareto + 6mo trend + 4 stats + budget cards), Liabilities (T3 bar + 24mo paydown + 4 stats + expandable cards), Budget (T4 bar + 7 stats + budget cards) ✅
+- M2 panels wired (9B2 QA applied):
+  - Cashflow: 1M/3M/6M range toggle (range-btn fix), 30/70 date window, list/card view toggle ✅
+  - Expenses: trend left + pareto right, current/3M/6M period selector, responsive min-width:0, list/card view toggle ✅
+  - Liabilities: trend left + T3 bar right, responsive grid ✅
+  - Budget: T4 bar + 7 stats + budget cards ✅
 - Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts (click → M2 panel) ✅
 - Entry drawer: embedded in shell (all 4 tabs), context-aware (cashflow→transactions, expenses/budget→budgets, liabilities→liabilities), pin-able ✅
 - Budget delete: requires typing budget label to confirm; other deletes use confirm() ✅
@@ -294,8 +299,8 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-1. Phase 9b — Wire dashboard T1 cashflow into new sidebar shell (cashflow panel gets live chart + cards)
-2. Phase 9c — Wire remaining panels (entry, budget, liabilities, expenses) to existing injector logic
+1. Fix 9E — Budget panel 12-month planning grid redesign + diary.injector.js surgical improvements
+2. Fix 9C — Full M3.4 Projects module (Airtable schema, API endpoints, projects.injector.js, index.html panel)
 3. Collection module full test + buyer tags
 4. AI Advisor full test + verify financial context loads
 

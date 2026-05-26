@@ -1,5 +1,6 @@
 /* cashflow.injector.js — Cash Flow panel (M2.1)
  * Lazy-init on first panel activation via 'panelactivated' event.
+ * 9B2 fixes: F1a period toggle class fix, F1b 30/70 range window, F1c list/card view toggle
  */
 (function () {
   'use strict';
@@ -8,7 +9,7 @@
   const esc  = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   let cfChart = null, txData = [], liabilities = [], syncPoint = null;
-  let activeRange = '1m', initialized = false;
+  let activeRange = '1m', cfView = 'list', initialized = false;
   function el(id) { return document.getElementById(id); }
 
   async function api(path) {
@@ -17,11 +18,24 @@
     return r.json();
   }
 
-  function rangeStart(range) {
+  /* F1b — range window: today sits at ~30% from left edge */
+  function rangeWindow(range) {
     const n = new Date();
-    if (range === '1m') return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split('T')[0];
-    if (range === '3m') return new Date(n.getFullYear(), n.getMonth() - 2, 1).toISOString().split('T')[0];
-    return new Date(n.getFullYear(), n.getMonth() - 5, 1).toISOString().split('T')[0];
+    let start, end;
+    if (range === '1m') {
+      // Calendar month: 1st → last day of current month
+      start = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split('T')[0];
+      end   = new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().split('T')[0];
+    } else if (range === '3m') {
+      // 1 month back + 2 months forward (today at ~33%)
+      start = new Date(n.getFullYear(), n.getMonth() - 1, n.getDate()).toISOString().split('T')[0];
+      end   = new Date(n.getFullYear(), n.getMonth() + 2, n.getDate()).toISOString().split('T')[0];
+    } else {
+      // 2 months back + 4 months forward (today at ~33%)
+      start = new Date(n.getFullYear(), n.getMonth() - 2, n.getDate()).toISOString().split('T')[0];
+      end   = new Date(n.getFullYear(), n.getMonth() + 4, n.getDate()).toISOString().split('T')[0];
+    }
+    return { start, end };
   }
 
   /* ── Stats ── */
@@ -80,16 +94,16 @@
     return { currentCash, dailyNet };
   }
 
-  /* ── Chart ── */
-  function renderChart(currentCash, dailyNet) {
+  /* ── Chart — F1b: use rangeWindow end date ── */
+  function renderChart(currentCash, dailyNet, endDateStr) {
     const canvas = el('cf-chart');
     if (!canvas) return;
     if (cfChart) { cfChart.destroy(); cfChart = null; }
 
     const today     = new Date();
     const todayStr  = today.toISOString().split('T')[0];
-    const rStart    = rangeStart(activeRange);
-    const endDate   = new Date(today); endDate.setDate(endDate.getDate() + 30);
+    const rStart    = rangeWindow(activeRange).start;
+    const endDate   = new Date(endDateStr + 'T00:00:00');
 
     const dailyDelta = {};
     txData.forEach(t => {
@@ -170,42 +184,78 @@
     }};
   }
 
-  /* ── Cards ── */
+  /* ── Cards — F1c: list (default) and card views ── */
   function renderCards() {
     const zone = el('cf-cards');
     if (!zone) return;
     const rows = [...txData].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 50);
-    if (!rows.length) { zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem 0">No transactions</p>'; return; }
-    zone.innerHTML = rows.map(t => {
-      const isIn   = t.type === 'Income';
-      const label  = t.budget_label || t.category_name || t.entity || t.description || '—';
-      return `<div class="tx-mini-card">
-        <div style="min-width:0;overflow:hidden">
-          <div style="font-size:0.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary,var(--text))">${esc(label)}</div>
-          <div style="font-size:0.66rem;color:var(--text-secondary,var(--text-dim))">${t.date.slice(5)}${t.entity ? ' · '+esc(t.entity) : ''}</div>
-        </div>
-        <div style="font-size:0.8rem;font-weight:700;white-space:nowrap;color:${isIn?'var(--color-income,var(--green))':'var(--color-expense,var(--red))'}">${isIn?'+':'-'}${fmt(t.amount)}</div>
-      </div>`;
-    }).join('');
+    if (!rows.length) {
+      zone.style.cssText = '';
+      zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem 0">No transactions</p>';
+      return;
+    }
+
+    if (cfView === 'card') {
+      zone.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;padding:0.5rem';
+      zone.innerHTML = rows.map(t => {
+        const isIn  = t.type === 'Income';
+        const label = t.budget_label || t.category_name || t.entity || t.description || '—';
+        return `<div class="tx-mini-card">
+          <div style="min-width:0;overflow:hidden">
+            <div style="font-size:0.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary,var(--text))">${esc(label)}</div>
+            <div style="font-size:0.66rem;color:var(--text-secondary,var(--text-dim))">${t.date.slice(5)}${t.entity ? ' · '+esc(t.entity) : ''}</div>
+          </div>
+          <div style="font-size:0.8rem;font-weight:700;white-space:nowrap;color:${isIn?'var(--color-income,var(--green))':'var(--color-expense,var(--red))'}">${isIn?'+':'-'}${fmt(t.amount)}</div>
+        </div>`;
+      }).join('');
+    } else {
+      // List view: compact rows
+      zone.style.cssText = '';
+      zone.innerHTML = rows.map(t => {
+        const isIn  = t.type === 'Income';
+        const label = t.budget_label || t.category_name || t.entity || t.description || '—';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.75rem;border-bottom:1px solid var(--border)">
+          <div style="min-width:0;flex:1;margin-right:0.5rem">
+            <span style="font-size:0.75rem;font-weight:600;color:var(--text-primary,var(--text));margin-right:0.4rem">${esc(label)}</span>
+            <span style="font-size:0.66rem;color:var(--text-secondary,var(--text-dim))">${t.date.slice(5)}${t.entity ? ' · '+esc(t.entity) : ''}</span>
+          </div>
+          <div style="font-size:0.78rem;font-weight:700;white-space:nowrap;color:${isIn?'var(--color-income,var(--green))':'var(--color-expense,var(--red))'}">${isIn?'+':'-'}${fmt(t.amount)}</div>
+        </div>`;
+      }).join('');
+    }
   }
 
-  /* ── Range toggle ── */
+  /* F1a — range toggle: fix .period-btn → .range-btn, skip if already active */
   function initRangeToggle() {
     const tog = el('cf-range-toggle');
     if (!tog) return;
     tog.addEventListener('click', e => {
       const btn = e.target.closest('[data-range]');
-      if (!btn) return;
-      tog.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      if (!btn || btn.classList.contains('active')) return;
+      tog.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       activeRange = btn.dataset.range;
       loadAndRender().catch(console.error);
     });
   }
 
+  /* F1c — view toggle: List / Card */
+  function initViewToggle() {
+    const tog = el('cf-view-toggle');
+    if (!tog) return;
+    tog.addEventListener('click', e => {
+      const btn = e.target.closest('[data-view]');
+      if (!btn || btn.classList.contains('active')) return;
+      tog.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      cfView = btn.dataset.view;
+      renderCards();
+    });
+  }
+
   /* ── Load ── */
   async function loadAndRender() {
-    const start = rangeStart(activeRange);
+    const { start, end } = rangeWindow(activeRange);
     const [txR, liR, syR] = await Promise.allSettled([
       api('/api/transactions?start=' + start),
       api('/api/liabilities'),
@@ -216,13 +266,14 @@
     syncPoint   = syR.status==='fulfilled' ? (syR.value.syncPoint||null) : null;
 
     const { currentCash, dailyNet } = computeStats();
-    renderChart(currentCash, dailyNet);
+    renderChart(currentCash, dailyNet, end);
     renderCards();
   }
 
   function init() {
     if (initialized) return; initialized = true;
     initRangeToggle();
+    initViewToggle();
     loadAndRender().catch(console.error);
   }
 

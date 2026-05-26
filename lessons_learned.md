@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-26
-> Current highest lesson: L043
+> Current highest lesson: L047
 
 ---
 
@@ -270,6 +270,30 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Panels with Chart.js charts render with zero dimensions when the panel is `display:none` at DOMContentLoaded. Initializing all charts on page load wastes API calls and causes render bugs.
 **Rule:** Each M2 panel gets its own IIFE injector file (cashflow.injector.js, expenses.injector.js, liabilities-panel.injector.js, budget-panel.injector.js, dash-overview.injector.js). Each IIFE uses an `initialized` flag and only runs `loadAndRender()` on first panel activation. Listen for `window.dispatchEvent(new CustomEvent('panelactivated', { detail: route }))` dispatched by `navigate()`. Also listen for `DOMContentLoaded` to handle direct hash navigation to that panel. Pattern: `window.addEventListener('panelactivated', e => { if (e.detail === 'xxx') init(); })`.
 **Tag:** #shell #charts #lazy-init #panelactivated
+
+---
+
+## FIX 9B2 — Module QA Fixes (2026-05-26)
+
+### L044 — CSS class name matters for toggle groups
+**Problem:** cashflow.injector.js `initRangeToggle()` queried `.period-btn` to deactivate buttons, but the cashflow HTML uses `.range-btn`. Clicking any period button appeared to work (active class applied to clicked button) but never deactivated the previous active button — multiple buttons could appear active simultaneously.
+**Rule:** Before writing any toggle group logic, check the exact CSS class on the HTML buttons. `.period-btn` and `.range-btn` are different classes with different styles. Use `querySelectorAll('.range-btn')` or `querySelectorAll('.period-btn')` matching what the HTML actually uses. The rule: query the buttons via the class attribute, not by a sibling class.
+**Tag:** #css #toggle #cashflow
+
+### L045 — deferred script init: immediate active-panel check, not DOMContentLoaded
+**Problem:** Panel injectors registered `DOMContentLoaded` listeners. But the shell's inline `<script>` also registers DOMContentLoaded callbacks and dispatches `panelactivated` from there — which fires BEFORE deferred scripts' DOMContentLoaded callbacks run (callbacks execute in registration order).
+**Rule:** In deferred panel injector IIFEs, replace `document.addEventListener('DOMContentLoaded', ...)` with TWO things: (1) `window.addEventListener('panelactivated', e => { if (e.detail === 'xxx') init(); })` — for future panel navigations; and (2) `if (el('panel-xxx')?.classList.contains('active')) init()` — executed immediately at IIFE parse time (after DOMContentLoaded, so `.active` class is already set). The second check handles direct hash navigation.
+**Tag:** #shell #timing #panelactivated
+
+### L046 — CSS min-width:0 on grid children prevents Chart.js overflow
+**Problem:** Charts inside a CSS grid container overflowed their column width. Chart.js sets canvas dimensions based on the container's computed width, but grid columns allow children to grow beyond their track size by default (min-width is 'auto').
+**Rule:** Add `min-width: 0` to all direct grid children that contain charts. For `.panel-charts`: `.panel-charts > * { min-width: 0; }`. This forces the grid column to respect its defined width, allowing Chart.js `responsive: true` to correctly measure the container.
+**Tag:** #css #charts #responsive #grid
+
+### L047 — Collapse-with-summary pattern for dense UI sections
+**Problem:** Entry utility drawer showed a full 12-month history table + 2 charts + 4 YoY charts as always-visible. This occupied most of the drawer, pushing the entry form far below the fold.
+**Rule:** For large data-history sections in a drawer/panel: (1) default to collapsed (`display:none` on body div); (2) always show a one-line summary of the most recent record above the toggle button; (3) chevron text "▶ Show history" / "▲ Hide history" communicates collapsed state; (4) guard the toggle listener with `_utilToggleInit` flag to prevent double-binding if `loadUtilityHistory()` is called multiple times (e.g. after save).
+**Tag:** #ux #drawer #collapse
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
