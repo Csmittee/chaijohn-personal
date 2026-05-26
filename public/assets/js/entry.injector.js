@@ -17,7 +17,7 @@
   let txType      = 'Expense';
   let txPeriod    = 'daily';
   let txMap       = {};
-  let elecChart, waterChart;
+  let elecChart, waterChart, activeUtilChart = 'electricity', lastUtilRecords = [];
   let budgetActiveFilter = 'active';
 
   function periodShort(p) {
@@ -519,9 +519,50 @@
   let yoyCharts = {};
   let yoyAllRecords = [];
 
+  function renderUtilChart(records) {
+    const reversed = [...records].reverse();
+    const labels   = reversed.map(r => (r.month || '').slice(0, 7));
+    if (activeUtilChart === 'water') {
+      if (elecChart) { elecChart.destroy(); elecChart = null; }
+      renderMiniChart('elec-chart', labels, reversed.map(r => r.water_charge || 0), 'Water ฿', '#3b82f6');
+    } else {
+      if (elecChart) { elecChart.destroy(); elecChart = null; }
+      renderMiniChart('elec-chart', labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
+    }
+  }
+
   async function loadUtilityHistory() {
     const tableEl = document.getElementById('util-history-table');
     if (!tableEl) return;
+
+    // F4b — collapse toggle
+    const toggleBtn  = document.getElementById('util-history-toggle');
+    const chevronEl  = document.getElementById('util-history-chevron');
+    const summaryEl  = document.getElementById('util-history-summary');
+    const bodyEl     = document.getElementById('util-history-body');
+    if (toggleBtn && !toggleBtn._utilToggleInit) {
+      toggleBtn._utilToggleInit = true;
+      toggleBtn.addEventListener('click', () => {
+        const open = bodyEl.style.display !== 'none';
+        bodyEl.style.display = open ? 'none' : 'block';
+        if (chevronEl) chevronEl.textContent = open ? '▶ Show history' : '▲ Hide history';
+      });
+    }
+
+    // F4a — chart toggle
+    const chartToggle = document.getElementById('util-chart-toggle-bar');
+    if (chartToggle && !chartToggle._utilChartInit) {
+      chartToggle._utilChartInit = true;
+      chartToggle.addEventListener('click', e => {
+        const btn = e.target.closest('[data-util-chart]');
+        if (!btn || btn.classList.contains('active')) return;
+        chartToggle.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeUtilChart = btn.dataset.utilChart;
+        if (lastUtilRecords.length) renderUtilChart(lastUtilRecords);
+      });
+    }
+
     try {
       const now = new Date();
       const [yearRes, allRes] = await Promise.all([
@@ -530,6 +571,16 @@
       ]);
       const records = (yearRes.records || []).map(r => r.fields).slice(0, 12);
       yoyAllRecords = (allRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+      lastUtilRecords = records;
+
+      // F4b — summary line (always visible)
+      if (summaryEl && records.length > 0) {
+        const latest = records[0];
+        const mo = (latest.month || '').slice(0, 7);
+        summaryEl.textContent = mo
+          + ' · Elec ' + (latest.electricity_charge ? fmt(latest.electricity_charge) : '—')
+          + ' · Water ' + (latest.water_charge ? fmt(latest.water_charge) : '—');
+      }
 
       if (records.length === 0) {
         tableEl.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem">No utility records yet.</div>';
@@ -558,10 +609,7 @@
               </tr>`).join('')}
             </tbody>
           </table>`;
-        const reversed = [...records].reverse();
-        const labels   = reversed.map(r => (r.month || '').slice(0, 7));
-        renderMiniChart('elec-chart',  labels, reversed.map(r => r.electricity_charge || 0), 'Electricity ฿', '#f59e0b');
-        renderMiniChart('water-chart', labels, reversed.map(r => r.water_charge || 0),       'Water ฿',       '#3b82f6');
+        renderUtilChart(records);
       }
 
       renderYoYCharts(yoyAllRecords);
