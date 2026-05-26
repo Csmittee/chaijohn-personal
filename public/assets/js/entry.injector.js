@@ -560,6 +560,7 @@
         btn.classList.add('active');
         activeUtilChart = btn.dataset.utilChart;
         if (lastUtilRecords.length) renderUtilChart(lastUtilRecords);
+        applyYoYFilter();
       });
     }
 
@@ -662,6 +663,7 @@
     const activeYears = years.filter(y => y >= from && y <= to);
     drawYoYCharts(byYear, activeYears);
     renderYoYLegend(activeYears);
+    applyYoYFilter();
   }
 
   function drawYoYCharts(byYear, activeYears) {
@@ -716,6 +718,14 @@
         <span>${y}</span>
       </span>`;
     }).join('');
+  }
+
+  function applyYoYFilter() {
+    const elecIds  = ['yoy-wrap-elec-units', 'yoy-wrap-elec-charge'];
+    const waterIds = ['yoy-wrap-water-units', 'yoy-wrap-water-charge'];
+    const showElec = activeUtilChart === 'electricity';
+    elecIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = showElec ? '' : 'none'; });
+    waterIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = showElec ? 'none' : ''; });
   }
 
   function renderMiniChart(canvasId, labels, data, label, color) {

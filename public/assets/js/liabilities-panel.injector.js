@@ -154,7 +154,7 @@
 
     const orderedGroups = GROUP_ORDER.filter(k => groups[k]);
 
-    zone.style.cssText = '';
+    zone.style.cssText = 'display:block';
     zone.innerHTML = orderedGroups.map(groupKey => {
       const items = groups[groupKey].sort((a,b) => Number(b.current_balance||0) - Number(a.current_balance||0));
       const cards = items.map(l => {

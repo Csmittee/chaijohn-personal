@@ -67,7 +67,7 @@
     if (spentEl && totalSpent > totalBudget) spentEl.style.color = 'var(--red)';
   }
 
-  /* Trend — bar chart for single month, line for multi-month */
+  /* Trend — daily bars for single month, monthly line for multi-month */
   async function renderTrend() {
     const canvas = el('exp-trend-chart');
     if (!canvas) return;
@@ -80,45 +80,65 @@
       allTx = (res.records || []).map(r => ({...r.fields}));
     } catch { return; }
 
-    const now = new Date();
-    const mArr = [];
-    for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      mArr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
-    }
-    const totals = Object.fromEntries(mArr.map(m => [m, 0]));
-    allTx.filter(t => t.type === 'Expense').forEach(t => {
-      const ym = (t.date||'').slice(0,7);
-      if (totals[ym] !== undefined) totals[ym] += Number(t.amount||0);
-    });
-    const labels = mArr.map(m => {
-      const [y,mo] = m.split('-');
-      return new Date(y,mo-1,1).toLocaleDateString('en',{month:'short'});
-    });
-
-    const isSingle = months === 1;
-    trendChart = new Chart(canvas, {
-      type: isSingle ? 'bar' : 'line',
-      data: { labels, datasets: [{
-        label: 'Monthly Expenses',
-        data: mArr.map(m => totals[m]),
-        borderColor: '#ef4444',
-        borderWidth: isSingle ? 0 : 2,
-        fill: !isSingle,
-        backgroundColor: isSingle ? '#ef4444' : 'rgba(239,68,68,0.08)',
-        pointRadius: isSingle ? 0 : 3,
-        tension: 0.3,
-        borderRadius: isSingle ? 4 : 0
-      }]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { font:{size:9} } },
-          y: { ticks: { font:{size:9}, callback: v => '฿'+(v/1000).toFixed(0)+'k' } }
-        }
+    if (months === 1) {
+      /* Daily breakdown: one bar per day in the current month */
+      const now = new Date();
+      const year = now.getFullYear(), month = now.getMonth() + 1;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const labels = [], data = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        labels.push(String(d).padStart(2,'0'));
+        data.push(allTx.filter(t => t.type === 'Expense' && t.date === ds).reduce((s,t) => s + Number(t.amount||0), 0));
       }
-    });
+      trendChart = new Chart(canvas, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Daily Expenses', data, backgroundColor: '#ef4444bb', borderWidth: 0, borderRadius: 2 }]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { font:{size:9}, maxTicksLimit: 10 } },
+            y: { ticks: { font:{size:9}, callback: v => '฿'+(v/1000).toFixed(0)+'k' } }
+          }
+        }
+      });
+    } else {
+      /* Monthly totals for 3M / 6M */
+      const now = new Date();
+      const mArr = [];
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        mArr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      }
+      const totals = Object.fromEntries(mArr.map(m => [m, 0]));
+      allTx.filter(t => t.type === 'Expense').forEach(t => {
+        const ym = (t.date||'').slice(0,7);
+        if (totals[ym] !== undefined) totals[ym] += Number(t.amount||0);
+      });
+      const labels = mArr.map(m => {
+        const [y,mo] = m.split('-');
+        return new Date(y,mo-1,1).toLocaleDateString('en',{month:'short'});
+      });
+      trendChart = new Chart(canvas, {
+        type: 'line',
+        data: { labels, datasets: [{
+          label: 'Monthly Expenses',
+          data: mArr.map(m => totals[m]),
+          borderColor: '#ef4444', borderWidth: 2,
+          fill: true, backgroundColor: 'rgba(239,68,68,0.08)',
+          pointRadius: 3, tension: 0.3
+        }]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { font:{size:9} } },
+            y: { ticks: { font:{size:9}, callback: v => '฿'+(v/1000).toFixed(0)+'k' } }
+          }
+        }
+      });
+    }
   }
 
   function renderPareto(catMap, budgetMap, spendByBudget) {
