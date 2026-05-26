@@ -1,7 +1,6 @@
 /* liabilities-panel.injector.js — Liabilities panel (M2.6)
- * Stats: total debt, monthly payment, monthly interest, est. total remaining interest
- * Charts: balance bar (T3 style) + projected paydown line
- * Cards: liability cards (expandable)
+ * 9B3: cards grouped by creditor_type (Bank → Family → Other), interest on face,
+ *      proportional sizing matching expenses, static (no expand)
  */
 (function () {
   'use strict';
@@ -20,14 +19,12 @@
     return r.json();
   }
 
-  /* ── Stats ── */
   function renderStats() {
     const active = liabilities.filter(l => l.active !== false && Number(l.current_balance||0) > 0);
-    const totalDebt     = active.reduce((s,l) => s + Number(l.current_balance||0), 0);
-    const monthlyPay    = active.reduce((s,l) => s + Number(l.monthly_payment||0), 0);
-    const monthlyInt    = active.reduce((s,l) => s + Number(l.current_balance||0) * Number(l.interest_rate||0) / 100 / 12, 0);
+    const totalDebt  = active.reduce((s,l) => s + Number(l.current_balance||0), 0);
+    const monthlyPay = active.reduce((s,l) => s + Number(l.monthly_payment||0), 0);
+    const monthlyInt = active.reduce((s,l) => s + Number(l.current_balance||0) * Number(l.interest_rate||0) / 100 / 12, 0);
 
-    // Estimated total remaining interest for each loan
     let totalRemInterest = 0;
     active.forEach(l => {
       const B = Number(l.current_balance || 0);
@@ -37,20 +34,16 @@
       if (r > 0 && p > r * B) {
         const n = -Math.log(1 - r * B / p) / Math.log(1 + r);
         totalRemInterest += Math.max(0, n * p - B);
-      } else {
-        // zero interest or simple amortisation
-        totalRemInterest += 0;
       }
     });
 
     const set = (id,v) => { const e = el(id); if (e) e.textContent = v; };
-    set('liab-total-debt',    fmt(totalDebt));
-    set('liab-monthly-pay',   fmt(monthlyPay));
-    set('liab-monthly-int',   fmt(Math.round(monthlyInt)));
-    set('liab-rem-interest',  fmt(Math.round(totalRemInterest)));
+    set('liab-total-debt',   fmt(totalDebt));
+    set('liab-monthly-pay',  fmt(monthlyPay));
+    set('liab-monthly-int',  fmt(Math.round(monthlyInt)));
+    set('liab-rem-interest', fmt(Math.round(totalRemInterest)));
   }
 
-  /* ── Bar chart (T3 style) ── */
   function renderBar() {
     const canvas = el('liab-bar-chart');
     if (!canvas) return;
@@ -59,7 +52,6 @@
     const active = liabilities
       .filter(l => l.active !== false && Number(l.current_balance||0) > 0)
       .sort((a,b) => Number(b.current_balance||0) - Number(a.current_balance||0));
-
     if (!active.length) return;
 
     barChart = new Chart(canvas, {
@@ -67,9 +59,9 @@
       data: {
         labels: active.map(l => l.name || '—'),
         datasets: [
-          { label: 'Balance', data: active.map(l => Number(l.current_balance||0)),
+          { label: 'Balance',    data: active.map(l => Number(l.current_balance||0)),
             backgroundColor: '#ef4444', borderRadius: 4 },
-          { label: 'Loan Size', data: active.map(l => Math.max(0, Number(l.loan_size||0) - Number(l.current_balance||0))),
+          { label: 'Loan Size',  data: active.map(l => Math.max(0, Number(l.loan_size||0) - Number(l.current_balance||0))),
             backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 4 }
         ]
       },
@@ -84,7 +76,6 @@
     });
   }
 
-  /* ── Projected paydown trend ── */
   function renderTrend() {
     const canvas = el('liab-trend-chart');
     if (!canvas) return;
@@ -93,7 +84,6 @@
     const active = liabilities.filter(l => l.active !== false && Number(l.current_balance||0) > 0 && Number(l.monthly_payment||0) > 0);
     if (!active.length) return;
 
-    // Project 24 months forward per loan
     const months = 24;
     const labels = [];
     const now = new Date();
@@ -102,7 +92,6 @@
       labels.push(d.toLocaleDateString('en',{month:'short',year:'2-digit'}));
     }
 
-    // Aggregate projected total balance month by month
     const balByMonth = Array(months + 1).fill(0);
     const intByMonth = Array(months + 1).fill(0);
 
@@ -141,51 +130,64 @@
     });
   }
 
-  /* ── Cards ── */
+  /* ── Cards — grouped by creditor_type, proportional size, interest on face ── */
   function renderCards() {
     const zone = el('liab-cards');
     if (!zone) return;
-    const active = liabilities
-      .filter(l => l.active !== false && Number(l.current_balance||0) > 0)
-      .sort((a,b) => Number(b.current_balance||0) - Number(a.current_balance||0));
+    const active = liabilities.filter(l => l.active !== false && Number(l.current_balance||0) > 0);
+    if (!active.length) {
+      zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem">No active liabilities</p>';
+      return;
+    }
 
-    if (!active.length) { zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem">No active liabilities</p>'; return; }
+    const maxBal = Math.max(...active.map(l => Number(l.current_balance||0)), 1);
 
-    zone.innerHTML = active.map(l => {
-      const bal      = Number(l.current_balance || 0);
-      const orig     = Number(l.loan_size || bal);
-      const paid     = Math.max(0, orig - bal);
-      const progress = pct(paid, orig);
-      const monthInt = bal * Number(l.interest_rate||0) / 100 / 12;
+    /* Group order: Bank → Family → Other */
+    const GROUP_ORDER = ['Bank', 'Family', 'Friend', 'Other'];
+    const groups = {};
+    active.forEach(l => {
+      const type = l.creditor_type || 'Other';
+      const key  = GROUP_ORDER.includes(type) ? type : 'Other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(l);
+    });
 
-      return `<div class="liab-content-card">
-        <div class="liab-content-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display==='block'?'none':'block'">
-          <div>
-            <div style="font-size:0.85rem;font-weight:600;color:var(--text,var(--text-primary))">${esc(l.name||'—')}</div>
-            <div style="font-size:0.72rem;color:var(--text-dim,var(--text-secondary))">${l.creditor_type||''}</div>
+    const orderedGroups = GROUP_ORDER.filter(k => groups[k]);
+
+    zone.style.cssText = '';
+    zone.innerHTML = orderedGroups.map(groupKey => {
+      const items = groups[groupKey].sort((a,b) => Number(b.current_balance||0) - Number(a.current_balance||0));
+      const cards = items.map(l => {
+        const bal      = Number(l.current_balance || 0);
+        const orig     = Number(l.loan_size || bal);
+        const paid     = Math.max(0, orig - bal);
+        const progress = pct(paid, orig);
+        const monthInt = Math.round(bal * Number(l.interest_rate||0) / 100 / 12);
+        const barC     = progress >= 75 ? '#22c55e' : progress >= 40 ? '#f59e0b' : '#ef4444';
+        const h        = Math.max(72, Math.sqrt(bal / maxBal) * 160);
+
+        return `<div class="liab-content-card" style="min-height:${h}px;display:flex;flex-direction:column;justify-content:space-between;background:var(--bg-card,var(--bg-raised))">
+          <div style="padding:0.7rem 0.85rem">
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text,var(--text-primary))">${esc(l.name||'—')}</div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.15rem">${fmt(Number(l.monthly_payment||0))}/mo${monthInt > 0 ? ' · int ' + fmt(monthInt) + '/mo' : ''}</div>
           </div>
-          <div style="text-align:right">
-            <div style="font-size:0.9rem;font-weight:700;color:#ef4444">${fmt(bal)}</div>
-            <div style="font-size:0.68rem;color:var(--text-dim,var(--text-secondary))">${fmt(Number(l.monthly_payment||0))}/mo</div>
+          <div style="padding:0 0.85rem 0.7rem">
+            <div style="font-size:0.88rem;font-weight:700;color:#ef4444;margin-bottom:0.4rem">${fmt(bal)}</div>
+            <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="width:${progress}%;height:100%;background:${barC};border-radius:3px;transition:width 0.4s"></div>
+            </div>
+            <div style="font-size:0.62rem;text-align:right;margin-top:0.15rem;color:var(--text-dim)">${progress}% paid</div>
           </div>
-        </div>
-        <div class="liab-content-body">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;margin-bottom:0.5rem">
-            <div style="font-size:0.75rem"><span style="color:var(--text-dim)">Rate: </span>${l.interest_rate||0}% p.a.</div>
-            <div style="font-size:0.75rem"><span style="color:var(--text-dim)">Int/mo: </span>${fmt(Math.round(monthInt))}</div>
-            <div style="font-size:0.75rem"><span style="color:var(--text-dim)">Loan size: </span>${fmt(orig)}</div>
-            <div style="font-size:0.75rem"><span style="color:var(--text-dim)">Due day: </span>${l.payment_due_day||'—'}</div>
-          </div>
-          <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:0.2rem">
-            <div style="width:${progress}%;height:100%;background:#22c55e;border-radius:3px"></div>
-          </div>
-          <div style="font-size:0.68rem;color:var(--text-dim,var(--text-secondary))">${progress}% paid · ${fmt(paid)} paid of ${fmt(orig)}</div>
-        </div>
-      </div>`;
+        </div>`;
+      }).join('');
+
+      return `<div class="section-band">${esc(groupKey.toUpperCase())}</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.75rem;margin-bottom:1rem">
+${cards}
+</div>`;
     }).join('');
   }
 
-  /* ── Load ── */
   async function loadAndRender() {
     const r = await api('/api/liabilities?all=true');
     liabilities = (r.records || []).map(rec => ({ id: rec.id, ...rec.fields }));
