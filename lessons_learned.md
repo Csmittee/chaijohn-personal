@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-26
-> Current highest lesson: L039
+> Current highest lesson: L040
 
 ---
 
@@ -243,6 +243,11 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 ---
 
 ## PHASE 9a — Sidebar Shell (2026-05-26)
+
+### L040 — Sidebar always-dark: lock CSS tokens on #sidebar element
+**Problem:** Light mode flips `--text`, `--text-dim`, `--text-muted`, `--border` to dark-on-light values. The sidebar background is intentionally kept dark (`--sidebar-bg: #0a0a10`), so light-mode text tokens (dark text on dark background) make all sidebar labels invisible.
+**Rule:** When a UI region is intentionally always-dark regardless of theme, re-declare the dark-mode token values directly on that element's ID/class selector. Example: `#sidebar { --text: #e8e8f0; --text-dim: rgba(232,232,240,0.45); ... }`. This overrides any `[data-theme="light"]` cascade without touching the sidebar's structural CSS. Never use hardcoded color values inside sidebar rules — always use tokens so this single override is sufficient.
+**Tag:** #shell #theme #css-tokens #ux
 
 ### L039 — Sidebar shell auth: overlay + /api/auth/check bypass
 **Problem:** New `index.html` is both the login page AND the app shell. auth.js was designed for a redirect pattern (login page → dashboard.html). Reusing it wholesale would cause a redirect loop.
