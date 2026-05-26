@@ -81,7 +81,7 @@
     } catch { return; }
 
     if (months === 1) {
-      /* Daily breakdown: one bar per day in the current month */
+      /* Daily breakdown: daily bars + cumulative line + budget cap */
       const now = new Date();
       const year = now.getFullYear(), month = now.getMonth() + 1;
       const daysInMonth = new Date(year, month, 0).getDate();
@@ -91,12 +91,27 @@
         labels.push(String(d).padStart(2,'0'));
         data.push(allTx.filter(t => t.type === 'Expense' && t.date === ds).reduce((s,t) => s + Number(t.amount||0), 0));
       }
+      const catMap0 = Object.fromEntries(categories.map(c => [c.id, c]));
+      const totalBudget = budgets.filter(b => {
+        const cat = catMap0[lid(b.category_id)];
+        return b.active !== false && cat?.type === 'Expense';
+      }).reduce((s, b) => s + mbr(b), 0);
+      let cumul = 0;
+      const cumulData = data.map(v => (cumul += v));
+      const datasets = [
+        { type: 'bar',  label: 'Daily',       data,         backgroundColor: '#ef4444bb', borderWidth: 0, borderRadius: 2, order: 2 },
+        { type: 'line', label: 'Accumulated', data: cumulData, borderColor: '#f59e0b', borderWidth: 1.5, fill: false, pointRadius: 0, tension: 0.1, order: 1 }
+      ];
+      if (totalBudget > 0) datasets.push({
+        type: 'line', label: 'Budget cap', data: Array(daysInMonth).fill(totalBudget),
+        borderColor: '#22c55e', borderWidth: 1, borderDash: [5,3], fill: false, pointRadius: 0, order: 1
+      });
       trendChart = new Chart(canvas, {
         type: 'bar',
-        data: { labels, datasets: [{ label: 'Daily Expenses', data, backgroundColor: '#ef4444bb', borderWidth: 0, borderRadius: 2 }]},
+        data: { labels, datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: { legend: { display: true, labels: { font:{size:9}, boxWidth: 12 } } },
           scales: {
             x: { ticks: { font:{size:9}, maxTicksLimit: 10 } },
             y: { ticks: { font:{size:9}, callback: v => '฿'+(v/1000).toFixed(0)+'k' } }
@@ -161,6 +176,22 @@
 
     const sorted  = Object.entries(groupTotals).sort((a,b) => b[1]-a[1]).slice(0, 10);
     const palette = ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#22c55e','#ec4899','#14b8a6','#64748b','#f97316','#0ea5e9'];
+    const total = sorted.reduce((s,[,v]) => s+v, 0);
+    const cutoff80 = total * 0.8;
+    const pareto80Plugin = {
+      id: 'pareto80',
+      afterDraw(chart) {
+        if (!total) return;
+        const { ctx, scales:{x}, chartArea:{top, bottom} } = chart;
+        if (!x) return;
+        const xPos = x.getPixelForValue(cutoff80);
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b'; ctx.setLineDash([4,2]); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xPos, top); ctx.lineTo(xPos, bottom); ctx.stroke();
+        ctx.setLineDash([]); ctx.fillStyle = '#f59e0b'; ctx.font = 'bold 9px system-ui';
+        ctx.fillText('80%', xPos+3, top+12); ctx.restore();
+      }
+    };
 
     paretoChart = new Chart(canvas, {
       type: 'bar',
@@ -172,7 +203,8 @@
           x: { ticks: { font:{size:9}, callback: v => '฿'+(v/1000).toFixed(0)+'k' } },
           y: { ticks: { font:{size:9} } }
         }
-      }
+      },
+      plugins: total > 0 ? [pareto80Plugin] : []
     });
   }
 
