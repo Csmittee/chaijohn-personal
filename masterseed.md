@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-26 — Phase 9a complete; sidebar shell Part 1 merged to feat/sidebar-shell
+> Last Updated: 2026-05-26 — Fix 9B complete; M2 panels wired; entry drawer; Time Management stub; dash-overview; redirects added
 
 ---
 
@@ -178,11 +178,11 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
 │   ├── LESSONS.md                       ✅ exists (legacy — superseded by lessons_learned.md)
 │   ├── DECISIONS.md                     ✅ exists
 │   ├── PROGRESS.md                      ✅ exists
-│   └── prompts/                         ← CC prompt archive (create this folder)
+│   └── prompts/                         ✅ CC_PROMPT_fix9A + fixA–fixG archived
 └── public/                              ← Cloudflare Pages serves this
-    ├── index.html                       ✅ Chairit OS sidebar shell (Phase 9a — Part 1)
-    ├── dashboard.html                   ✅ working
-    ├── entry.html                       ✅ working (A/B/C fixes pending)
+    ├── index.html                       ✅ Chairit OS sidebar shell (9B — full M2 panels + entry drawer + collection + AI + time management)
+    ├── dashboard.html                   ✅ redirects to /#dashboard
+    ├── entry.html                       ✅ redirects to / (entry drawer in shell)
     ├── diary.html                       ✅ working after Phase 4 fixes
     ├── collection.html                  ⬜ built, not tested
     ├── ai-advisor.html                  ⬜ built, not tested
@@ -193,11 +193,16 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
         └── js/
             ├── auth.js                 ✅
             ├── dropzone.js             ✅
-            ├── dashboard.injector.js   ✅
-            ├── entry.injector.js       ✅ (A/B/C fixes pending)
+            ├── dashboard.injector.js   ✅ (retired from shell — kept for reference)
+            ├── entry.injector.js       ✅ (embedded in drawer; budget delete requires typed confirm)
             ├── diary.injector.js       ✅
-            ├── collection.injector.js  ⬜
-            └── ai.injector.js          ⬜
+            ├── collection.injector.js  ✅ (embedded in panel-collection)
+            ├── ai-advisor.injector.js  ✅ (embedded in panel-ai)
+            ├── cashflow.injector.js    ✅ NEW — IIFE, lazy via panelactivated
+            ├── expenses.injector.js    ✅ NEW — IIFE, lazy via panelactivated
+            ├── liabilities-panel.injector.js ✅ NEW — IIFE, lazy via panelactivated
+            ├── budget-panel.injector.js ✅ NEW — IIFE, lazy via panelactivated
+            └── dash-overview.injector.js ✅ NEW — IIFE, lazy via panelactivated
 functions/
 ├── _middleware.js                       ✅
 ├── _airtable.js                         ✅ shared helpers
@@ -239,7 +244,8 @@ functions/
 | Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
 | Fix F | F1 Category group 422 fix · F2 Debts liability→Income tx · F3 Transaction DELETE button · F4 Budget meter active/period filter · F5-F6 Dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow / T2 Expense / T3 Debt / T4 Annual Plan) | ✅ COMPLETE |
 | Fix G | G1 Transactions API reads/writes budget_id (GET enriches budget_label+category via budget; POST requires budget_id for Expense; PATCH accepts budget_id) · G2 Budgets API returns category_name/group/type + expense_only filter · G3 Transaction expense dropdown → Budget list grouped by category_group · G4 Transaction list display uses server-enriched budget fields + legacy fallback · G5 Budget creation enforces unique label+category_id (API 400 + UI keeps form on error) · G6 Budget category dropdown = Expense only; section renamed to "Add Budget Item" · G7 Dashboard resolves category via budget_id using resolveCatId() helper | ✅ COMPLETE |
-| Phase 9a | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
+| Fix 9A | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
+| Fix 9B | Sidebar Shell Part 2 — M2 panel stat chips + charts + cards wired; entry drawer (pin-able, context-aware); dashboard overview + mini charts; Time Management stub; redirects for dashboard.html + entry.html; budget delete typed confirm | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -251,15 +257,22 @@ functions/
 **Working and confirmed:**
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
-- Dashboard (Fix G + post-G): Horizontal-scroll GRAPH ZONE (4 chart panels). Dynamic CONTENT ZONE: T1=compact 2-col mini-card transaction grid, T2=2-col mosaic budget grid (card height proportional to budget amount via sqrt scaling, sorted largest→smallest), T3=2-col grid liability cards with expandable payment history, T4=Annual Financial Plan table. Category resolved via budget_id chain (G7). ✅
-- Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history, correct cashflow direction) ✅, Budgets (inline edit + card/group view + category create + one-time filter, unique label enforcement, expense-only category dropdown, "Add Budget Item" form) ✅, Categories (free-text group via Airtable Meta API, correct UX labels) ✅
-- Diary: list + editor + preview + AI assist + AI comparison panel (Keep/Replace/Append) + Undo ✅
-- Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support (FileReader → Claude) ✅, Approve → Airtable ✅
+- Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer (pin-able, context-aware tabs), Time Management placeholder, dashboard overview mini charts ✅
+- M2 panels wired: Cashflow (T1 chart + 5 stats + tx cards), Expenses (Pareto + 6mo trend + 4 stats + budget cards), Liabilities (T3 bar + 24mo paydown + 4 stats + expandable cards), Budget (T4 bar + 7 stats + budget cards) ✅
+- Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts (click → M2 panel) ✅
+- Entry drawer: embedded in shell (all 4 tabs), context-aware (cashflow→transactions, expenses/budget→budgets, liabilities→liabilities), pin-able ✅
+- Budget delete: requires typing budget label to confirm; other deletes use confirm() ✅
+- Collection + AI panels: embedded in shell via collection.injector.js + ai-advisor.injector.js ✅
+- Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history) ✅, Budgets (inline edit + card/group view + category create) ✅
+- Diary: list + editor + preview + AI assist + Undo ✅
+- Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
 
 **Pending / untested:**
-- Collection module: built, not tested end-to-end
-- AI Advisor: built, not tested end-to-end
+- Collection module: embedded in shell, needs end-to-end QA
+- AI Advisor: embedded in shell, needs end-to-end QA
+- Time Management: placeholder only (future build)
+- Sales, Projects, Ideas, Hard Assets, Proj Assets: stub panels (future build)
 
 ---
 

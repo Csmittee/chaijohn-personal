@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-26
-> Current highest lesson: L039
+> Current highest lesson: L043
 
 ---
 
@@ -244,12 +244,32 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 
 ## PHASE 9a — Sidebar Shell (2026-05-26)
 
+### L040 — Sidebar always-dark: lock CSS tokens on #sidebar element
+**Problem:** Light mode flips `--text`, `--text-dim`, `--text-muted`, `--border` to dark-on-light values. The sidebar background is intentionally kept dark (`--sidebar-bg: #0a0a10`), so light-mode text tokens (dark text on dark background) make all sidebar labels invisible.
+**Rule:** When a UI region is intentionally always-dark regardless of theme, re-declare the dark-mode token values directly on that element's ID/class selector. Example: `#sidebar { --text: #e8e8f0; --text-dim: rgba(232,232,240,0.45); ... }`. This overrides any `[data-theme="light"]` cascade without touching the sidebar's structural CSS. Never use hardcoded color values inside sidebar rules — always use tokens so this single override is sufficient.
+**Tag:** #shell #theme #css-tokens #ux
+
 ### L039 — Sidebar shell auth: overlay + /api/auth/check bypass
 **Problem:** New `index.html` is both the login page AND the app shell. auth.js was designed for a redirect pattern (login page → dashboard.html). Reusing it wholesale would cause a redirect loop.
 **Rule:** For the sidebar shell pattern, handle auth inline. Show a full-screen overlay by default. On DOM load, call `GET /api/auth/check` — if 200, call `revealShell()` immediately to bypass the PIN overlay. If not, wait for form submit → `POST /api/auth/verify`. `revealShell()` hides the overlay and calls `navigate(hash || 'dashboard')`. Do NOT load auth.js on this page — the inline script handles the full auth lifecycle.
 **Tag:** #auth #shell #architecture
 
 ---
+
+### L043 — Entry drawer: embed full form HTML in shell, not a separate page
+**Problem:** The old entry.html was a standalone page. The new shell needs a centralized, context-aware entry panel that responds to which M2 panel is active.
+**Rule:** Embed the complete entry form HTML (all 4 tabs: transactions, utilities, liabilities, budgets) inside a fixed-right drawer div (`#entry-drawer`). The entry.injector.js initializes on DOMContentLoaded and binds to IDs — since they're always in the DOM, no changes to the injector are needed. Context-awareness: `PANEL_TAB_MAP` in the shell JS maps routes to tab names; `navigate()` calls `switchEntryTab()` when the drawer is open. The Entry nav item triggers `toggleDrawer()` instead of routing. Pin = `margin-right` on `#main` + no-close behaviour. Always define `--nav-height: 0px` in the shell tokens so sticky form card positions correctly inside the drawer scroll container.
+**Tag:** #shell #entry #drawer #architecture
+
+### L042 — CSS compat bridge for old injectors in new shell
+**Problem:** collection.injector.js, ai.injector.js, and entry.injector.js rely on CSS classes from global.css (`.btn`, `.form-group`, `.form-row`, `.card`, `.tabs`, `.tab-btn`, `.tab-panel`, `.period-toggle`, `.period-btn`, `.section-header`, `.section-title`, `.modal-backdrop`, `.modal`, `.fab-btn`). The new shell doesn't import global.css (conflicting variable names and body reset).
+**Rule:** Add a "compat bridge" CSS block inside the shell `<style>` that: (1) maps `--text-primary`, `--text-secondary`, `--bg-page`, `--color-income`, `--color-expense`, `--color-primary`, `--success`, `--nav-height` to shell token equivalents via `var(--xxx)`, and (2) redefines all utility classes used by injectors using the shell's own tokens. This keeps the shell self-contained without importing global.css. Never add `[data-theme="light"]` overrides inside the compat section — token aliasing handles it automatically.
+**Tag:** #css #shell #compat #injectors
+
+### L041 — Per-panel IIFE injectors: lazy init via panelactivated event
+**Problem:** Panels with Chart.js charts render with zero dimensions when the panel is `display:none` at DOMContentLoaded. Initializing all charts on page load wastes API calls and causes render bugs.
+**Rule:** Each M2 panel gets its own IIFE injector file (cashflow.injector.js, expenses.injector.js, liabilities-panel.injector.js, budget-panel.injector.js, dash-overview.injector.js). Each IIFE uses an `initialized` flag and only runs `loadAndRender()` on first panel activation. Listen for `window.dispatchEvent(new CustomEvent('panelactivated', { detail: route }))` dispatched by `navigate()`. Also listen for `DOMContentLoaded` to handle direct hash navigation to that panel. Pattern: `window.addEventListener('panelactivated', e => { if (e.detail === 'xxx') init(); })`.
+**Tag:** #shell #charts #lazy-init #panelactivated
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.

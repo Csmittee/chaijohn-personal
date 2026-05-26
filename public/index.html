@@ -8,13 +8,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
-    /* ── Chairit OS Design Tokens ── */
+    /* ── Design Tokens ── */
     :root {
       --font-display: 'Syne', sans-serif;
       --font-body:    'Space Grotesk', sans-serif;
       --font-mono:    'IBM Plex Mono', monospace;
 
-      /* dark (default) */
       --bg:            #0d0d14;
       --bg-raised:     #13131f;
       --bg-card:       #1a1a2e;
@@ -24,23 +23,34 @@
       --text-dim:      rgba(232,232,240,0.45);
       --text-muted:    rgba(232,232,240,0.65);
 
-      /* brand */
       --yellow: #f5c518;
       --green:  #22c55e;
       --red:    #ef4444;
       --blue:   #3b82f6;
       --purple: #a78bfa;
 
-      /* sidebar */
-      --sidebar-w:          220px;
-      --sidebar-bg:         #0a0a10;
-      --nav-hover:          rgba(255,255,255,0.05);
-      --nav-active-bg:      rgba(245,197,24,0.12);
-      --nav-active-border:  #f5c518;
+      --sidebar-w:         220px;
+      --sidebar-bg:        #0a0a10;
+      --nav-hover:         rgba(255,255,255,0.05);
+      --nav-active-bg:     rgba(245,197,24,0.12);
+      --nav-active-border: #f5c518;
+      --drawer-w:          min(480px, 100vw);
 
       --radius:    8px;
       --radius-lg: 12px;
       --transition: 0.18s ease;
+
+      /* compat aliases for old injectors */
+      --text-primary:   var(--text);
+      --text-secondary: var(--text-muted);
+      --bg-page:        var(--bg);
+      --color-income:   var(--green);
+      --color-expense:  var(--red);
+      --color-primary:  var(--blue);
+      --color-warning:  #f59e0b;
+      --success:        var(--green);
+      --shadow:         0 2px 8px rgba(0,0,0,0.4);
+      --nav-height:     0px;
     }
 
     [data-theme="light"] {
@@ -54,379 +64,241 @@
       --text-muted:    rgba(26,26,46,0.6);
     }
 
+    #sidebar {
+      --text:          #e8e8f0;
+      --text-dim:      rgba(232,232,240,0.45);
+      --text-muted:    rgba(232,232,240,0.65);
+      --border:        rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.16);
+    }
+
     /* ── Reset ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    body {
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: grid;
-      grid-template-columns: var(--sidebar-w) 1fr;
-    }
-
-    /* ─────────────────────────────────────
-       SIDEBAR
-    ───────────────────────────────────── */
+    /* ─── Sidebar ─── */
     #sidebar {
-      position: fixed;
-      top: 0; left: 0;
-      width: var(--sidebar-w);
-      height: 100vh;
+      position: fixed; top: 0; left: 0;
+      width: var(--sidebar-w); height: 100vh;
       background: var(--sidebar-bg);
       border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      z-index: 100;
-      overflow-y: auto;
-      overflow-x: hidden;
+      display: flex; flex-direction: column;
+      z-index: 100; overflow-y: auto; overflow-x: hidden;
     }
-
-    .sidebar-brand {
-      padding: 1.25rem 1rem 1rem;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .brand-name {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.05rem;
-      letter-spacing: 0.04em;
-      color: var(--yellow);
-      line-height: 1.2;
-    }
-
-    .brand-sub {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      color: var(--text-dim);
-      letter-spacing: 0.06em;
-      margin-top: 2px;
-    }
-
-    .sidebar-nav {
-      flex: 1;
-      padding: 0.5rem 0;
-      overflow-y: auto;
-    }
-
-    .nav-section-label {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      padding: 0.9rem 1rem 0.3rem;
-    }
-
+    .sidebar-brand { padding: 1.25rem 1rem 1rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .brand-name { font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--yellow); }
+    .brand-sub  { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 0.06em; margin-top: 2px; }
+    .sidebar-nav { flex: 1; padding: 0.5rem 0; overflow-y: auto; }
+    .nav-section-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; padding: 0.9rem 1rem 0.3rem; }
     .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      padding: 0.48rem 1rem;
-      font-size: 0.82rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      cursor: pointer;
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.48rem 1rem; font-size: 0.82rem; font-weight: 500;
+      color: var(--text-muted); cursor: pointer;
       border-left: 2px solid transparent;
       transition: background var(--transition), color var(--transition), border-color var(--transition);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      user-select: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none;
     }
-
-    .nav-item:hover {
-      background: var(--nav-hover);
-      color: var(--text);
-    }
-
-    .nav-item.active {
-      background: var(--nav-active-bg);
-      color: var(--yellow);
-      border-left-color: var(--nav-active-border);
-      font-weight: 600;
-    }
-
-    .nav-icon {
-      font-size: 0.85rem;
-      width: 1rem;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .nav-label {
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
+    .nav-item:hover { background: var(--nav-hover); color: var(--text); }
+    .nav-item.active { background: var(--nav-active-bg); color: var(--yellow); border-left-color: var(--nav-active-border); font-weight: 600; }
+    .nav-icon { font-size: 0.85rem; width: 1rem; text-align: center; flex-shrink: 0; }
+    .nav-label { overflow: hidden; text-overflow: ellipsis; }
     .nav-group-header {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      padding: 0.48rem 1rem;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: background var(--transition), color var(--transition);
-      user-select: none;
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.48rem 1rem; font-size: 0.82rem; font-weight: 600;
+      color: var(--text-muted); cursor: pointer;
+      transition: background var(--transition), color var(--transition); user-select: none;
     }
-
-    .nav-group-header:hover {
-      background: var(--nav-hover);
-      color: var(--text);
-    }
-
-    .nav-group-chevron {
-      margin-left: auto;
-      font-size: 0.65rem;
-      transition: transform var(--transition);
-      flex-shrink: 0;
-    }
-
-    .nav-group.open .nav-group-chevron {
-      transform: rotate(90deg);
-    }
-
-    .nav-group-children {
-      display: none;
-      padding-left: 0.75rem;
-    }
-
-    .nav-group.open .nav-group-children {
-      display: block;
-    }
-
-    .sidebar-footer {
-      padding: 0.75rem 1rem;
-      border-top: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .theme-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      cursor: pointer;
-      padding: 0.35rem 0;
-      transition: color var(--transition);
-      user-select: none;
-    }
-
+    .nav-group-header:hover { background: var(--nav-hover); color: var(--text); }
+    .nav-group-chevron { margin-left: auto; font-size: 0.65rem; transition: transform var(--transition); flex-shrink: 0; }
+    .nav-group.open .nav-group-chevron { transform: rotate(90deg); }
+    .nav-group-children { display: none; padding-left: 0.75rem; }
+    .nav-group.open .nav-group-children { display: block; }
+    .sidebar-footer { padding: 0.75rem 1rem; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .theme-toggle { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); cursor: pointer; padding: 0.35rem 0; transition: color var(--transition); user-select: none; }
     .theme-toggle:hover { color: var(--text); }
 
-    /* ─────────────────────────────────────
-       MAIN CONTENT
-    ───────────────────────────────────── */
-    #main {
-      margin-left: var(--sidebar-w);
-      min-height: 100vh;
-      overflow-y: auto;
-      padding: 1.5rem;
-    }
-
+    /* ─── Main ─── */
+    #main { margin-left: var(--sidebar-w); min-height: 100vh; overflow-y: auto; padding: 1.5rem; transition: margin-right var(--transition); }
+    #main.drawer-pinned { margin-right: var(--drawer-w); }
     .route-panel { display: none; }
     .route-panel.active { display: block; }
 
+    /* ─── Panel header ─── */
     .panel-header { margin-bottom: 1.25rem; }
+    .panel-title { font-family: var(--font-display); font-weight: 800; font-size: 1.4rem; color: var(--text); letter-spacing: -0.01em; }
+    .panel-subtitle { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); margin-top: 0.2rem; }
 
-    .panel-title {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.4rem;
-      color: var(--text);
-      letter-spacing: -0.01em;
+    /* ─── Stat chips ─── */
+    .conclusion-row { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .stat-chip { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.6rem 0.9rem; min-width: 120px; }
+    .chip-label { display: block; font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .chip-value { font-family: var(--font-mono); font-size: 0.95rem; font-weight: 600; color: var(--text-muted); }
+
+    /* ─── Panel chart layout ─── */
+    .panel-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 768px) { .panel-charts { grid-template-columns: 1fr; } }
+    .chart-panel { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; }
+    .chart-panel-title { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .chart-wrap { height: 220px; position: relative; }
+    .chart-wrap-tall { height: 280px; position: relative; }
+
+    /* ─── Cards zone ─── */
+    .cards-zone { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .liab-content-card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .liab-content-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.75rem 0.9rem; cursor: pointer; user-select: none; transition: background var(--transition); }
+    .liab-content-header:hover { background: var(--nav-hover); }
+    .liab-content-body { display: none; padding: 0.6rem 0.9rem 0.75rem; border-top: 1px solid var(--border); }
+
+    /* ─── TX mini card ─── */
+    .tx-mini-card { display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 0.75rem; background: var(--bg-raised); border-bottom: 1px solid var(--border); gap: 0.5rem; }
+    .tx-mini-card:last-child { border-bottom: none; }
+
+    /* ─── Range toggle ─── */
+    .range-toggle { display: flex; gap: 0.35rem; margin-bottom: 1rem; }
+    .range-btn { font-family: var(--font-mono); font-size: 0.72rem; padding: 0.3rem 0.65rem; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; transition: all var(--transition); }
+    .range-btn.active { background: var(--nav-active-bg); border-color: var(--yellow); color: var(--yellow); }
+
+    /* ─── Dashboard mini chart grid ─── */
+    .mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 640px) { .mini-grid { grid-template-columns: 1fr; } }
+    .mini-chart-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 0.85rem; cursor: pointer; transition: border-color var(--transition), background var(--transition);
     }
+    .mini-chart-card:hover { border-color: var(--border-strong); background: var(--bg-raised); }
+    .mini-chart-label { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .mini-chart-wrap { height: 70px; position: relative; }
 
-    .panel-subtitle {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      margin-top: 0.2rem;
-    }
+    /* ─── Today priority placeholder ─── */
+    .today-priority { border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; text-align: center; }
+    .today-priority-label { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.1em; }
+    .today-priority-content { font-size: 0.85rem; color: var(--text-muted); }
 
-    .conclusion-row {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
+    /* ─── Coming soon stub ─── */
+    .coming-soon { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); padding: 2.5rem 0; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); }
 
-    .stat-chip {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 0.6rem 0.9rem;
-      min-width: 120px;
-    }
-
-    .chip-label {
-      display: block;
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      color: var(--text-dim);
-      letter-spacing: 0.04em;
-      margin-bottom: 0.2rem;
-    }
-
-    .chip-value {
-      font-family: var(--font-mono);
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--text-muted);
-    }
-
-    .filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      padding: 0.6rem 0.75rem;
-      background: var(--bg-raised);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--text-dim);
-    }
-
-    .detail-section {
-      background: var(--bg-raised);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.5rem;
-    }
-
-    .coming-soon {
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--text-dim);
-      padding: 2.5rem 0;
-      text-align: center;
-      border: 1px dashed var(--border);
-      border-radius: var(--radius);
-    }
-
-    /* ─────────────────────────────────────
-       AUTH OVERLAY
-    ───────────────────────────────────── */
-    #auth-overlay {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
+    /* ─── Auth overlay ─── */
+    #auth-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     #auth-overlay.hidden { display: none; }
-
-    .auth-card {
-      width: min(360px, 90vw);
-      background: var(--bg-raised);
-      border: 1px solid var(--border-strong);
-      border-radius: var(--radius-lg);
-      padding: 2rem 1.75rem;
-    }
-
-    .auth-logo {
-      text-align: center;
-      margin-bottom: 1.75rem;
-    }
-
-    .auth-logo-name {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.5rem;
-      color: var(--yellow);
-      letter-spacing: 0.04em;
-    }
-
-    .auth-logo-sub {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      color: var(--text-dim);
-      letter-spacing: 0.06em;
-      margin-top: 4px;
-    }
-
+    .auth-card { width: min(360px, 90vw); background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 2rem 1.75rem; }
+    .auth-logo { text-align: center; margin-bottom: 1.75rem; }
+    .auth-logo-name { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; color: var(--yellow); letter-spacing: 0.04em; }
+    .auth-logo-sub { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 0.06em; margin-top: 4px; }
     .auth-field { margin-bottom: 1rem; }
-
-    .auth-label {
-      display: block;
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      color: var(--text-dim);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 0.4rem;
-    }
-
-    .auth-input {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border-strong);
-      border-radius: var(--radius);
-      padding: 0.7rem 1rem;
-      font-family: var(--font-mono);
-      font-size: 1.4rem;
-      letter-spacing: 0.35em;
-      color: var(--text);
-      text-align: center;
-      outline: none;
-      transition: border-color var(--transition);
-    }
-
+    .auth-label { display: block; font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.4rem; }
+    .auth-input { width: 100%; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0.7rem 1rem; font-family: var(--font-mono); font-size: 1.4rem; letter-spacing: 0.35em; color: var(--text); text-align: center; outline: none; transition: border-color var(--transition); }
     .auth-input:focus { border-color: var(--yellow); }
-
-    .auth-btn {
-      width: 100%;
-      background: var(--yellow);
-      color: #0a0a10;
-      border: none;
-      border-radius: var(--radius);
-      padding: 0.75rem;
-      font-family: var(--font-body);
-      font-size: 0.9rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: opacity var(--transition);
-      margin-top: 0.25rem;
-    }
-
-    .auth-btn:hover   { opacity: 0.88; }
-    .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .auth-msg {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      border-radius: var(--radius);
-      padding: 0.45rem 0.7rem;
-      margin-bottom: 0.75rem;
-      display: none;
-    }
-
-    .auth-msg.error {
-      color: var(--red);
-      background: rgba(239,68,68,0.08);
-      border: 1px solid rgba(239,68,68,0.2);
-    }
-
-    .auth-msg.setup {
-      color: var(--yellow);
-      background: rgba(245,197,24,0.08);
-      border: 1px solid rgba(245,197,24,0.2);
-    }
-
+    .auth-btn { width: 100%; background: var(--yellow); color: #0a0a10; border: none; border-radius: var(--radius); padding: 0.75rem; font-family: var(--font-body); font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: opacity var(--transition); margin-top: 0.25rem; }
+    .auth-btn:hover { opacity: 0.88; } .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-msg { font-family: var(--font-mono); font-size: 0.72rem; border-radius: var(--radius); padding: 0.45rem 0.7rem; margin-bottom: 0.75rem; display: none; }
+    .auth-msg.error { color: var(--red); background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); }
+    .auth-msg.setup  { color: var(--yellow); background: rgba(245,197,24,0.08); border: 1px solid rgba(245,197,24,0.2); }
     .auth-msg a { color: inherit; }
+
+    /* ─── Entry Drawer ─── */
+    #entry-drawer {
+      position: fixed; top: 0; right: 0;
+      width: var(--drawer-w); height: 100vh;
+      background: var(--bg-raised);
+      border-left: 1px solid var(--border-strong);
+      z-index: 200; display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+    }
+    #entry-drawer.open { transform: translateX(0); }
+    .drawer-topbar {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; background: var(--sidebar-bg);
+    }
+    .drawer-title { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; color: var(--yellow); flex: 1; }
+    .drawer-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.3rem 0.55rem; color: var(--text-dim); cursor: pointer; font-size: 0.75rem; transition: all var(--transition); }
+    .drawer-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+    .drawer-btn.pinned { border-color: var(--yellow); color: var(--yellow); background: rgba(245,197,24,0.08); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 0; }
+
+    /* ─── Form compat (for entry / collection / AI injectors) ─── */
+    .card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem; }
+    .page-content { padding: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
+    .form-group label { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    input[type="text"], input[type="number"], input[type="date"], input[type="month"],
+    input[type="password"], input[type="file"], select, textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border-strong);
+      border-radius: var(--radius); padding: 0.5rem 0.75rem;
+      font-family: var(--font-body); font-size: 0.85rem; color: var(--text);
+      outline: none; transition: border-color var(--transition);
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--yellow); }
+    select option { background: var(--bg-card); color: var(--text); }
+    textarea { resize: vertical; }
+    .btn {
+      padding: 0.5rem 1rem; border-radius: var(--radius); border: 1px solid var(--border);
+      font-family: var(--font-body); font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; transition: all var(--transition); color: var(--text); background: var(--bg-raised);
+    }
+    .btn:hover { border-color: var(--border-strong); }
+    .btn-primary  { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .btn-success  { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn-outline  { background: transparent; color: var(--text-muted); }
+    .btn-lg { padding: 0.65rem 1.25rem; font-size: 0.95rem; }
+    .btn-sm { padding: 0.25rem 0.6rem; font-size: 0.78rem; }
+    .w-full { width: 100%; }
+    .flex { display: flex; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-1 { gap: 0.5rem; }
+    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 0.4rem 0.85rem; border-radius: var(--radius); border: 1px solid var(--border);
+      background: var(--bg-raised); color: var(--text-dim); font-size: 0.8rem; cursor: pointer;
+      font-family: var(--font-body); transition: all var(--transition);
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--border-strong); }
+    .tab-btn.active { background: var(--nav-active-bg); border-color: var(--yellow); color: var(--yellow); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .section-title { font-weight: 600; font-size: 0.88rem; color: var(--text); }
+    .period-toggle { display: flex; gap: 0.25rem; }
+    .period-btn { font-family: var(--font-mono); font-size: 0.72rem; padding: 0.28rem 0.6rem; background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; transition: all var(--transition); }
+    .period-btn:hover { color: var(--text); border-color: var(--border-strong); }
+    .period-btn.active { background: var(--nav-active-bg); border-color: var(--yellow); color: var(--yellow); }
+    .chart-container { position: relative; }
+    .filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+
+    /* ─── Collection panel ─── */
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 1rem; padding-bottom: 5rem; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: flex; align-items: center; justify-content: center; }
+    .modal-backdrop.hidden { display: none; }
+    .modal { background: var(--bg-raised); border-radius: var(--radius-lg); padding: 1.25rem; width: min(520px,90vw); max-height: 88vh; overflow-y: auto; border: 1px solid var(--border-strong); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .modal-title { font-weight: 700; font-size: 1rem; color: var(--text); }
+    .fab-btn { position: fixed; bottom: 2rem; right: 2rem; width: 52px; height: 52px; background: var(--yellow); color: #0a0a10; border: none; border-radius: 50%; font-size: 1.5rem; font-weight: 700; cursor: pointer; z-index: 190; box-shadow: 0 4px 16px rgba(245,197,24,0.3); transition: transform var(--transition); }
+    .fab-btn:hover { transform: scale(1.08); }
+    .metric-value { font-weight: 700; font-size: 1.1rem; color: var(--text); margin-top: 0.15rem; }
+    .amount-positive { color: var(--green); font-weight: 700; font-size: 1rem; margin-top: 0.15rem; }
+
+    /* ─── AI Chat panel ─── */
+    .chat-layout { display: grid; grid-template-columns: 200px 1fr; height: calc(100vh - 6rem); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    @media (max-width: 640px) { .chat-layout { grid-template-columns: 1fr; } .chat-sidebar { display: none; } }
+    .chat-sidebar { background: var(--bg-card); border-right: 1px solid var(--border); padding: 0.75rem; overflow-y: auto; }
+    .chat-main { display: flex; flex-direction: column; background: var(--bg); }
+    #messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .chat-input-area { display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); flex-shrink: 0; }
+    #chat-input { flex: 1; resize: none; min-height: 2.5rem; max-height: 8rem; }
+
+    /* ─── Time Management placeholder ─── */
+    .tm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 640px) { .tm-grid { grid-template-columns: 1fr; } }
+    .tm-section { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; min-height: 200px; }
+    .tm-section-title { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .tm-section-body { font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 2rem 0; }
+
+    /* ─── Cashflow sync info ─── */
+    #cf-sync-info { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-dim); margin-bottom: 0.5rem; }
   </style>
 </head>
 <body>
@@ -443,13 +315,256 @@
       <form id="pin-form" autocomplete="off">
         <div class="auth-field">
           <label class="auth-label" for="pin-input">PIN</label>
-          <input type="password" id="pin-input" class="auth-input"
-            maxlength="6" inputmode="numeric" placeholder="••••••" autocomplete="off">
+          <input type="password" id="pin-input" class="auth-input" maxlength="6" inputmode="numeric" placeholder="••••••" autocomplete="off">
         </div>
         <button type="submit" id="enter-btn" class="auth-btn">Enter</button>
       </form>
     </div>
   </div>
+
+  <!-- ── Entry Drawer ── -->
+  <div id="entry-drawer">
+    <div class="drawer-topbar">
+      <span class="drawer-title">⊕ Entry</span>
+      <button class="drawer-btn" id="entry-pin-btn" title="Pin drawer open">📌 Pin</button>
+      <button class="drawer-btn" id="entry-close-btn" title="Close">✕</button>
+    </div>
+    <div class="drawer-body page-content">
+
+      <div class="tabs" id="entry-tabs">
+        <button class="tab-btn active" data-tab="transactions">Transactions</button>
+        <button class="tab-btn" data-tab="utilities">Utilities</button>
+        <button class="tab-btn" data-tab="liabilities">Liabilities</button>
+        <button class="tab-btn" data-tab="budgets">Budgets</button>
+      </div>
+
+      <!-- ── Transactions Tab ── -->
+      <div class="tab-panel active" id="transactions-tab">
+        <div class="card" style="position:sticky;top:0;z-index:10">
+          <div class="flex items-center gap-1" style="margin-bottom:1rem">
+            <button class="btn btn-lg btn-success" id="type-income" data-type="Income">EARN</button>
+            <button class="btn btn-lg btn-outline" id="type-expense" data-type="Expense">EXPENSE</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="tx-amount">Amount (฿)</label>
+              <input type="number" id="tx-amount" placeholder="0" step="1" inputmode="numeric">
+            </div>
+            <div class="form-group">
+              <label for="tx-category">Category</label>
+              <select id="tx-category"></select>
+              <div id="tx-budget-bar" style="display:none;margin-top:0.35rem;font-size:0.78rem;color:var(--text-muted)"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="tx-description">Description</label>
+              <input type="text" id="tx-description" placeholder="What was this for?">
+            </div>
+            <div class="form-group">
+              <label for="tx-entity">Entity / Platform</label>
+              <input type="text" id="tx-entity" list="entity-suggestions" placeholder="Who or where">
+              <datalist id="entity-suggestions"></datalist>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="tx-date">Date</label>
+              <input type="date" id="tx-date">
+            </div>
+            <div class="form-group">
+              <label for="tx-note">Note (optional)</label>
+              <input type="text" id="tx-note" placeholder="Extra note">
+            </div>
+          </div>
+          <button class="btn btn-primary w-full btn-lg" id="save-tx">Save Transaction</button>
+        </div>
+        <div class="tabs" id="tx-period-tabs">
+          <button class="tab-btn active" data-txperiod="daily">Daily</button>
+          <button class="tab-btn" data-txperiod="weekly">Weekly</button>
+          <button class="tab-btn" data-txperiod="monthly">Monthly</button>
+        </div>
+        <div id="tx-list"></div>
+      </div>
+
+      <!-- ── Utilities Tab ── -->
+      <div class="tab-panel" id="utilities-tab">
+        <div class="card">
+          <div class="section-header">
+            <span class="section-title">Utilities Entry</span>
+            <input type="month" id="util-month" style="width:auto">
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="util-elec-units">Electricity Units</label><input type="number" id="util-elec-units" placeholder="kWh" step="0.01"></div>
+            <div class="form-group"><label for="util-elec-charge">Electricity Charge (฿)</label><input type="number" id="util-elec-charge" placeholder="฿" step="0.01"></div>
+          </div>
+          <div id="elec-rate-display" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.5rem"></div>
+          <div id="elec-vs-prev" style="font-size:0.82rem;margin-bottom:1rem"></div>
+          <div class="form-row">
+            <div class="form-group"><label for="util-water-units">Water Units</label><input type="number" id="util-water-units" placeholder="units" step="0.01"></div>
+            <div class="form-group"><label for="util-water-charge">Water Charge (฿)</label><input type="number" id="util-water-charge" placeholder="฿" step="0.01"></div>
+          </div>
+          <div id="water-rate-display" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.5rem"></div>
+          <div id="water-vs-prev" style="font-size:0.82rem;margin-bottom:1rem"></div>
+          <div class="form-group"><label for="util-notes">Notes</label><textarea id="util-notes" rows="2"></textarea></div>
+          <div class="form-group"><label for="util-ft-note">FT Note</label><textarea id="util-ft-note" rows="2" placeholder="e.g. Rate changed, meter replaced, estimated reading"></textarea></div>
+          <button class="btn btn-primary w-full" id="save-util">Save Utilities</button>
+        </div>
+        <div class="card">
+          <div class="section-header"><span class="section-title">Last 12 Months</span></div>
+          <div id="util-history-table"></div>
+          <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div class="chart-container" style="height:140px"><canvas id="elec-chart"></canvas></div>
+            <div class="chart-container" style="height:140px"><canvas id="water-chart"></canvas></div>
+          </div>
+          <div id="yoy-section" style="margin-top:1.5rem">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+              <span class="section-title" style="font-size:0.9rem">Year-over-Year Trends</span>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text-muted)">
+                <span>From</span>
+                <select id="yoy-from-year" style="width:auto;padding:0.2rem 0.5rem;font-size:0.82rem"></select>
+                <span>to</span>
+                <select id="yoy-to-year" style="width:auto;padding:0.2rem 0.5rem;font-size:0.82rem"></select>
+              </div>
+            </div>
+            <div id="yoy-legend" style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.78rem"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Electricity Units</div><div class="chart-container" style="height:140px"><canvas id="yoy-elec-units"></canvas></div></div>
+              <div><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Electricity Charge ฿</div><div class="chart-container" style="height:140px"><canvas id="yoy-elec-charge"></canvas></div></div>
+              <div><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Water Units</div><div class="chart-container" style="height:140px"><canvas id="yoy-water-units"></canvas></div></div>
+              <div><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Water Charge ฿</div><div class="chart-container" style="height:140px"><canvas id="yoy-water-charge"></canvas></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Liabilities Tab ── -->
+      <div class="tab-panel" id="liabilities-tab">
+        <div class="card">
+          <div class="section-header"><span class="section-title">Log a Payment</span></div>
+          <div class="form-group"><label for="payment-liability-select">Liability</label><select id="payment-liability-select"></select></div>
+          <div id="payment-interest-preview" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.5rem;display:none"></div>
+          <div class="form-row">
+            <div class="form-group"><label for="payment-amount">Payment Amount (฿)</label><input type="number" id="payment-amount" placeholder="฿"></div>
+            <div class="form-group"><label for="payment-date">Payment Date</label><input type="date" id="payment-date"></div>
+          </div>
+          <div class="form-group"><label for="payment-note">Note</label><input type="text" id="payment-note" placeholder="Optional note"></div>
+          <button class="btn btn-success w-full" id="save-payment">Log Payment</button>
+        </div>
+        <div class="card">
+          <button id="liab-form-toggle" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+            <span class="section-title">＋ Add New Liability</span>
+            <span id="liab-form-chevron" style="transition:transform 0.3s;display:inline-block;color:var(--text-muted);font-size:0.85rem">▼</span>
+          </button>
+          <div id="liab-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+            <div style="padding-top:1rem">
+              <div class="form-row">
+                <div class="form-group"><label for="liab-name">Liability Name</label><input type="text" id="liab-name" placeholder="Bank / Person / Card"></div>
+                <div class="form-group"><label for="liab-creditor-type">Creditor Type</label><select id="liab-creditor-type"><option value="Bank">Bank</option><option value="Family">Family</option><option value="Friend">Friend</option><option value="Other">Other</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label for="liab-loan-size">Loan Size (฿)</label><input type="number" id="liab-loan-size" placeholder="Original amount"></div>
+                <div class="form-group"><label for="liab-balance">Current Balance (฿)</label><input type="number" id="liab-balance" placeholder="Remaining balance"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label for="liab-rate">Interest Rate (% p.a.)</label><input type="number" id="liab-rate" step="0.01" placeholder="e.g. 7.5"></div>
+                <div class="form-group"><label for="liab-monthly">Monthly Payment (฿)</label><input type="number" id="liab-monthly" placeholder="฿"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label for="liab-due-day">Payment Due Day</label><input type="number" id="liab-due-day" min="1" max="31" placeholder="e.g. 5"></div>
+                <div class="form-group"><label for="liab-start">Start Date</label><input type="date" id="liab-start"></div>
+              </div>
+              <div class="form-group"><label for="liab-notes">Notes</label><input type="text" id="liab-notes" placeholder="Optional notes"></div>
+              <button class="btn btn-primary w-full" id="save-liability">Add Liability</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-header"><span class="section-title">Active Liabilities</span></div>
+          <div id="active-liabilities-table"></div>
+        </div>
+      </div>
+
+      <!-- ── Budgets Tab ── -->
+      <div class="tab-panel" id="budgets-tab">
+        <div class="card">
+          <button id="cat-form-toggle" style="width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:space-between;font-family:inherit">
+            <span class="section-title">＋ New Category</span>
+            <span id="cat-form-chevron" style="transition:transform 0.3s;display:inline-block;color:var(--text-muted);font-size:0.85rem">▼</span>
+          </button>
+          <div id="cat-form-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+            <div style="padding-top:1rem">
+              <div class="form-row">
+                <div class="form-group"><label for="cat-name">Item Name</label><input type="text" id="cat-name" placeholder="e.g. Dog food, Gym, Grab taxi"></div>
+                <div class="form-group"><label for="cat-type">Flow Type</label><select id="cat-type"><option value="Expense">Expense</option><option value="Earn">Earn</option><option value="Investment">Investment</option><option value="Loan">Loan</option></select></div>
+              </div>
+              <div class="form-group">
+                <label for="cat-group">Category Group</label>
+                <input type="text" id="cat-group" list="cat-group-list" placeholder="Select existing or type new">
+                <datalist id="cat-group-list"></datalist>
+              </div>
+              <div class="form-group" id="cat-expense-type-group" style="display:none">
+                <label for="cat-expense-type">Expense Type</label>
+                <select id="cat-expense-type">
+                  <option value="">— Select (optional) —</option>
+                  <option value="FP-FV">FP-FV (Fixed timing, Fixed amount)</option>
+                  <option value="FP-VV">FP-VV (Fixed timing, Variable amount)</option>
+                  <option value="VP-FV">VP-FV (Variable timing, Fixed amount)</option>
+                  <option value="VP-VV">VP-VV (Variable timing, Variable amount)</option>
+                  <option value="Surprise">Surprise</option>
+                </select>
+              </div>
+              <button class="btn btn-primary w-full" id="save-category">Add Category</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-header"><span class="section-title">Add Budget Item</span></div>
+          <div class="form-row">
+            <div class="form-group"><label for="budget-label">Label</label><input type="text" id="budget-label" placeholder="Budget name"></div>
+            <div class="form-group"><label for="budget-category">Category</label><select id="budget-category"></select></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="budget-amount">Amount (฿)</label><input type="number" id="budget-amount" placeholder="฿"></div>
+            <div class="form-group"><label for="budget-period">Period</label><select id="budget-period"><option value="Monthly">Monthly</option><option value="Annual">Annual</option><option value="One-time">One-time</option></select></div>
+          </div>
+          <div id="budget-onetime-note" style="display:none;font-size:0.8rem;color:var(--text-muted);padding:0.5rem 0.75rem;background:rgba(245,158,11,0.08);border-radius:var(--radius);margin-bottom:0.75rem;border:1px solid rgba(245,158,11,0.25)">
+            ℹ️ One-time budgets are only shown when today falls within the Start–End date range.
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="budget-start">Start Date</label><input type="date" id="budget-start"></div>
+            <div class="form-group"><label for="budget-end">End Date (optional)</label><input type="date" id="budget-end"></div>
+          </div>
+          <button class="btn btn-primary w-full" id="save-budget">Create Budget</button>
+        </div>
+        <div class="card">
+          <div class="section-header"><span class="section-title">Active Budgets</span></div>
+          <div id="budget-control-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+              <div class="period-toggle">
+                <button class="period-btn active" data-budget-view="row">≡ Row</button>
+                <button class="period-btn" data-budget-view="card">⊞ Card</button>
+              </div>
+              <div class="period-toggle">
+                <button class="period-btn active" data-budget-group="all">All</button>
+                <button class="period-btn" data-budget-group="byCategory">By Category</button>
+              </div>
+              <div class="period-toggle">
+                <button class="period-btn active" data-budget-active="active">Active</button>
+                <button class="period-btn" data-budget-active="all">All incl. past</button>
+              </div>
+            </div>
+            <div id="budget-group-actions" style="display:none;gap:0.75rem;align-items:center">
+              <button id="budget-expand-all" style="background:none;border:none;cursor:pointer;font-size:0.82rem;color:var(--blue);font-family:inherit;padding:0">Expand all</button>
+              <button id="budget-collapse-all" style="background:none;border:none;cursor:pointer;font-size:0.82rem;color:var(--blue);font-family:inherit;padding:0">Collapse all</button>
+            </div>
+          </div>
+          <div id="budgets-list"></div>
+        </div>
+      </div>
+
+    </div><!-- .drawer-body -->
+  </div><!-- #entry-drawer -->
 
   <!-- ── Sidebar ── -->
   <aside id="sidebar">
@@ -460,106 +575,56 @@
 
     <nav class="sidebar-nav">
 
-      <!-- M1 standalone -->
       <div class="nav-item" data-route="dashboard">
-        <span class="nav-icon">⬡</span>
-        <span class="nav-label">Dashboard</span>
+        <span class="nav-icon">⬡</span><span class="nav-label">Dashboard</span>
       </div>
 
-      <!-- M2 FINANCE — expanded by default -->
       <div class="nav-section-label">Finance</div>
       <div class="nav-group open" id="group-finance">
         <div class="nav-group-header">
-          <span class="nav-icon">◈</span>
-          <span>Finance</span>
+          <span class="nav-icon">◈</span><span>Finance</span>
           <span class="nav-group-chevron">›</span>
         </div>
         <div class="nav-group-children">
-          <div class="nav-item" data-route="cashflow">
-            <span class="nav-icon">⟡</span>
-            <span class="nav-label">Cash Flow</span>
-          </div>
-          <div class="nav-item" data-route="sales">
-            <span class="nav-icon">↑</span>
-            <span class="nav-label">Sales</span>
-          </div>
-          <div class="nav-item" data-route="expenses">
-            <span class="nav-icon">↓</span>
-            <span class="nav-label">Expenses</span>
-          </div>
-          <div class="nav-item" data-route="projects">
-            <span class="nav-icon">◧</span>
-            <span class="nav-label">Projects</span>
-          </div>
-          <div class="nav-item" data-route="budget">
-            <span class="nav-icon">◻</span>
-            <span class="nav-label">Budget</span>
-          </div>
-          <div class="nav-item" data-route="liabilities">
-            <span class="nav-icon">⧖</span>
-            <span class="nav-label">Liabilities</span>
-          </div>
-          <div class="nav-item" data-route="entry">
-            <span class="nav-icon">⊕</span>
-            <span class="nav-label">Entry</span>
-          </div>
+          <div class="nav-item" data-route="cashflow"><span class="nav-icon">⟡</span><span class="nav-label">Cash Flow</span></div>
+          <div class="nav-item" data-route="sales"><span class="nav-icon">↑</span><span class="nav-label">Sales</span></div>
+          <div class="nav-item" data-route="expenses"><span class="nav-icon">↓</span><span class="nav-label">Expenses</span></div>
+          <div class="nav-item" data-route="projects"><span class="nav-icon">◧</span><span class="nav-label">Projects</span></div>
+          <div class="nav-item" data-route="budget"><span class="nav-icon">◻</span><span class="nav-label">Budget</span></div>
+          <div class="nav-item" data-route="liabilities"><span class="nav-icon">⧖</span><span class="nav-label">Liabilities</span></div>
+          <div class="nav-item" id="entry-nav-btn"><span class="nav-icon">⊕</span><span class="nav-label">Entry</span></div>
         </div>
       </div>
 
-      <!-- M3 ASSETS — collapsed -->
       <div class="nav-section-label">Assets</div>
       <div class="nav-group" id="group-assets">
         <div class="nav-group-header">
-          <span class="nav-icon">◈</span>
-          <span>Assets</span>
+          <span class="nav-icon">◈</span><span>Assets</span>
           <span class="nav-group-chevron">›</span>
         </div>
         <div class="nav-group-children">
-          <div class="nav-item" data-route="ideas">
-            <span class="nav-icon">◎</span>
-            <span class="nav-label">Ideas</span>
-          </div>
-          <div class="nav-item" data-route="collection">
-            <span class="nav-icon">◈</span>
-            <span class="nav-label">Collection</span>
-          </div>
-          <div class="nav-item" data-route="hard-assets">
-            <span class="nav-icon">◫</span>
-            <span class="nav-label">Hard Assets</span>
-          </div>
-          <div class="nav-item" data-route="proj-assets">
-            <span class="nav-icon">◬</span>
-            <span class="nav-label">Project Assets</span>
-          </div>
+          <div class="nav-item" data-route="ideas"><span class="nav-icon">◎</span><span class="nav-label">Ideas</span></div>
+          <div class="nav-item" data-route="collection"><span class="nav-icon">◈</span><span class="nav-label">Collection</span></div>
+          <div class="nav-item" data-route="hard-assets"><span class="nav-icon">◫</span><span class="nav-label">Hard Assets</span></div>
+          <div class="nav-item" data-route="proj-assets"><span class="nav-icon">◬</span><span class="nav-label">Project Assets</span></div>
         </div>
       </div>
 
-      <!-- M4 TOOLS — collapsed -->
       <div class="nav-section-label">Tools</div>
       <div class="nav-group" id="group-tools">
         <div class="nav-group-header">
-          <span class="nav-icon">◈</span>
-          <span>Tools</span>
+          <span class="nav-icon">◈</span><span>Tools</span>
           <span class="nav-group-chevron">›</span>
         </div>
         <div class="nav-group-children">
-          <div class="nav-item" data-route="ai">
-            <span class="nav-icon">⬡</span>
-            <span class="nav-label">AI</span>
-          </div>
-          <div class="nav-item" data-route="mindmap">
-            <span class="nav-icon">◎</span>
-            <span class="nav-label">Mind Map</span>
-          </div>
+          <div class="nav-item" data-route="ai"><span class="nav-icon">⬡</span><span class="nav-label">AI Advisor</span></div>
+          <div class="nav-item" data-route="mindmap"><span class="nav-icon">◎</span><span class="nav-label">Mind Map</span></div>
+          <div class="nav-item" data-route="timemanagement"><span class="nav-icon">⏱</span><span class="nav-label">Time Management</span></div>
         </div>
       </div>
 
-      <!-- M5 LIFE — standalone -->
       <div class="nav-section-label">Life</div>
-      <div class="nav-item" data-route="life">
-        <span class="nav-icon">○</span>
-        <span class="nav-label">Life</span>
-      </div>
+      <div class="nav-item" data-route="life"><span class="nav-icon">○</span><span class="nav-label">Life</span></div>
 
     </nav>
 
@@ -574,201 +639,375 @@
   <!-- ── Main Content ── -->
   <main id="main">
 
+    <!-- ─── Dashboard ─── -->
     <div class="route-panel" id="panel-dashboard">
       <div class="panel-header">
         <div class="panel-title">Dashboard</div>
-        <div class="panel-subtitle">// overview · today</div>
+        <div class="panel-subtitle">// overview · where to focus today</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">cash balance</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">this month in</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">this month out</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">days to ฿0</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">days to ฿0</span><span class="chip-value" id="dash-days-zero">—</span></div>
+        <div class="stat-chip"><span class="chip-label">days to next earn</span><span class="chip-value" id="dash-days-earn">—</span></div>
+        <div class="stat-chip"><span class="chip-label">project idea value</span><span class="chip-value" id="dash-project-val">—</span></div>
+        <div class="stat-chip"><span class="chip-label">net worth est.</span><span class="chip-value" id="dash-net-worth">—</span></div>
       </div>
-      <div class="filter-bar">filter · range · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">dashboard — coming in Part 2</div></div>
+      <div class="today-priority">
+        <div class="today-priority-label">TODAY PRIORITY</div>
+        <div class="today-priority-content">— coming soon · time management module —</div>
+      </div>
+      <div class="mini-grid">
+        <div class="mini-chart-card" onclick="navigate('cashflow')">
+          <div class="mini-chart-label">Cash Flow ›</div>
+          <div class="mini-chart-wrap"><canvas id="dash-mini-cf"></canvas></div>
+        </div>
+        <div class="mini-chart-card" onclick="navigate('expenses')">
+          <div class="mini-chart-label">Expenses ›</div>
+          <div class="mini-chart-wrap"><canvas id="dash-mini-exp"></canvas></div>
+        </div>
+        <div class="mini-chart-card" onclick="navigate('liabilities')">
+          <div class="mini-chart-label">Liabilities ›</div>
+          <div class="mini-chart-wrap"><canvas id="dash-mini-liab"></canvas></div>
+        </div>
+        <div class="mini-chart-card" onclick="navigate('budget')">
+          <div class="mini-chart-label">Budget ›</div>
+          <div class="mini-chart-wrap"><canvas id="dash-mini-bud"></canvas></div>
+        </div>
+      </div>
     </div>
 
+    <!-- ─── Cash Flow ─── -->
     <div class="route-panel" id="panel-cashflow">
       <div class="panel-header">
         <div class="panel-title">Cash Flow</div>
-        <div class="panel-subtitle">// forecast · transactions</div>
+        <div class="panel-subtitle">// forecast · transactions · daily burn</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">net this month</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">forecast 30d</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">days to ฿0</span><span class="chip-value" id="cf-days-zero">—</span></div>
+        <div class="stat-chip"><span class="chip-label">total in</span><span class="chip-value" id="cf-total-in">—</span></div>
+        <div class="stat-chip"><span class="chip-label">total out</span><span class="chip-value" id="cf-total-out">—</span></div>
+        <div class="stat-chip"><span class="chip-label">balance</span><span class="chip-value" id="cf-balance">—</span></div>
+        <div class="stat-chip"><span class="chip-label">next income</span><span class="chip-value" id="cf-incoming-due">—</span></div>
       </div>
-      <div class="filter-bar">filter · range · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">cashflow — coming in Part 2</div></div>
+      <div id="cf-sync-info"></div>
+      <div id="cf-range-toggle" class="range-toggle">
+        <button class="range-btn active" data-range="1m">1M</button>
+        <button class="range-btn" data-range="3m">3M</button>
+        <button class="range-btn" data-range="6m">6M</button>
+      </div>
+      <div class="chart-panel" style="margin-bottom:1rem">
+        <div class="chart-panel-title">balance forecast</div>
+        <div class="chart-wrap-tall"><canvas id="cf-chart"></canvas></div>
+      </div>
+      <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div id="cf-cards"></div>
+      </div>
     </div>
 
+    <!-- ─── Sales ─── -->
     <div class="route-panel" id="panel-sales">
       <div class="panel-header">
         <div class="panel-title">Sales</div>
         <div class="panel-subtitle">// income · clients · pipeline</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total this month</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · range · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">sales — coming in Part 2</div></div>
+      <div class="coming-soon">sales — coming soon</div>
     </div>
 
+    <!-- ─── Expenses ─── -->
     <div class="route-panel" id="panel-expenses">
       <div class="panel-header">
         <div class="panel-title">Expenses</div>
-        <div class="panel-subtitle">// spending · categories</div>
+        <div class="panel-subtitle">// spending · categories · budget ratio</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total this month</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">spent this month</span><span class="chip-value" id="exp-spent">—</span></div>
+        <div class="stat-chip"><span class="chip-label">budget remaining</span><span class="chip-value" id="exp-remain">—</span></div>
+        <div class="stat-chip"><span class="chip-label">budgets over limit</span><span class="chip-value" id="exp-locked">—</span></div>
+        <div class="stat-chip"><span class="chip-label">debt payback ratio</span><span class="chip-value" id="exp-debt-ratio">—</span></div>
       </div>
-      <div class="filter-bar">filter · range · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">expenses — coming in Part 2</div></div>
+      <div class="panel-charts">
+        <div class="chart-panel">
+          <div class="chart-panel-title">top spend by group (pareto)</div>
+          <div class="chart-wrap"><canvas id="exp-pareto-chart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-panel-title">6-month expense trend</div>
+          <div class="chart-wrap"><canvas id="exp-trend-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="cards-zone" id="exp-cards"></div>
     </div>
 
+    <!-- ─── Projects ─── -->
     <div class="route-panel" id="panel-projects">
       <div class="panel-header">
         <div class="panel-title">Projects</div>
         <div class="panel-subtitle">// active · pipeline · archive</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">active projects</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · status · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">projects — coming in Part 2</div></div>
+      <div class="coming-soon">projects — coming soon</div>
     </div>
 
+    <!-- ─── Budget ─── -->
     <div class="route-panel" id="panel-budget">
       <div class="panel-header">
         <div class="panel-title">Budget</div>
-        <div class="panel-subtitle">// plan · actuals · variance</div>
+        <div class="panel-subtitle">// plan · actuals · variance · hit/miss</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">monthly budget</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">spent</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">plan / month</span><span class="chip-value" id="bud-plan-month">—</span></div>
+        <div class="stat-chip"><span class="chip-label">plan / 12mo</span><span class="chip-value" id="bud-plan-12">—</span></div>
+        <div class="stat-chip"><span class="chip-label">earn booked</span><span class="chip-value" id="bud-earn">—</span></div>
+        <div class="stat-chip"><span class="chip-label">avg balance</span><span class="chip-value" id="bud-avg-balance">—</span></div>
+        <div class="stat-chip"><span class="chip-label">budget gap</span><span class="chip-value" id="bud-gap">—</span></div>
+        <div class="stat-chip"><span class="chip-label">on track</span><span class="chip-value" id="bud-hit-count">—</span></div>
+        <div class="stat-chip"><span class="chip-label">over limit</span><span class="chip-value" id="bud-miss-count">—</span></div>
       </div>
-      <div class="filter-bar">filter · period · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">budget — coming in Part 2</div></div>
+      <div class="chart-panel" style="margin-bottom:1rem">
+        <div class="chart-panel-title">budget vs actual (T4)</div>
+        <div class="chart-wrap-tall"><canvas id="bud-chart"></canvas></div>
+      </div>
+      <div class="cards-zone" id="bud-cards"></div>
     </div>
 
+    <!-- ─── Liabilities ─── -->
     <div class="route-panel" id="panel-liabilities">
       <div class="panel-header">
         <div class="panel-title">Liabilities</div>
-        <div class="panel-subtitle">// loans · obligations</div>
+        <div class="panel-subtitle">// loans · obligations · paydown forecast</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total owed</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">monthly payment</span><span class="chip-value">—</span></div>
+        <div class="stat-chip"><span class="chip-label">total debt</span><span class="chip-value" id="liab-total-debt">—</span></div>
+        <div class="stat-chip"><span class="chip-label">monthly payment</span><span class="chip-value" id="liab-monthly-pay">—</span></div>
+        <div class="stat-chip"><span class="chip-label">monthly interest</span><span class="chip-value" id="liab-monthly-int">—</span></div>
+        <div class="stat-chip"><span class="chip-label">est. remaining int.</span><span class="chip-value" id="liab-rem-interest">—</span></div>
       </div>
-      <div class="filter-bar">filter · active · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">liabilities — coming in Part 2</div></div>
+      <div class="panel-charts">
+        <div class="chart-panel">
+          <div class="chart-panel-title">balance by liability (T3)</div>
+          <div class="chart-wrap"><canvas id="liab-bar-chart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-panel-title">24-month paydown projection</div>
+          <div class="chart-wrap"><canvas id="liab-trend-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="cards-zone" id="liab-cards"></div>
     </div>
 
-    <div class="route-panel" id="panel-entry">
-      <div class="panel-header">
-        <div class="panel-title">Entry</div>
-        <div class="panel-subtitle">// record transactions · quick add</div>
-      </div>
-      <div class="conclusion-row"></div>
-      <div class="filter-bar">type · category · date — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">entry — coming in Part 2</div></div>
-    </div>
-
+    <!-- ─── Ideas ─── -->
     <div class="route-panel" id="panel-ideas">
       <div class="panel-header">
         <div class="panel-title">Ideas</div>
         <div class="panel-subtitle">// concept log · wishlist</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total ideas</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · status · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">ideas — coming in Part 2</div></div>
+      <div class="coming-soon">ideas — coming soon</div>
     </div>
 
+    <!-- ─── Collection ─── -->
     <div class="route-panel" id="panel-collection">
       <div class="panel-header">
         <div class="panel-title">Collection</div>
-        <div class="panel-subtitle">// inventory · valuables</div>
+        <div class="panel-subtitle">// inventory · valuables · tracking</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">items</span><span class="chip-value">—</span></div>
-        <div class="stat-chip"><span class="chip-label">est. value</span><span class="chip-value">—</span></div>
+      <div class="card" id="collection-summary" style="margin-bottom:1rem">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem;text-align:center">
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Total Holding</div><div id="sum-holding" class="metric-value">฿—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">For Sale</div><div id="sum-forsale" class="metric-value">—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Sold YTD</div><div id="sum-sold-ytd" class="amount-positive">฿—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Knife</div><div id="sum-knife">฿—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Vice</div><div id="sum-vice">฿—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Plant</div><div id="sum-plant">฿—</div></div>
+          <div><div style="font-size:0.8rem;color:var(--text-muted)">Doll</div><div id="sum-doll">฿—</div></div>
+        </div>
       </div>
-      <div class="filter-bar">filter · category · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">collection — coming in Part 2</div></div>
+      <div class="filter-bar" id="collection-filters">
+        <div class="period-toggle">
+          <button class="period-btn active" data-status="">All</button>
+          <button class="period-btn" data-status="Holding">Holding</button>
+          <button class="period-btn" data-status="For Sale">For Sale</button>
+          <button class="period-btn" data-status="Sold">Sold</button>
+        </div>
+        <select id="category-filter" style="width:auto">
+          <option value="">All Categories</option>
+          <option value="Collection-Knife">Knife</option>
+          <option value="Collection-Vice">Vice</option>
+          <option value="Collection-Plant">Plant</option>
+          <option value="Collection-Doll">Doll</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="asset-grid" id="asset-grid"></div>
     </div>
 
+    <!-- ─── Hard Assets ─── -->
     <div class="route-panel" id="panel-hard-assets">
       <div class="panel-header">
         <div class="panel-title">Hard Assets</div>
         <div class="panel-subtitle">// property · vehicles · physical</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total value</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · type · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">hard-assets — coming in Part 2</div></div>
+      <div class="coming-soon">hard assets — coming soon</div>
     </div>
 
+    <!-- ─── Project Assets ─── -->
     <div class="route-panel" id="panel-proj-assets">
       <div class="panel-header">
         <div class="panel-title">Project Assets</div>
         <div class="panel-subtitle">// digital · IP · tools</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">total items</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · type · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">proj-assets — coming in Part 2</div></div>
+      <div class="coming-soon">project assets — coming soon</div>
     </div>
 
+    <!-- ─── AI Advisor ─── -->
     <div class="route-panel" id="panel-ai">
       <div class="panel-header">
-        <div class="panel-title">AI</div>
-        <div class="panel-subtitle">// assistant · analysis · automation</div>
+        <div class="panel-title">AI Advisor</div>
+        <div class="panel-subtitle">// financial context · analysis · strategy</div>
       </div>
-      <div class="conclusion-row"></div>
-      <div class="filter-bar">mode · context · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">ai — coming in Part 2</div></div>
+      <div class="chat-layout">
+        <div class="chat-sidebar">
+          <div class="section-header" style="margin-bottom:0.75rem">
+            <span class="section-title" style="font-size:0.9rem">Past Sessions</span>
+            <button class="btn btn-sm btn-primary" id="new-session-btn">+ New</button>
+          </div>
+          <div id="sessions-list" style="font-size:0.82rem"></div>
+        </div>
+        <div class="chat-main">
+          <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0">
+            <div style="font-size:0.85rem;color:var(--text-muted)" id="context-status">Loading financial context…</div>
+          </div>
+          <div id="messages"></div>
+          <div class="chat-input-area">
+            <textarea id="chat-input" placeholder="Ask about cashflow, debt strategy, asset sales…" rows="2"></textarea>
+            <button class="btn btn-primary" id="send-btn">Send</button>
+          </div>
+        </div>
+      </div>
     </div>
 
+    <!-- ─── Mind Map ─── -->
     <div class="route-panel" id="panel-mindmap">
       <div class="panel-header">
         <div class="panel-title">Mind Map</div>
         <div class="panel-subtitle">// visual thinking · connections</div>
       </div>
-      <div class="conclusion-row"></div>
-      <div class="filter-bar">view · mode · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">mindmap — coming in Part 2</div></div>
+      <div class="coming-soon">mindmap — coming soon</div>
     </div>
 
+    <!-- ─── Time Management ─── -->
+    <div class="route-panel" id="panel-timemanagement">
+      <div class="panel-header">
+        <div class="panel-title">Time Management</div>
+        <div class="panel-subtitle">// tasks · inputs · calendar · today goal</div>
+      </div>
+      <div class="tm-grid">
+        <div class="tm-section">
+          <div class="tm-section-title">My Tasks</div>
+          <div class="tm-section-body">task list — coming soon</div>
+        </div>
+        <div class="tm-section">
+          <div class="tm-section-title">My Inputs</div>
+          <div class="tm-section-body">input log — coming soon</div>
+        </div>
+        <div class="tm-section">
+          <div class="tm-section-title">Calendar Schedule</div>
+          <div class="tm-section-body">calendar — coming soon</div>
+        </div>
+        <div class="tm-section">
+          <div class="tm-section-title">Today Goal</div>
+          <div class="tm-section-body">today goal — coming soon</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Life ─── -->
     <div class="route-panel" id="panel-life">
       <div class="panel-header">
         <div class="panel-title">Life</div>
         <div class="panel-subtitle">// goals · health · journal</div>
       </div>
-      <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">open goals</span><span class="chip-value">—</span></div>
-      </div>
-      <div class="filter-bar">filter · period · options — coming in Part 2</div>
-      <div class="detail-section"><div class="coming-soon">life — coming in Part 2</div></div>
+      <div class="coming-soon">life — coming soon</div>
     </div>
 
   </main>
 
-  <script>
-    /* ─────────────────────────────────────
-       CHAIJOHN OS — Shell v1 (Part 1)
-       Theme · Nav groups · Router · Auth
-    ───────────────────────────────────── */
+  <!-- ── Collection Modals (global, always in DOM) ── -->
+  <div class="modal-backdrop hidden" id="asset-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="asset-modal-title">Add Asset</span>
+        <button class="btn btn-sm btn-outline" id="asset-modal-close">×</button>
+      </div>
+      <input type="hidden" id="asset-edit-id">
+      <div class="form-group"><label for="asset-name">Name</label><input type="text" id="asset-name" placeholder="Asset name"></div>
+      <div class="form-row">
+        <div class="form-group"><label for="asset-category">Category</label><select id="asset-category"><option value="Collection-Knife">Knife</option><option value="Collection-Vice">Vice</option><option value="Collection-Plant">Plant</option><option value="Collection-Doll">Doll</option><option value="Property">Property</option><option value="Vehicle">Vehicle</option><option value="Electronics">Electronics</option><option value="Business">Business</option><option value="Inventory">Inventory</option><option value="Other">Other</option></select></div>
+        <div class="form-group"><label for="asset-status">Status</label><select id="asset-status"><option value="Holding">Holding</option><option value="For Sale">For Sale</option><option value="Sold">Sold</option><option value="Invested">Invested</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="asset-cost">Cost Price (฿)</label><input type="number" id="asset-cost"></div>
+        <div class="form-group"><label for="asset-value">Estimated Value (฿)</label><input type="number" id="asset-value"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="asset-date">Date Acquired</label><input type="date" id="asset-date"></div>
+        <div class="form-group"><label for="asset-velocity">Velocity</label><select id="asset-velocity"><option value="Fast move">Fast move</option><option value="Slow move">Slow move</option><option value="Illiquid">Illiquid</option></select></div>
+      </div>
+      <div class="form-group"><label for="asset-notes">Notes</label><textarea id="asset-notes" rows="2"></textarea></div>
+      <div class="form-group"><label for="asset-image-file">Image Upload</label><input type="file" id="asset-image-file" accept="image/*" style="padding:0.3rem"></div>
+      <div class="form-group"><label for="asset-image-url">Or Cloudinary URL</label><input type="text" id="asset-image-url" placeholder="https://res.cloudinary.com/..."></div>
+      <div id="asset-image-preview" style="margin-bottom:1rem"></div>
+      <div class="flex justify-between">
+        <button class="btn btn-outline" id="asset-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="save-asset-btn">Save</button>
+      </div>
+    </div>
+  </div>
 
-    /* ── Theme (runs before paint) ── */
+  <div class="modal-backdrop hidden" id="sell-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Mark as Sold</span>
+        <button class="btn btn-sm btn-outline" id="sell-modal-close">×</button>
+      </div>
+      <input type="hidden" id="sell-asset-id">
+      <div class="form-group"><label for="sell-price">Sold Price (฿)</label><input type="number" id="sell-price"></div>
+      <div class="form-row">
+        <div class="form-group"><label for="sell-date">Sold Date</label><input type="date" id="sell-date"></div>
+        <div class="form-group"><label for="sell-via">Platform / Via</label><input type="text" id="sell-via" placeholder="Facebook, Line, etc."></div>
+      </div>
+      <div class="flex justify-between">
+        <button class="btn btn-outline" id="sell-cancel">Cancel</button>
+        <button class="btn btn-success" id="confirm-sell">Confirm Sale</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="share-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Share Asset</span>
+        <button class="btn btn-sm btn-outline" id="share-modal-close">×</button>
+      </div>
+      <input type="hidden" id="share-asset-id">
+      <div id="share-buttons" style="display:flex;flex-direction:column;gap:0.75rem">
+        <button class="btn btn-primary" id="share-fb">📘 Share on Facebook</button>
+        <button class="btn btn-outline" id="share-ig">📷 Copy Instagram Caption</button>
+        <button class="btn btn-outline" id="share-ploikong">🔄 Ploikong Sync (v2)</button>
+      </div>
+      <div id="share-feedback" style="margin-top:1rem;font-size:0.85rem;color:var(--green)"></div>
+    </div>
+  </div>
+
+  <!-- Add asset FAB (collection panel) -->
+  <button class="fab-btn" id="add-asset-fab" title="Add Asset" style="display:none">+</button>
+
+  <script>
+    /* ── CHAIJOHN OS Shell v2 (9B) ── */
+
+    /* Theme (runs before paint) */
     (function () {
-      const saved = localStorage.getItem('chaijohn-theme') || 'dark';
+      var saved = localStorage.getItem('chaijohn-theme') || 'dark';
       document.documentElement.setAttribute('data-theme', saved);
-      const icon  = document.getElementById('theme-icon');
-      const label = document.getElementById('theme-label');
+      var icon  = document.getElementById('theme-icon');
+      var label = document.getElementById('theme-label');
       if (saved === 'light') {
         if (icon)  icon.textContent  = '☀️';
         if (label) label.textContent = 'Light mode';
@@ -776,15 +1015,15 @@
     })();
 
     document.getElementById('theme-toggle').addEventListener('click', function () {
-      const current = document.documentElement.getAttribute('data-theme') || 'dark';
-      const next    = current === 'dark' ? 'light' : 'dark';
+      var current = document.documentElement.getAttribute('data-theme') || 'dark';
+      var next    = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('chaijohn-theme', next);
       document.getElementById('theme-icon').textContent  = next === 'dark' ? '🌙' : '☀️';
       document.getElementById('theme-label').textContent = next === 'dark' ? 'Dark mode' : 'Light mode';
     });
 
-    /* ── Collapsible groups ── */
+    /* Collapsible nav groups */
     document.querySelectorAll('.nav-group-header').forEach(function (header) {
       header.addEventListener('click', function () {
         header.closest('.nav-group').classList.toggle('open');
@@ -794,19 +1033,29 @@
     /* ── Router ── */
     var ROUTES = [
       'dashboard','cashflow','sales','expenses','projects',
-      'budget','liabilities','entry','ideas','collection',
-      'hard-assets','proj-assets','ai','mindmap','life'
+      'budget','liabilities','ideas','collection',
+      'hard-assets','proj-assets','ai','mindmap','timemanagement','life'
     ];
+
+    /* Context-aware entry tab map */
+    var PANEL_TAB_MAP = {
+      cashflow:    'transactions',
+      expenses:    'budgets',
+      liabilities: 'liabilities',
+      budget:      'budgets'
+    };
+
+    var currentRoute = 'dashboard';
 
     function navigate(route) {
       if (!ROUTES.includes(route)) route = 'dashboard';
+      currentRoute = route;
 
       document.querySelectorAll('.route-panel').forEach(function (p) {
         p.classList.toggle('active', p.id === 'panel-' + route);
       });
-
       document.querySelectorAll('.nav-item[data-route]').forEach(function (item) {
-        const match = item.dataset.route === route;
+        var match = item.dataset.route === route;
         item.classList.toggle('active', match);
         if (match) {
           var group = item.closest('.nav-group');
@@ -814,9 +1063,20 @@
         }
       });
 
-      if (location.hash !== '#' + route) {
-        history.replaceState(null, '', '#' + route);
+      if (location.hash !== '#' + route) history.replaceState(null, '', '#' + route);
+
+      /* Show/hide collection FAB */
+      var fab = document.getElementById('add-asset-fab');
+      if (fab) fab.style.display = route === 'collection' ? 'flex' : 'none';
+
+      /* Context-aware drawer tab switching (if drawer open/pinned) */
+      var drawer = document.getElementById('entry-drawer');
+      if (drawer && drawer.classList.contains('open') && PANEL_TAB_MAP[route]) {
+        switchEntryTab(PANEL_TAB_MAP[route]);
       }
+
+      /* Dispatch panelactivated for lazy injectors */
+      window.dispatchEvent(new CustomEvent('panelactivated', { detail: route }));
     }
 
     document.querySelectorAll('.nav-item[data-route]').forEach(function (item) {
@@ -825,6 +1085,57 @@
 
     window.addEventListener('hashchange', function () {
       navigate(location.hash.replace('#', '') || 'dashboard');
+    });
+
+    /* ── Entry Drawer ── */
+    var drawer      = document.getElementById('entry-drawer');
+    var pinBtn      = document.getElementById('entry-pin-btn');
+    var closeBtn    = document.getElementById('entry-close-btn');
+    var mainEl      = document.getElementById('main');
+    var drawerPinned = false;
+
+    function openDrawer() {
+      drawer.classList.add('open');
+      document.getElementById('entry-nav-btn').classList.add('active');
+      /* Context-aware tab on open */
+      if (PANEL_TAB_MAP[currentRoute]) switchEntryTab(PANEL_TAB_MAP[currentRoute]);
+    }
+    function closeDrawer() {
+      if (drawerPinned) return;
+      drawer.classList.remove('open');
+      document.getElementById('entry-nav-btn').classList.remove('active');
+    }
+    function toggleDrawer() {
+      if (drawer.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
+    }
+    function switchEntryTab(tabName) {
+      var btn = document.querySelector('#entry-tabs .tab-btn[data-tab="' + tabName + '"]');
+      if (btn) btn.click();
+    }
+
+    document.getElementById('entry-nav-btn').addEventListener('click', toggleDrawer);
+
+    closeBtn.addEventListener('click', function () {
+      drawerPinned = false;
+      pinBtn.classList.remove('pinned');
+      pinBtn.textContent = '📌 Pin';
+      mainEl.classList.remove('drawer-pinned');
+      drawer.classList.remove('open');
+      document.getElementById('entry-nav-btn').classList.remove('active');
+    });
+
+    pinBtn.addEventListener('click', function () {
+      drawerPinned = !drawerPinned;
+      if (drawerPinned) {
+        pinBtn.classList.add('pinned');
+        pinBtn.textContent = '📍 Pinned';
+        mainEl.classList.add('drawer-pinned');
+        drawer.classList.add('open');
+      } else {
+        pinBtn.classList.remove('pinned');
+        pinBtn.textContent = '📌 Pin';
+        mainEl.classList.remove('drawer-pinned');
+      }
     });
 
     /* ── Auth ── */
@@ -836,60 +1147,49 @@
       var setupEl   = document.getElementById('auth-setup');
       var submitBtn = document.getElementById('enter-btn');
 
-      function showError(msg) {
-        errEl.textContent = msg;
-        errEl.style.display = 'block';
-        setupEl.style.display = 'none';
-      }
-
-      function showSetup() {
-        setupEl.style.display = 'block';
-        errEl.style.display = 'none';
-      }
-
-      function revealShell() {
-        overlay.classList.add('hidden');
-        navigate(location.hash.replace('#', '') || 'dashboard');
-      }
+      function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; setupEl.style.display = 'none'; }
+      function showSetup()    { setupEl.style.display = 'block'; errEl.style.display = 'none'; }
+      function revealShell()  { overlay.classList.add('hidden'); navigate(location.hash.replace('#', '') || 'dashboard'); }
 
       async function doLogin() {
         var pin = (pinInput.value || '').trim();
         if (!pin) { showError('Please enter your PIN.'); return; }
-        errEl.style.display = 'none';
-        setupEl.style.display = 'none';
-        submitBtn.disabled = true;
+        errEl.style.display = 'none'; setupEl.style.display = 'none'; submitBtn.disabled = true;
         try {
           var r = await fetch('/api/auth/verify', {
-            method: 'POST',
-            credentials: 'same-origin',
+            method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pin: pin })
           });
-          if (r.ok) {
-            revealShell();
-          } else if (r.status === 404) {
-            showSetup();
-          } else {
+          if (r.ok) { revealShell(); }
+          else if (r.status === 404) { showSetup(); }
+          else {
             var msg = 'Incorrect PIN';
             try { var d = await r.json(); if (d && d.error) msg = d.error; } catch (e) {}
             showError(msg);
           }
-        } catch (e) {
-          showError('Connection error. Please try again.');
-        } finally {
-          submitBtn.disabled = false;
-        }
+        } catch (e) { showError('Connection error. Please try again.'); }
+        finally { submitBtn.disabled = false; }
       }
 
       form.addEventListener('submit', function (e) { e.preventDefault(); doLogin(); });
       if (pinInput) pinInput.focus();
-
-      /* already logged in? skip overlay */
       fetch('/api/auth/check', { credentials: 'same-origin' })
         .then(function (r) { if (r.ok) revealShell(); })
         .catch(function () { /* stay on overlay */ });
     })();
   </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="/assets/js/dropzone.js" defer></script>
+  <script src="/assets/js/dash-overview.injector.js" defer></script>
+  <script src="/assets/js/cashflow.injector.js" defer></script>
+  <script src="/assets/js/expenses.injector.js" defer></script>
+  <script src="/assets/js/liabilities-panel.injector.js" defer></script>
+  <script src="/assets/js/budget-panel.injector.js" defer></script>
+  <script src="/assets/js/collection.injector.js" defer></script>
+  <script src="/assets/js/ai-advisor.injector.js" defer></script>
+  <script src="/assets/js/entry.injector.js" defer></script>
 
 </body>
 </html>

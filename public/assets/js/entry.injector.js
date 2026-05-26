@@ -1216,7 +1216,10 @@
   }
 
   async function deleteBudget(budgetId, panel) {
-    if (!confirm('Delete this budget? Cannot be undone.')) return;
+    const label = panel.querySelector('.be-label')?.value?.trim() || 'this budget';
+    const typed = window.prompt(`Type the budget name to confirm deletion:\n"${label}"`);
+    if (typed === null) return;
+    if (typed.trim() !== label.trim()) { alert('Name did not match — deletion cancelled.'); return; }
     const msgEl = panel.querySelector('.be-msg');
     try {
       await api(`/api/budgets/${budgetId}`, { method: 'DELETE' });
