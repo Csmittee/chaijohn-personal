@@ -226,8 +226,6 @@
     loadAndRender().catch(console.error);
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (el('panel-cashflow')?.classList.contains('active')) init();
-  });
   window.addEventListener('panelactivated', e => { if (e.detail === 'cashflow') init(); });
+  if (el('panel-cashflow')?.classList.contains('active')) init();
 })();
