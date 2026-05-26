@@ -821,10 +821,10 @@
       </div>
       <div class="filter-bar" id="collection-filters">
         <div class="period-toggle">
-          <button class="period-btn active" data-status="">All</button>
-          <button class="period-btn" data-status="Holding">Holding</button>
-          <button class="period-btn" data-status="For Sale">For Sale</button>
-          <button class="period-btn" data-status="Sold">Sold</button>
+          <button class="period-btn active" data-status-filter="all">All</button>
+          <button class="period-btn" data-status-filter="Holding">Holding</button>
+          <button class="period-btn" data-status-filter="For Sale">For Sale</button>
+          <button class="period-btn" data-status-filter="Sold">Sold</button>
         </div>
         <select id="category-filter" style="width:auto">
           <option value="">All Categories</option>
@@ -996,8 +996,8 @@
     </div>
   </div>
 
-  <!-- Add asset FAB (collection panel) -->
-  <button class="fab-btn" id="add-asset-fab" title="Add Asset" style="display:none">+</button>
+  <!-- Add asset FAB (collection panel) — id must match collection.injector.js -->
+  <button class="fab-btn" id="add-asset-btn" title="Add Asset" style="display:none">+</button>
 
   <script>
     /* ── CHAIJOHN OS Shell v2 (9B) ── */
@@ -1066,7 +1066,7 @@
       if (location.hash !== '#' + route) history.replaceState(null, '', '#' + route);
 
       /* Show/hide collection FAB */
-      var fab = document.getElementById('add-asset-fab');
+      var fab = document.getElementById('add-asset-btn');
       if (fab) fab.style.display = route === 'collection' ? 'flex' : 'none';
 
       /* Context-aware drawer tab switching (if drawer open/pinned) */
@@ -1188,7 +1188,7 @@
   <script src="/assets/js/liabilities-panel.injector.js" defer></script>
   <script src="/assets/js/budget-panel.injector.js" defer></script>
   <script src="/assets/js/collection.injector.js" defer></script>
-  <script src="/assets/js/ai-advisor.injector.js" defer></script>
+  <script src="/assets/js/ai.injector.js" defer></script>
   <script src="/assets/js/entry.injector.js" defer></script>
 
 </body>

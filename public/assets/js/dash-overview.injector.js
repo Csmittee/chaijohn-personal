@@ -282,8 +282,6 @@
     loadAndRender().catch(console.error);
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (el('panel-dashboard')?.classList.contains('active')) init();
-  });
   window.addEventListener('panelactivated', e => { if (e.detail === 'dashboard') init(); });
+  if (el('panel-dashboard')?.classList.contains('active')) init();
 })();

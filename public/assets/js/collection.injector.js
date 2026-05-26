@@ -21,7 +21,7 @@ async function api(path, options) {
     headers: Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}),
     credentials: 'same-origin'
   }));
-  if (res.status === 401) { window.location.href = '/index.html'; throw new Error('Unauthorized'); }
+  if (res.status === 401) { throw new Error('Unauthorized'); }
   return res;
 }
 
@@ -594,4 +594,10 @@ document.addEventListener('DOMContentLoaded', function () {
       ['asset-modal', 'sell-modal', 'share-modal'].forEach(closeModal);
     }
   });
+});
+
+// Reload assets when collection panel activates (handles case where DOMContentLoaded fired before auth)
+var collectionLoaded = false;
+window.addEventListener('panelactivated', function (e) {
+  if (e.detail === 'collection') { loadAssets(); collectionLoaded = true; }
 });

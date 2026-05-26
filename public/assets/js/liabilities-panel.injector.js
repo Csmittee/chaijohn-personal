@@ -200,8 +200,6 @@
     loadAndRender().catch(console.error);
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (el('panel-liabilities')?.classList.contains('active')) init();
-  });
   window.addEventListener('panelactivated', e => { if (e.detail === 'liabilities') init(); });
+  if (el('panel-liabilities')?.classList.contains('active')) init();
 })();
