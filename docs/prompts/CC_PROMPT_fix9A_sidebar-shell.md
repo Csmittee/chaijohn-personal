@@ -96,7 +96,7 @@ On load: `GET /api/auth/check` — if 200, bypass overlay immediately.
 ## Files Changed
 
 - `public/index.html` — REPLACED (full new file)
-- `docs/prompts/CC_PROMPT_phase9a_sidebar-shell.md` — created (this file, stamped ✅)
+- `docs/prompts/CC_PROMPT_fix9A_sidebar-shell.md` — created (this file, stamped ✅)
 - `masterseed.md` — updated (Phase 9a added, roadmap updated)
 - `lessons_learned.md` — updated (L039 appended)
 

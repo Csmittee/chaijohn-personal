@@ -178,7 +178,7 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
 │   ├── LESSONS.md                       ✅ exists (legacy — superseded by lessons_learned.md)
 │   ├── DECISIONS.md                     ✅ exists
 │   ├── PROGRESS.md                      ✅ exists
-│   └── prompts/                         ← CC prompt archive (create this folder)
+│   └── prompts/                         ✅ CC_PROMPT_fix9A + fixA–fixG archived
 └── public/                              ← Cloudflare Pages serves this
     ├── index.html                       ✅ Chairit OS sidebar shell (Phase 9a — Part 1)
     ├── dashboard.html                   ✅ working
@@ -239,7 +239,7 @@ functions/
 | Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
 | Fix F | F1 Category group 422 fix · F2 Debts liability→Income tx · F3 Transaction DELETE button · F4 Budget meter active/period filter · F5-F6 Dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow / T2 Expense / T3 Debt / T4 Annual Plan) | ✅ COMPLETE |
 | Fix G | G1 Transactions API reads/writes budget_id (GET enriches budget_label+category via budget; POST requires budget_id for Expense; PATCH accepts budget_id) · G2 Budgets API returns category_name/group/type + expense_only filter · G3 Transaction expense dropdown → Budget list grouped by category_group · G4 Transaction list display uses server-enriched budget fields + legacy fallback · G5 Budget creation enforces unique label+category_id (API 400 + UI keeps form on error) · G6 Budget category dropdown = Expense only; section renamed to "Add Budget Item" · G7 Dashboard resolves category via budget_id using resolveCatId() helper | ✅ COMPLETE |
-| Phase 9a | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
+| Fix 9A | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
