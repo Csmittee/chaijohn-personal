@@ -82,7 +82,18 @@
     if (balEl) balEl.style.color = currentCash >= 0 ? 'var(--green)' : 'var(--red)';
 
     const syncEl = el('cf-sync-info');
-    if (syncEl) syncEl.textContent = syncPoint ? '⚡ sync: ' + fmt(syncBal) + ' · ' + syncDate : '';
+    if (syncEl) {
+      syncEl.innerHTML = syncPoint
+        ? `⚡ sync: ${fmt(syncBal)} · ${syncDate} <span style="font-size:0.6rem;opacity:0.55">[edit]</span>`
+        : `<span style="text-decoration:underline dotted">⚡ Set startup cash</span>`;
+      if (!syncEl._cfSyncBound) {
+        syncEl._cfSyncBound = true;
+        syncEl.addEventListener('click', () => {
+          const form = el('cf-sync-form');
+          if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        });
+      }
+    }
 
     return { currentCash, dailyNet };
   }
@@ -271,10 +282,42 @@ ${items.map(t => {
     renderCards();
   }
 
+  function initSyncForm() {
+    const saveBtn = el('cf-sync-save');
+    if (!saveBtn) return;
+    const today = new Date().toISOString().split('T')[0];
+    const dateEl = el('cf-sync-date');
+    if (dateEl && !dateEl.value) dateEl.value = today;
+    saveBtn.addEventListener('click', async () => {
+      const balance = Number(el('cf-sync-balance')?.value || 0);
+      const date    = el('cf-sync-date')?.value || today;
+      const msgEl   = el('cf-sync-msg');
+      if (!balance || !date) {
+        if (msgEl) { msgEl.textContent = 'Balance and date required'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+        return;
+      }
+      try {
+        const r = await fetch('/api/cashflow-sync', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ balance, date })
+        });
+        if (!r.ok) throw new Error('API ' + r.status);
+        const form = el('cf-sync-form');
+        if (form) form.style.display = 'none';
+        loadAndRender().catch(console.error);
+      } catch (err) {
+        const msgEl = el('cf-sync-msg');
+        if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+      }
+    });
+  }
+
   function init() {
     if (initialized) return; initialized = true;
     initRangeToggle();
     initViewToggle();
+    initSyncForm();
     loadAndRender().catch(console.error);
   }
 

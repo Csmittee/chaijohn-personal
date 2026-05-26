@@ -453,7 +453,7 @@
               </div>
             </div>
             <div id="yoy-legend" style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.78rem"></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div style="display:grid;grid-template-columns:1fr;gap:1rem">
               <div id="yoy-wrap-elec-units"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Electricity Units</div><div class="chart-container" style="height:140px"><canvas id="yoy-elec-units"></canvas></div></div>
               <div id="yoy-wrap-elec-charge"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Electricity Charge ฿</div><div class="chart-container" style="height:140px"><canvas id="yoy-elec-charge"></canvas></div></div>
               <div id="yoy-wrap-water-units"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">Water Units</div><div class="chart-container" style="height:140px"><canvas id="yoy-water-units"></canvas></div></div>
@@ -714,7 +714,16 @@
         <div class="stat-chip"><span class="chip-label">balance</span><span class="chip-value" id="cf-balance">—</span></div>
         <div class="stat-chip"><span class="chip-label">next income</span><span class="chip-value" id="cf-incoming-due">—</span></div>
       </div>
-      <div id="cf-sync-info"></div>
+      <div id="cf-sync-info" style="cursor:pointer"></div>
+      <div id="cf-sync-form" style="display:none;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:0.6rem 0.85rem;margin-bottom:0.5rem">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--text-dim);margin-bottom:0.4rem;letter-spacing:0.06em">SET STARTUP CASH BALANCE</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <input type="number" id="cf-sync-balance" placeholder="Balance ฿" style="width:130px;font-size:0.82rem;padding:0.25rem 0.5rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input type="date" id="cf-sync-date" style="font-size:0.82rem;padding:0.25rem 0.5rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <button id="cf-sync-save" style="font-size:0.82rem;padding:0.25rem 0.75rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600">Save</button>
+        </div>
+        <div id="cf-sync-msg" style="display:none;font-size:0.78rem;margin-top:0.3rem"></div>
+      </div>
       <div id="cf-range-toggle" class="range-toggle">
         <button class="range-btn active" data-range="1m">1M</button>
         <button class="range-btn" data-range="3m">3M</button>
