@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-26
-> Current highest lesson: L047
+> Current highest lesson: L052
 
 ---
 
@@ -294,6 +294,35 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Entry utility drawer showed a full 12-month history table + 2 charts + 4 YoY charts as always-visible. This occupied most of the drawer, pushing the entry form far below the fold.
 **Rule:** For large data-history sections in a drawer/panel: (1) default to collapsed (`display:none` on body div); (2) always show a one-line summary of the most recent record above the toggle button; (3) chevron text "▶ Show history" / "▲ Hide history" communicates collapsed state; (4) guard the toggle listener with `_utilToggleInit` flag to prevent double-binding if `loadUtilityHistory()` is called multiple times (e.g. after save).
 **Tag:** #ux #drawer #collapse
+
+---
+
+## FIX 9B3 — Section Bands, Proportional Cards, Entry FAB (2026-05-26)
+
+### L048 — Section band pattern for grouped card views
+**Problem:** User wanted "left tab zoning" for grouped card lists (liability types, expense groups, cashflow directions). Multi-column card grids with no visual grouping make it impossible to scan categories.
+**Rule:** Add a full-width `.section-band` header before each group's card grid. HTML structure: `<div class="section-band">GROUP NAME</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.75rem;margin-bottom:1rem">...cards...</div>`. The `.section-band` CSS uses `background: rgba(255,255,255,0.04); border-left: 3px solid var(--accent); padding: 0.35rem 0.75rem; font-size: 0.7rem; font-weight:600; letter-spacing:0.08em; color: var(--text-dim); text-transform:uppercase`. Color can be overridden inline for semantic sections (green=cash-in, red=cash-out).
+**Tag:** #shell #cards #ux #css
+
+### L049 — Proportional card height via sqrt scaling
+**Problem:** Using raw amount / maxAmount for card heights produces extreme aspect ratios — the largest card is enormous while small cards are invisible.
+**Rule:** Use `Math.max(72, Math.sqrt(amount / maxAmount) * 160)` px as the card `min-height`. The sqrt function compresses the range: a card worth 10% of max gets `√0.1 × 160 = 50.6 → 72px` (floor), while max gets 160px. This gives visible proportionality without extreme sizing. Use 72px floor and 160px ceiling consistently across cashflow, expenses, and liabilities card views.
+**Tag:** #cards #ux #chartjs
+
+### L050 — Chart.js single-data-point: use bar not line
+**Problem:** A line chart with only one data point renders as a single dot — no line, no fill, looks broken. This happens in the expenses trend when "Current Month" is selected (only one month label).
+**Rule:** Check `const isSingle = months === 1` before creating the trend chart. When `isSingle`, use `type: 'bar'` with `borderRadius: 4`, `backgroundColor: '#ef4444'`, `borderWidth: 0`. When `!isSingle`, use `type: 'line'` with `fill: true`, `borderWidth: 2`. The `data`, `labels`, and `scales` options work identically for both types.
+**Tag:** #chartjs #expenses #ux
+
+### L051 — Entry FAB: position:fixed for cross-panel access
+**Problem:** The entry toggle button was inside the nav sidebar, making it feel like a navigation item rather than a quick-action tool. Users had to return to nav to open the entry drawer.
+**Rule:** Place the entry FAB (`#entry-fab`) as `position:fixed; top:0.7rem; right:1rem; z-index:400` directly inside `<body>`. This makes it overlay every panel without being part of the sidebar nav. Use a compact yellow `⊕ Entry` button style matching the brand accent. Wire to the same `toggleDrawer()` function — no change to drawer logic needed.
+**Tag:** #shell #entry #ux #css
+
+### L052 — Frosted glass for overlay panels
+**Problem:** The entry drawer had a solid `var(--bg-raised)` background — felt heavy and covered all context behind it.
+**Rule:** For side drawers / overlay panels, use semi-transparent frosted glass: `background: rgba(12,12,20,0.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px)`. The rgba matches the dark shell background (`--bg-base: #0c0c14`) at 88% opacity. The blur creates depth without obscuring the content underneath. Always include the `-webkit-` prefix for Safari support.
+**Tag:** #css #shell #ux #drawer
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
