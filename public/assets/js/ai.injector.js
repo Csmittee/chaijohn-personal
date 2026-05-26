@@ -17,7 +17,7 @@ async function api(path, options) {
     headers: Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}),
     credentials: 'same-origin'
   }));
-  if (res.status === 401) { window.location.href = '/index.html'; throw new Error('Unauthorized'); }
+  if (res.status === 401) { throw new Error('Unauthorized'); }
   return res;
 }
 
@@ -397,7 +397,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // Save session before page unload
   window.addEventListener('beforeunload', function () {
     if (currentMessages.length >= 2 && !sessionSaved) {
-      // Synchronous fallback — use sendBeacon if available
       if (navigator.sendBeacon) {
         const payload = JSON.stringify({
           session_id: sessionId,
@@ -408,4 +407,19 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
   });
+});
+
+// Reload AI context when panel activates (handles case where DOMContentLoaded fired before auth)
+var aiContextLoaded = false;
+window.addEventListener('panelactivated', function (e) {
+  if (e.detail === 'ai' && !aiContextLoaded) {
+    aiContextLoaded = true;
+    loadFinancialContext().then(function () {
+      renderContextPanel();
+      if (document.getElementById('messages')?.children.length === 0) {
+        showWelcomeMessage();
+        renderSuggestedPrompts();
+      }
+    }).catch(function () {});
+  }
 });
