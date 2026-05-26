@@ -1389,14 +1389,14 @@
 
     function openDrawer() {
       drawer.classList.add('open');
-      document.getElementById('entry-nav-btn').classList.add('active');
+      const _enb = document.getElementById('entry-nav-btn'); if (_enb) _enb.classList.add('active');
       /* Context-aware tab on open */
       if (PANEL_TAB_MAP[currentRoute]) switchEntryTab(PANEL_TAB_MAP[currentRoute]);
     }
     function closeDrawer() {
       if (drawerPinned) return;
       drawer.classList.remove('open');
-      document.getElementById('entry-nav-btn').classList.remove('active');
+      const _enb = document.getElementById('entry-nav-btn'); if (_enb) _enb.classList.remove('active');
     }
     function toggleDrawer() {
       if (drawer.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
@@ -1406,7 +1406,7 @@
       if (btn) btn.click();
     }
 
-    document.getElementById('entry-nav-btn').addEventListener('click', toggleDrawer);
+    const _enbToggle = document.getElementById('entry-nav-btn'); if (_enbToggle) _enbToggle.addEventListener('click', toggleDrawer);
 
     closeBtn.addEventListener('click', function () {
       drawerPinned = false;
@@ -1414,7 +1414,7 @@
       pinBtn.textContent = '📌 Pin';
       mainEl.classList.remove('drawer-pinned');
       drawer.classList.remove('open');
-      document.getElementById('entry-nav-btn').classList.remove('active');
+      const _enb2 = document.getElementById('entry-nav-btn'); if (_enb2) _enb2.classList.remove('active');
     });
 
     pinBtn.addEventListener('click', function () {
