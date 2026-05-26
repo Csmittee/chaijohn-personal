@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
-> Last updated: 2026-05-25
-> Current highest lesson: L038
+> Last updated: 2026-05-26
+> Current highest lesson: L039
 
 ---
 
@@ -239,6 +239,17 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** No duplicate check on category name allowed identical records to be created (e.g. "Dog food" created twice). Frontend has no mechanism to prevent this — only the API can enforce it.
 **Rule:** POST /api/categories checks for existing records with the same name (case-insensitive, using Airtable formula `LOWER({name})="..."`) before creating. Returns 400 if duplicate found. UI shows inline error without clearing the form so the user can correct.
 **Tag:** #categories #validation #api
+
+---
+
+## PHASE 9a — Sidebar Shell (2026-05-26)
+
+### L039 — Sidebar shell auth: overlay + /api/auth/check bypass
+**Problem:** New `index.html` is both the login page AND the app shell. auth.js was designed for a redirect pattern (login page → dashboard.html). Reusing it wholesale would cause a redirect loop.
+**Rule:** For the sidebar shell pattern, handle auth inline. Show a full-screen overlay by default. On DOM load, call `GET /api/auth/check` — if 200, call `revealShell()` immediately to bypass the PIN overlay. If not, wait for form submit → `POST /api/auth/verify`. `revealShell()` hides the overlay and calls `navigate(hash || 'dashboard')`. Do NOT load auth.js on this page — the inline script handles the full auth lifecycle.
+**Tag:** #auth #shell #architecture
+
+---
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.

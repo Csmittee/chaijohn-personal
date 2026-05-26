@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-25 — Fix G complete; prompts A–G archived to docs/prompts/
+> Last Updated: 2026-05-26 — Phase 9a complete; sidebar shell Part 1 merged to feat/sidebar-shell
 
 ---
 
@@ -180,7 +180,7 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
 │   ├── PROGRESS.md                      ✅ exists
 │   └── prompts/                         ← CC prompt archive (create this folder)
 └── public/                              ← Cloudflare Pages serves this
-    ├── index.html                       ✅ PIN login
+    ├── index.html                       ✅ Chairit OS sidebar shell (Phase 9a — Part 1)
     ├── dashboard.html                   ✅ working
     ├── entry.html                       ✅ working (A/B/C fixes pending)
     ├── diary.html                       ✅ working after Phase 4 fixes
@@ -239,6 +239,7 @@ functions/
 | Fix E | E1 Category hierarchy + free-text group (Meta API) · E2 Entity autocomplete · E3 Liability cashflow direction · E4 KV cashflow sync point · E5 In-vs-out view toggle · E6 Period-aware budget meters · E7 4-panel top-row layout | ✅ COMPLETE |
 | Fix F | F1 Category group 422 fix · F2 Debts liability→Income tx · F3 Transaction DELETE button · F4 Budget meter active/period filter · F5-F6 Dashboard graph train (horizontal scroll) + dynamic content zone (T1 Cashflow / T2 Expense / T3 Debt / T4 Annual Plan) | ✅ COMPLETE |
 | Fix G | G1 Transactions API reads/writes budget_id (GET enriches budget_label+category via budget; POST requires budget_id for Expense; PATCH accepts budget_id) · G2 Budgets API returns category_name/group/type + expense_only filter · G3 Transaction expense dropdown → Budget list grouped by category_group · G4 Transaction list display uses server-enriched budget fields + legacy fallback · G5 Budget creation enforces unique label+category_id (API 400 + UI keeps form on error) · G6 Budget category dropdown = Expense only; section renamed to "Add Budget Item" · G7 Dashboard resolves category via budget_id using resolveCatId() helper | ✅ COMPLETE |
+| Phase 9a | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -280,9 +281,10 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-1. QA Fix G live: confirm expense dropdown shows budget list grouped by category, earn dropdown shows earn categories, transaction display shows "Basic Living — Food restaurant" format, legacy records show "(legacy)" tag, budget form shows "Add Budget Item", duplicate budget label returns 400 + form stays populated, dashboard T2/Pareto/alerts resolve category via budget_id
-2. Collection module full test + buyer tags
-3. AI Advisor full test + verify financial context loads
+1. Phase 9b — Wire dashboard T1 cashflow into new sidebar shell (cashflow panel gets live chart + cards)
+2. Phase 9c — Wire remaining panels (entry, budget, liabilities, expenses) to existing injector logic
+3. Collection module full test + buyer tags
+4. AI Advisor full test + verify financial context loads
 
 **After that:**
 4. Diary → social push (FB/IG) with image capability
