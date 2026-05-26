@@ -34,12 +34,13 @@
         <div style="padding:0.75rem;border-bottom:1px solid var(--border)">
           <input type="search" id="diary-search" placeholder="Search entries..." class="w-full" style="margin-bottom:0.5rem">
           <div class="flex" style="gap:0.4rem;flex-wrap:wrap" id="type-filters">
-            <button class="badge badge-primary" data-type="">All</button>
-            <button class="badge badge-gray" data-type="Story">Story</button>
-            <button class="badge badge-gray" data-type="Idea">Idea</button>
-            <button class="badge badge-gray" data-type="Blog">Blog</button>
-            <button class="badge badge-gray" data-type="Project">Project</button>
-            <button class="badge badge-gray" data-type="Skill">Skill</button>
+            <button class="badge badge-primary" data-type="" data-count="0">All</button>
+            <button class="badge badge-gray" data-type="Story" data-count="0">Story</button>
+            <button class="badge badge-gray" data-type="Idea" data-count="0">Idea</button>
+            <button class="badge badge-gray" data-type="Blog" data-count="0">Blog</button>
+            <button class="badge badge-gray" data-type="Project" data-count="0">Project</button>
+            <button class="badge badge-gray" data-type="Skill" data-count="0">Skill</button>
+            <button class="badge badge-gray" data-type="Memo" data-count="0">Memo</button>
           </div>
         </div>
         <div id="diary-entry-list"></div>
@@ -83,6 +84,7 @@
                   <option value="Blog">Blog</option>
                   <option value="Project">Project</option>
                   <option value="Skill">Skill</option>
+                  <option value="Memo">Memo</option>
                 </select>
               </div>
             </div>
@@ -124,6 +126,25 @@
               <span id="upload-image-status" style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem"></span>
             </div>
 
+            <!-- Distribution section (shown for Blog/Idea/Story types) -->
+            <div id="dist-section" style="display:none;padding:0.75rem;background:rgba(245,197,24,0.05);border-radius:var(--radius);margin-bottom:1rem;border:1px solid rgba(245,197,24,0.15)">
+              <div style="font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.5rem">Distribution</div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <a id="dist-web-btn" href="#" target="_blank" rel="noopener"
+                  style="display:none;font-size:0.78rem;padding:0.3rem 0.65rem;border-radius:4px;background:rgba(34,197,94,0.15);color:#22c55e;text-decoration:none;border:1px solid rgba(34,197,94,0.25)">
+                  🌐 Web Live
+                </a>
+                <button id="dist-social-btn"
+                  style="font-size:0.78rem;padding:0.3rem 0.65rem;border-radius:4px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);cursor:pointer;font-family:inherit">
+                  💬 Social (soon)
+                </button>
+                <button id="dist-project-btn"
+                  style="font-size:0.78rem;padding:0.3rem 0.65rem;border-radius:4px;background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);cursor:pointer;font-family:inherit">
+                  📁 Project (soon)
+                </button>
+              </div>
+            </div>
+
             <!-- Blog publish section (shown when type=Blog) -->
             <div id="blog-publish-section" style="display:none;padding:0.75rem;background:rgba(59,130,246,0.05);border-radius:var(--radius);margin-bottom:1rem;border:1px solid rgba(59,130,246,0.2)">
               <label class="flex items-center gap-1" style="cursor:pointer">
@@ -135,12 +156,9 @@
               </p>
             </div>
 
-            <!-- AI Assist trigger -->
-            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem;
-              display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
-              <button class="btn btn-outline btn-sm" id="ai-assist-btn">✨ AI Assist</button>
-              <button class="btn btn-sm btn-warning hidden" id="ai-undo-btn"
-                title="Undo last AI replace">↩ Undo AI</button>
+            <!-- AI Assist trigger — undo only (AI pane now always visible below) -->
+            <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+              <button class="btn btn-sm btn-warning hidden" id="ai-undo-btn" title="Undo last AI replace">↩ Undo AI</button>
             </div>
 
             <!-- AI Comparison Panel (shown after AI returns result, before user applies) -->
@@ -160,6 +178,28 @@
                 <button class="btn btn-sm btn-outline" id="ai-comp-keep">↩ Keep Original</button>
                 <button class="btn btn-sm btn-primary" id="ai-comp-replace">✓ Apply &amp; Replace</button>
                 <button class="btn btn-sm btn-success" id="ai-comp-append">⊕ Append</button>
+              </div>
+            </div>
+
+            <!-- AI Bottom Pane -->
+            <div id="ai-bottom-pane" style="border-top:1px solid var(--border);margin-top:0.75rem;padding-top:0.75rem">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.4rem">
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                  <button class="btn btn-sm btn-outline ai-assist-type" data-assist="refine">Refine</button>
+                  <button class="btn btn-sm btn-outline ai-assist-type" data-assist="expand">Expand</button>
+                  <button class="btn btn-sm btn-outline ai-assist-type" data-assist="summarize">Summary</button>
+                  <button class="btn btn-sm btn-outline ai-assist-type" data-assist="tags">Tags</button>
+                </div>
+                <button class="btn btn-sm btn-outline" id="ai-pane-toggle" title="Expand/Collapse AI pane">▼ AI</button>
+              </div>
+              <div id="ai-pane-body" style="display:none">
+                <div id="ai-pane-loading" style="display:none;font-size:0.8rem;color:var(--text-muted);padding:0.3rem 0">⏳ AI is thinking…</div>
+                <div id="ai-pane-output" style="min-height:60px;padding:0.75rem;background:var(--bg-raised);border-radius:var(--radius);font-size:0.88rem;white-space:pre-wrap;line-height:1.6;margin-bottom:0.5rem;border:1px solid var(--border)">Choose a mode above to get AI suggestions…</div>
+                <div id="ai-pane-actions" style="display:flex;gap:0.4rem;flex-wrap:wrap">
+                  <button class="btn btn-sm btn-primary" id="ai-pane-use-content">Use in Content</button>
+                  <button class="btn btn-sm btn-success" id="ai-pane-append">Append</button>
+                  <button class="btn btn-sm btn-outline" id="ai-pane-use-tags" style="display:none">Use as Tags</button>
+                </div>
               </div>
             </div>
           </div>

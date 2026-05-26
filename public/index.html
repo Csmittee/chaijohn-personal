@@ -804,22 +804,31 @@
     <div class="route-panel" id="panel-budget">
       <div class="panel-header">
         <div class="panel-title">Budget</div>
-        <div class="panel-subtitle">// plan · actuals · variance · hit/miss</div>
+        <div class="panel-subtitle">// 12-month plan · actuals · variance · Thai tax</div>
       </div>
       <div class="conclusion-row">
-        <div class="stat-chip"><span class="chip-label">plan / month</span><span class="chip-value" id="bud-plan-month">—</span></div>
-        <div class="stat-chip"><span class="chip-label">plan / 12mo</span><span class="chip-value" id="bud-plan-12">—</span></div>
-        <div class="stat-chip"><span class="chip-label">earn booked</span><span class="chip-value" id="bud-earn">—</span></div>
-        <div class="stat-chip"><span class="chip-label">avg balance</span><span class="chip-value" id="bud-avg-balance">—</span></div>
-        <div class="stat-chip"><span class="chip-label">budget gap</span><span class="chip-value" id="bud-gap">—</span></div>
-        <div class="stat-chip"><span class="chip-label">on track</span><span class="chip-value" id="bud-hit-count">—</span></div>
-        <div class="stat-chip"><span class="chip-label">over limit</span><span class="chip-value" id="bud-miss-count">—</span></div>
+        <div class="stat-chip"><span class="chip-label">earn /mo</span><span class="chip-value" id="bud-earn-mo">—</span></div>
+        <div class="stat-chip"><span class="chip-label">spend /mo</span><span class="chip-value" id="bud-spend-mo">—</span></div>
+        <div class="stat-chip"><span class="chip-label">gap /mo</span><span class="chip-value" id="bud-gap-mo">—</span></div>
+        <div class="stat-chip"><span class="chip-label">status</span><span class="chip-value" id="bud-status">—</span></div>
+      </div>
+      <div class="filter-bar" style="margin-bottom:1rem;gap:0.75rem;flex-wrap:wrap">
+        <div class="period-toggle" id="bud-view-toggle">
+          <button class="period-btn active" data-budview="actual">Actual</button>
+          <button class="period-btn" data-budview="budget">Budget</button>
+          <button class="period-btn" data-budview="gap">Gap</button>
+        </div>
+        <div class="period-toggle" id="bud-period-toggle">
+          <button class="period-btn active" data-budperiod="month">This Month</button>
+          <button class="period-btn" data-budperiod="12mo">12mo Avg</button>
+        </div>
+        <span style="font-size:0.75rem;color:var(--text-dim);align-self:center" id="bud-period-label"></span>
       </div>
       <div class="chart-panel" style="margin-bottom:1rem">
-        <div class="chart-panel-title">budget vs actual (T4)</div>
-        <div class="chart-wrap-tall"><canvas id="bud-chart"></canvas></div>
+        <div class="chart-panel-title">budget vs actual — last 6 months</div>
+        <div class="chart-wrap-tall"><canvas id="bud-bar-chart"></canvas></div>
       </div>
-      <div class="cards-zone" id="bud-cards"></div>
+      <div id="bud-grid" style="margin-bottom:1rem"></div>
     </div>
 
     <!-- ─── Liabilities ─── -->

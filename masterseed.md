@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-26 — Fix 9B3 complete; section bands, proportional cards, entry FAB, chart fixes
+> Last Updated: 2026-05-26 — Fix 9E complete; budget 12-month grid + Thai tax, diary Memo type + AI pane + dist buttons
 
 ---
 
@@ -247,7 +247,8 @@ functions/
 | Fix 9A | Sidebar Shell Part 1 — Chairit OS layout, hash routing, 15 route panels, auth overlay, theme toggle; replaced index.html | ✅ COMPLETE |
 | Fix 9B | Sidebar Shell Part 2 — M2 panel stat chips + charts + cards wired; entry drawer (pin-able, context-aware); dashboard overview + mini charts; Time Management stub; redirects for dashboard.html + entry.html; budget delete typed confirm | ✅ COMPLETE |
 | Fix 9B2 | QA fixes: F1a/b/c cashflow toggle+range+view; F2a-d expenses chart order+period+responsive+view; F3a liabilities chart swap; F4a/b entry utility chart toggle+collapse | ✅ COMPLETE |
-| Fix 9B3 | Card section bands (CASH IN/OUT, expense group, liability type), proportional card sizing, Bundle/Details toggle, bar chart single-month, entry FAB fixed top-right, frosted glass drawer, utility chart 220px | ✅ COMPLETE — PR #23 open, pending QA merge |
+| Fix 9B3 | Card section bands (CASH IN/OUT, expense group, liability type), proportional card sizing, Bundle/Details toggle, bar chart single-month, entry FAB fixed top-right, frosted glass drawer, utility chart 220px | ✅ COMPLETE |
+| Fix 9E | E1: Budget panel 12-month grid redesign (4 chips, 6-mo bar chart, filter lane actual/budget/gap × month/12mo, spreadsheet grid EARN/EXPENSES/DEBT/GAP/Thai-tax analysis) · E2: Diary Memo type, count badges, thumbnails, dist buttons, AI bottom pane | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -264,14 +265,14 @@ functions/
   - Cashflow: 1M/3M/6M range toggle, 30/70 date window, list/card view toggle; card view = CASH IN / CASH OUT section bands + proportional sizing ✅
   - Expenses: trend left + pareto right, current/3M/6M period selector, responsive min-width:0; list/card/bundle/details toggle; details = group section bands + proportional cards; bar chart for single-month period ✅
   - Liabilities: trend left + bar right; static cards grouped by creditor_type (Bank→Family→Friend→Other) with section bands, interest on card face, proportional sizing ✅
-  - Budget: T4 bar + 7 stats + budget cards ✅
+  - Budget: 4 stat chips + 6-month bar chart + filter lane (actual/budget/gap × month/12mo avg) + spreadsheet grid (EARN/EXPENSES by group/DEBT PAYBACK/GAP/Thai tax analysis) ✅ 9E
 - Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts (click → M2 panel) ✅
 - Entry drawer: embedded in shell (all 4 tabs), context-aware (cashflow→transactions, expenses/budget→budgets, liabilities→liabilities), pin-able, frosted glass background ✅
 - Entry FAB: ⊕ Entry button fixed top-right (position:fixed, z-index:400) always accessible from all panels ✅
 - Budget delete: requires typing budget label to confirm; other deletes use confirm() ✅
 - Collection + AI panels: embedded in shell via collection.injector.js + ai-advisor.injector.js ✅
 - Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history) ✅, Budgets (inline edit + card/group view + category create) ✅
-- Diary: list + editor + preview + AI assist + Undo ✅
+- Diary: list + editor + preview + AI modal assist + AI bottom pane + Undo + Memo type + type count badges + thumbnail in list + dist buttons (Blog/Idea/Story/Project) ✅ 9E
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅
 
@@ -301,9 +302,8 @@ Every CC session must preserve:
 ## ROADMAP
 
 **Immediate (next):**
-0. Merge PR #23 after user QA confirms 9B3 changes on preview URL
-1. Fix 9E — Budget panel 12-month planning grid redesign + diary.injector.js surgical improvements
-2. Fix 9C — Full M3.4 Projects module (Airtable schema, API endpoints, projects.injector.js, index.html panel)
+1. Fix 9C — Full M3.4 Projects module (Airtable schema, API endpoints, projects.injector.js, index.html panel)
+2. Expense pareto cut-off date input (deferred from 9B3) — combine with next fix session
 3. Cashflow budget simulation / hold zone (drag-to-pause budget items) — deferred from 9B3, needs separate design session
 3. Collection module full test + buyer tags
 4. AI Advisor full test + verify financial context loads
