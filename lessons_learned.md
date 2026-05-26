@@ -324,6 +324,16 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Rule:** For side drawers / overlay panels, use semi-transparent frosted glass: `background: rgba(12,12,20,0.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px)`. The rgba matches the dark shell background (`--bg-base: #0c0c14`) at 88% opacity. The blur creates depth without obscuring the content underneath. Always include the `-webkit-` prefix for Safari support.
 **Tag:** #css #shell #ux #drawer
 
+### L053 — Budget panel: computeMaps() helper avoids data re-fetch on filter toggle
+**Problem:** View/period filter toggles on the budget panel (actual/budget/gap, this-month/12mo-avg) need to re-render the grid with different data slices. Naively re-fetching 12 months of data on every toggle click would be slow and wastes API calls.
+**Rule:** Extract `computeMaps()` as a pure function that reads from already-loaded module-scope arrays (`txData`, `budgets`, `categories`, `liabilities`) and returns derived maps (spendMonth, earnMonth, spend12Avg, earn12Avg, activeDebt, debtMonthly). Toggle handlers call `computeMaps()` + `renderGrid(maps)` with no API calls. Only `loadAndRender()` actually fetches. This pattern works for any panel with multiple filter states over static loaded data.
+**Tag:** #budget #performance #pattern
+
+### L054 — Diary AI pane: scope `.ai-assist-type` queries to avoid cross-wiring
+**Problem:** Adding an AI bottom pane with `.ai-assist-type` buttons alongside the existing modal's `.ai-assist-type` buttons caused all buttons (pane + modal) to share the same `querySelectorAll('.ai-assist-type')` handler — clicking any pane button triggered modal output.
+**Rule:** When adding a second UI zone with the same button class, scope each querySelectorAll to its container: `document.querySelectorAll('#ai-assist-modal .ai-assist-type')` for modal buttons, `document.querySelectorAll('#ai-bottom-pane .ai-assist-type')` for pane buttons. Each group gets its own event handler and streams to its own output element. Never rely on document-level class queries when the same class appears in multiple independent UI regions.
+**Tag:** #diary #ai #pattern
+
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
 **Rule:** T1 (Cashflow) uses `.tx-mini-grid` 2-column mini cards — each transaction is a small pill-card with label, subtitle, and amount. T2 (Expense Intelligence) uses `.budget-mosaic` 2-column grid with `min-height` proportional to budget amount via sqrt scaling (`max(78, sqrt(amount/max) * 200)`px). Larger budgets are visually taller; all budgets remain readable with minimum height. T3 (Debt) uses `.liab-content-grid` 2-column grid — expandable history panels still work (grid rows auto-expand for the open card). T4 (Annual Plan) stays as table rows — numeric comparison data is best in tabular format.

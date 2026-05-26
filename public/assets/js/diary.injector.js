@@ -100,6 +100,7 @@ function restoreState(state) {
   if (typeSelect) { typeSelect.value = state.type; toggleBlogSection(state.type === 'Blog'); }
   var pub = document.getElementById('publish-toggle');
   if (pub) pub.checked = state.publishToWeb;
+  toggleDistSection(state.type);
   currentImageUrl = state.imageUrl || '';
   updateImageDisplay();
   if (isPreviewMode) setEditMode();
@@ -161,6 +162,7 @@ async function loadEntryList() {
       return (b.fields.date || '') > (a.fields.date || '') ? 1 : -1;
     });
     renderEntryList(allEntries);
+    updateTypeCounts();
     buildConceptDatalist();
   } catch (e) {
     container.innerHTML = '<p style="color:#ef4444;padding:1rem">Error: ' + e.message + '</p>';
@@ -193,17 +195,22 @@ function renderEntryList(entries) {
     return;
   }
 
-  var typeColors = { Story:'#8b5cf6', Blog:'#22c55e', Idea:'#f59e0b', Project:'#3b82f6', Skill:'#06b6d4' };
+  var typeColors = { Story:'#8b5cf6', Blog:'#22c55e', Idea:'#f59e0b', Project:'#3b82f6', Skill:'#06b6d4', Memo:'#94a3b8' };
 
   container.innerHTML = filtered.map(function (entry) {
     var f = entry.fields;
     var color = typeColors[f.entry_type] || '#94a3b8';
     var isActive = entry.id === currentEntryId;
     var preview = (f.content || '').replace(/<[^>]*>/g, '').substring(0, 80);
+    var thumb = f.cloudinary_image_url
+      ? '<img src="' + escHtml(f.cloudinary_image_url) + '" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0">'
+      : '';
     return '<div class="diary-entry-item' + (isActive ? ' active' : '') + '" data-id="' + entry.id + '"' +
       ' style="padding:0.7rem 0.85rem;border-radius:8px;cursor:pointer;margin-bottom:0.35rem;' +
       'border:1px solid ' + (isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.04)') + ';' +
-      'background:' + (isActive ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)') + '">' +
+      'background:' + (isActive ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)') + ';' +
+      'display:flex;align-items:flex-start;gap:0.5rem">' +
+      '<div style="flex:1;min-width:0">' +
       '<div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.25rem">' +
       '<span style="background:' + color + '22;color:' + color + ';padding:0.1rem 0.45rem;border-radius:4px;font-size:0.68rem;font-weight:600">' + escHtml(f.entry_type || 'Story') + '</span>' +
       '<span style="font-size:0.72rem;color:rgba(255,255,255,0.4)">' + (f.date || '') + '</span>' +
@@ -211,6 +218,8 @@ function renderEntryList(entries) {
       '</div>' +
       '<div style="font-weight:500;font-size:0.86rem;margin-bottom:0.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(f.title || 'Untitled') + '</div>' +
       (preview ? '<div style="font-size:0.76rem;opacity:0.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(preview) + '</div>' : '') +
+      '</div>' +
+      (thumb ? '<div style="flex-shrink:0">' + thumb + '</div>' : '') +
       '</div>';
   }).join('');
 
@@ -244,6 +253,7 @@ function loadEntryInEditor(entry) {
   var pub = document.getElementById('publish-toggle');
   if (pub) pub.checked = !!f.publish_to_web;
 
+  toggleDistSection(f.entry_type || 'Story');
   updateImageDisplay();
   originalState = captureState();   // snapshot for Cancel
   setEditorButtons(true);
@@ -267,6 +277,7 @@ function clearEditor() {
   var typeSelect = document.getElementById('entry-type');
   if (typeSelect) typeSelect.value = 'Story';
   toggleBlogSection(false);
+  toggleDistSection('Story');
 
   var pub = document.getElementById('publish-toggle');
   if (pub) pub.checked = false;
@@ -286,6 +297,39 @@ function clearEditor() {
 function toggleBlogSection(show) {
   var s = document.getElementById('blog-publish-section');
   if (s) s.style.display = show ? 'block' : 'none';
+}
+
+/* ─── Distribution section toggle (Blog/Idea/Story/Project) ─── */
+function toggleDistSection(type) {
+  var distSec = document.getElementById('dist-section');
+  if (!distSec) return;
+  var showTypes = ['Blog', 'Idea', 'Story', 'Project'];
+  var show = showTypes.indexOf(type) !== -1;
+  distSec.style.display = show ? 'block' : 'none';
+  var webBtn = document.getElementById('dist-web-btn');
+  if (webBtn) {
+    var isPublishedBlog = type === 'Blog' && document.getElementById('publish-toggle')?.checked;
+    webBtn.style.display = isPublishedBlog ? 'inline' : 'none';
+  }
+}
+
+/* ─── Update type filter badge counts ─── */
+function updateTypeCounts() {
+  var counts = {};
+  allEntries.forEach(function (e) {
+    var t = e.fields.entry_type || 'Story';
+    counts[t] = (counts[t] || 0) + 1;
+  });
+  var total = allEntries.length;
+  document.querySelectorAll('#type-filters [data-type]').forEach(function (btn) {
+    var type = btn.dataset.type;
+    if (type === '') {
+      btn.textContent = 'All (' + total + ')';
+    } else {
+      var n = counts[type] || 0;
+      btn.textContent = type + (n > 0 ? ' (' + n + ')' : '');
+    }
+  });
 }
 
 /* ─── Edit / Preview segmented toggle ─── */
@@ -456,6 +500,48 @@ async function streamAiAssist(prompt) {
   return fullText;
 }
 
+/* ─── AI Assist: stream to bottom pane ─── */
+async function streamAiPane(prompt) {
+  var output  = document.getElementById('ai-pane-output');
+  var loading = document.getElementById('ai-pane-loading');
+  if (!output) return '';
+  output.textContent = '';
+  if (loading) loading.style.display = 'block';
+
+  var fullText = '';
+  try {
+    var res = await fetch('/api/ai-chat', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role:'user', content: prompt }], session_id: 'diary-pane-' + Date.now(), context_json: '' })
+    });
+    if (!res.ok || !res.body) {
+      output.textContent = 'AI error ' + res.status;
+      if (loading) loading.style.display = 'none';
+      return '';
+    }
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      decoder.decode(chunk.value, { stream: true }).split('\n').forEach(function (line) {
+        if (!line.startsWith('data: ')) return;
+        var raw = line.slice(6).trim();
+        if (raw === '[DONE]') return;
+        try {
+          var p = JSON.parse(raw);
+          if (p.type === 'content_block_delta' && p.delta?.text) { fullText += p.delta.text; output.textContent = fullText; }
+        } catch (e) {}
+      });
+    }
+  } catch (e) {
+    output.textContent = 'Error: ' + e.message;
+  }
+  if (loading) loading.style.display = 'none';
+  return fullText;
+}
+
 function getAssistPrompt(type, content) {
   var p = {
     refine:    'Refine and improve this writing, keeping my voice. No new headers/bullets unless already present:\n\n' + content,
@@ -503,9 +589,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* type select → blog section */
+  /* type select → blog + dist sections */
   var typeSelect = document.getElementById('entry-type');
-  if (typeSelect) typeSelect.addEventListener('change', function () { toggleBlogSection(typeSelect.value === 'Blog'); });
+  if (typeSelect) typeSelect.addEventListener('change', function () {
+    toggleBlogSection(typeSelect.value === 'Blog');
+    toggleDistSection(typeSelect.value);
+  });
 
   /* image upload */
   var imageFile = document.getElementById('entry-image-file');
@@ -556,8 +645,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   if (aiModal) aiModal.addEventListener('click', function (e) { if (e.target === aiModal) closeAiModal(); });
 
-  /* AI assist type buttons */
-  var assistBtns = document.querySelectorAll('.ai-assist-type');
+  /* AI assist type buttons — modal only */
+  var assistBtns = document.querySelectorAll('#ai-assist-modal .ai-assist-type');
   assistBtns.forEach(function (btn) {
     btn.dataset.originalText = btn.textContent;
     btn.addEventListener('click', async function () {
@@ -637,6 +726,78 @@ document.addEventListener('DOMContentLoaded', function () {
     clearAiUndo();
     showFlash('Content restored');
   });
+
+  /* AI bottom pane — toggle body */
+  var aiPaneToggle = document.getElementById('ai-pane-toggle');
+  if (aiPaneToggle) {
+    aiPaneToggle.addEventListener('click', function () {
+      var body = document.getElementById('ai-pane-body');
+      if (!body) return;
+      var isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      aiPaneToggle.textContent = isOpen ? '▼ AI' : '▲ AI';
+    });
+  }
+
+  /* AI bottom pane — mode buttons (Refine/Expand/Summary/Tags) */
+  var paneBtns = document.querySelectorAll('#ai-bottom-pane .ai-assist-type');
+  var paneLastType = null;
+  paneBtns.forEach(function (btn) {
+    btn.dataset.originalText = btn.textContent;
+    btn.addEventListener('click', async function () {
+      var type    = btn.dataset.assist;
+      var content = document.getElementById('entry-content')?.value || '';
+      if (!content.trim()) { showFlash('Write some content first', 'error'); return; }
+      /* Expand pane if collapsed */
+      var paneBody = document.getElementById('ai-pane-body');
+      if (paneBody && paneBody.style.display === 'none') {
+        paneBody.style.display = 'block';
+        if (aiPaneToggle) aiPaneToggle.textContent = '▲ AI';
+      }
+      paneBtns.forEach(function (b) { b.disabled = true; });
+      btn.textContent = '⏳';
+      paneLastType = type;
+      /* Show/hide tags button based on mode */
+      var useTagsBtn = document.getElementById('ai-pane-use-tags');
+      if (useTagsBtn) useTagsBtn.style.display = type === 'tags' ? 'inline-block' : 'none';
+      await streamAiPane(getAssistPrompt(type, content));
+      btn.textContent = btn.dataset.originalText;
+      paneBtns.forEach(function (b) { b.disabled = false; });
+    });
+  });
+
+  /* AI pane — Use in Content */
+  document.getElementById('ai-pane-use-content')?.addEventListener('click', function () {
+    var out = document.getElementById('ai-pane-output');
+    var placeholder = 'Choose a mode above to get AI suggestions…';
+    if (!out || out.textContent === placeholder) { showFlash('No AI output yet', 'error'); return; }
+    showAiComparison(out.textContent.trim());
+    if (isPreviewMode) setEditMode();
+  });
+
+  /* AI pane — Append */
+  document.getElementById('ai-pane-append')?.addEventListener('click', function () {
+    var out = document.getElementById('ai-pane-output');
+    var contentEl = document.getElementById('entry-content');
+    var placeholder = 'Choose a mode above to get AI suggestions…';
+    if (!out || out.textContent === placeholder || !contentEl) { showFlash('No AI output yet', 'error'); return; }
+    var sep = contentEl.value.trim() ? '\n\n---\n\n' : '';
+    contentEl.value = contentEl.value + sep + out.textContent;
+    showFlash('Appended!');
+  });
+
+  /* AI pane — Use as Tags */
+  document.getElementById('ai-pane-use-tags')?.addEventListener('click', function () {
+    var out = document.getElementById('ai-pane-output');
+    var tagsEl = document.getElementById('entry-tags');
+    if (!out || !tagsEl) return;
+    tagsEl.value = out.textContent.trim();
+    showFlash('Tags applied!');
+  });
+
+  /* Distribution button placeholders */
+  document.getElementById('dist-social-btn')?.addEventListener('click', function () { showFlash('Social distribution — coming soon', 'error'); });
+  document.getElementById('dist-project-btn')?.addEventListener('click', function () { showFlash('Project link — coming soon', 'error'); });
 
   setEditMode();
   clearEditor();
