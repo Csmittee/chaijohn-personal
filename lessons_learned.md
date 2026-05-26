@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-26
-> Current highest lesson: L052
+> Current highest lesson: L056
 
 ---
 
@@ -333,6 +333,16 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Adding an AI bottom pane with `.ai-assist-type` buttons alongside the existing modal's `.ai-assist-type` buttons caused all buttons (pane + modal) to share the same `querySelectorAll('.ai-assist-type')` handler — clicking any pane button triggered modal output.
 **Rule:** When adding a second UI zone with the same button class, scope each querySelectorAll to its container: `document.querySelectorAll('#ai-assist-modal .ai-assist-type')` for modal buttons, `document.querySelectorAll('#ai-bottom-pane .ai-assist-type')` for pane buttons. Each group gets its own event handler and streams to its own output element. Never rely on document-level class queries when the same class appears in multiple independent UI regions.
 **Tag:** #diary #ai #pattern
+
+### L055 — Ideas panel: IIFE + panelactivated required for shell-embedded diary editors
+**Problem:** Adding a diary-style editor to a sidebar panel (#panel-ideas) in the shell (index.html) requires a different pattern than standalone diary.html. diary.injector.js uses DOMContentLoaded (safe for single-page), but in the multi-panel shell, panels are lazy-loaded via panelactivated events. If you copy diary.injector.js verbatim to ideas-panel.injector.js, it fires immediately on load before #panel-ideas is activated, wasting API calls and potentially breaking because panel elements are display:none.
+**Rule:** For any diary-like editor embedded inside a sidebar panel in index.html: (1) Use IIFE + `window.addEventListener('panelactivated', e => { if (e.detail === 'ideas') init(); })` pattern — not DOMContentLoaded. (2) Prefix ALL element IDs with the panel name (e.g. `ideas-*`) to prevent ID conflicts with other panels in the same document. (3) Create a dedicated injector file — never re-use diary.injector.js for a shell panel.
+**Tag:** #shell #diary #pattern #architecture
+
+### L056 — Budget 12-month matrix: filter zones above/below chart must be visually separated
+**Problem:** Mixing graph controls and data display controls in the same filter bar confuses users — changing "Period: FY/Rolling" changes the chart but users expect it to affect the table too; and "View: Card/Spreadsheet" should only affect the table below.
+**Rule:** Two distinct filter zones: (1) GRAPH FILTER ZONE above the chart (controls chart axis/data only): View (Mo-by-Mo/Accum), Period (Std FY/Rolling), Filter (BG vs Act/Gap only). (2) DATA FILTER ZONE below the chart (controls table/card display only): View (Spreadsheet/Card), Filter (BG+Act/Data only/BG only), Mode (Edit ON/OFF). Never mix graph controls and data controls in the same bar. Label them clearly (e.g. small monospace "GRAPH:" and "DATA:" headers above each zone).
+**Tag:** #budget #ux #layout #pattern
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
