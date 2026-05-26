@@ -84,6 +84,13 @@
 
     const nwEl = el('dash-net-worth');
     if (nwEl) nwEl.style.color = netWorth >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Mini-chart stat spans
+    set('dash-stat-cf',   fmt(currentCash));
+    set('dash-stat-exp',  fmt(totalOut));
+    set('dash-stat-liab', fmt(totalDebt));
+    const cfEl = el('dash-stat-cf');
+    if (cfEl) cfEl.style.color = currentCash >= 0 ? '' : 'var(--red)';
   }
 
   /* ── Mini charts ── */
@@ -214,10 +221,18 @@
       return a;
     }
 
+    const incB = budgets.filter(b => { const cat = catMap[lid2(b.category_id)]; return b.active !== false && cat?.type === 'Income'; });
     const expB = budgets
       .filter(b => { const cat = catMap[lid2(b.category_id)]; return b.active !== false && cat?.type === 'Expense'; })
       .sort((a, b) => mbr(b) - mbr(a))
       .slice(0, 6);
+
+    // Budget gap stat
+    const earnMo = incB.reduce((s, b) => s + mbr(b), 0);
+    const spendMo = budgets.filter(b => { const cat = catMap[lid2(b.category_id)]; return b.active !== false && cat?.type === 'Expense'; }).reduce((s, b) => s + mbr(b), 0);
+    const gapMo = earnMo - spendMo;
+    const gapEl = document.getElementById('dash-stat-bud');
+    if (gapEl) { gapEl.textContent = fmt(gapMo); gapEl.style.color = gapMo >= 0 ? 'var(--green)' : 'var(--red)'; }
 
     if (!expB.length) return;
 
