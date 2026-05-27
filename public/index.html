@@ -189,7 +189,9 @@
     .coming-soon { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); padding: 2.5rem 0; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); }
 
     /* ─── Ideas panel diary layout ─── */
-    #panel-ideas { display:flex; flex-direction:column; }
+    /* Note: display:flex only when active — ID specificity beats .route-panel {display:none} if set unconditionally */
+    #panel-ideas { flex-direction:column; }
+    #panel-ideas.active { display:flex; }
     .ideas-kpi-strip { display:flex; gap:1.5rem; padding:0.55rem 1rem; border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; align-items:center; }
     .ideas-layout { display:flex; flex:1; overflow:hidden; }
     .ideas-list-panel { border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
