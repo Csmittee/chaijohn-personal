@@ -74,6 +74,17 @@
 
   function el(id) { return document.getElementById(id); }
 
+  function showFlash(msg, type) {
+    const d = document.createElement('div');
+    d.textContent = msg;
+    d.style.cssText = 'position:fixed;top:1rem;right:1rem;padding:0.65rem 1.1rem;border-radius:8px;' +
+      'background:' + (type === 'error' ? '#ef4444' : '#22c55e') + ';color:#fff;font-weight:500;z-index:9999;' +
+      'font-size:0.85rem;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s';
+    document.body.appendChild(d);
+    setTimeout(() => { d.style.opacity = '0'; }, 2600);
+    setTimeout(() => { if (d.parentNode) d.remove(); }, 3000);
+  }
+
   async function apiFetch(path) {
     const r = await fetch(path, { credentials: 'same-origin' });
     if (!r.ok) throw new Error('API ' + r.status + ' ' + path);
@@ -337,7 +348,7 @@
     const count = Object.keys(pendingChanges).length;
     const bar   = el('bud-pending-bar');
     const countEl = el('bud-pending-count');
-    if (bar)     bar.style.display     = count > 0 ? '' : 'none';
+    if (bar)     bar.style.display     = count > 0 ? 'flex' : 'none';
     if (countEl) countEl.textContent   = count + ' change' + (count === 1 ? '' : 's');
   }
 
@@ -395,7 +406,7 @@
       let budCell;
       if (editMode && dataType !== 'bgact') {
         budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-          style="width:58px;text-align:right;font-size:0.60rem;"
+          style="width:78px;text-align:right;font-size:0.72rem;"
           data-id="${esc(b.id)}" data-field="budget"
           value="${bAmt.toFixed(0)}"></td>`;
       } else {
@@ -418,7 +429,7 @@
           /* Show budget amount for each month (same as Budget/mo) */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:54px;text-align:right;font-size:0.60rem;"
+              style="width:72px;text-align:right;font-size:0.72rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
               value="${bAmt.toFixed(0)}"></td>`;
           }
@@ -427,7 +438,7 @@
         /* data: show actual, editable */
         if (editMode) {
           return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:54px;text-align:right;font-size:0.60rem;"
+            style="width:72px;text-align:right;font-size:0.72rem;"
             data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
             value="${actual.toFixed(0)}"></td>`;
         }
@@ -464,7 +475,7 @@
         let budCell;
         if (editMode && dataType !== 'bgact') {
           budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:58px;text-align:right;font-size:0.60rem;"
+            style="width:78px;text-align:right;font-size:0.72rem;"
             data-id="${esc(b.id)}" data-field="budget"
             value="${bAmt.toFixed(0)}"></td>`;
         } else {
@@ -485,7 +496,7 @@
           if (dataType === 'bg') {
             if (editMode) {
               return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-                style="width:54px;text-align:right;font-size:0.60rem;"
+                style="width:72px;text-align:right;font-size:0.72rem;"
                 data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
                 value="${bAmt.toFixed(0)}"></td>`;
             }
@@ -494,7 +505,7 @@
           /* data: actual, editable */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:54px;text-align:right;font-size:0.60rem;"
+              style="width:72px;text-align:right;font-size:0.72rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
               value="${actual.toFixed(0)}"></td>`;
           }
@@ -717,14 +728,23 @@
 
     const requests = entries.map(async e => {
       if (e.kind === 'budget') {
-        await fetch('/api/budgets/' + e.id, {
+        /* Reverse mbr(): input shows monthly rate, but Airtable stores by period */
+        const bud    = budgets.find(b => b.id === e.id);
+        const period = bud ? (bud.period || 'Monthly') : 'Monthly';
+        let saveAmount = Math.round(e.newVal);
+        if (period === 'Annual')   saveAmount = Math.round(e.newVal * 12);
+        else if (period === '3x-year') saveAmount = Math.round((e.newVal * 12) / 3);
+        else if (period === '6x-year') saveAmount = Math.round((e.newVal * 12) / 6);
+
+        const r = await fetch('/api/budgets/' + e.id, {
           method: 'PATCH',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: e.newVal })
+          body: JSON.stringify({ amount: saveAmount })
         });
+        if (!r.ok) throw new Error('Budget PATCH failed: ' + r.status + ' for ' + e.label);
       } else {
-        await fetch('/api/transactions', {
+        const r = await fetch('/api/transactions', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -737,12 +757,21 @@
             source:      'Manual'
           })
         });
+        if (!r.ok) throw new Error('Transaction POST failed: ' + r.status + ' for ' + e.label);
       }
     });
 
     try {
-      await Promise.all(requests);
+      const results = await Promise.allSettled(requests);
+      const failed  = results.filter(r => r.status === 'rejected');
+      if (failed.length === 0) {
+        showFlash('Saved ' + entries.length + ' change' + (entries.length === 1 ? '' : 's') + ' ✓');
+      } else {
+        showFlash(failed.length + ' save(s) failed — check console', 'error');
+        failed.forEach(r => console.error(r.reason));
+      }
     } catch (err) {
+      showFlash('Save error: ' + err.message, 'error');
       console.error('Save error:', err);
     }
 
