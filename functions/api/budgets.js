@@ -93,11 +93,13 @@ export async function onRequestPost(context) {
         maxRecords: 20
       });
       const duplicate = existing.records.some(r => {
-        const existCatId = linkedId(r.fields.category_id);
-        return existCatId === catId;
+        const existCatId  = linkedId(r.fields.category_id);
+        const existPeriod = r.fields.period || 'Monthly';
+        const newPeriod   = body.period || 'Monthly';
+        return existCatId === catId && existPeriod === newPeriod;
       });
       if (duplicate) {
-        return errorResponse('Budget label already exists for this item in this period');
+        return errorResponse('Budget label already exists for this item with the same period');
       }
     } catch { /* non-fatal — allow creation if check fails */ }
   }
