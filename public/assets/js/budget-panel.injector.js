@@ -406,7 +406,7 @@
       let budCell;
       if (editMode && dataType !== 'bgact') {
         budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-          style="width:78px;text-align:right;font-size:0.72rem;"
+          style="width:78px;text-align:right;font-size:0.62rem;"
           data-id="${esc(b.id)}" data-field="budget"
           value="${bAmt.toFixed(0)}"></td>`;
       } else {
@@ -429,7 +429,7 @@
           /* Show budget amount for each month (same as Budget/mo) */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:72px;text-align:right;font-size:0.72rem;"
+              style="width:72px;text-align:right;font-size:0.62rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
               value="${bAmt.toFixed(0)}"></td>`;
           }
@@ -438,7 +438,7 @@
         /* data: show actual, editable */
         if (editMode) {
           return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:72px;text-align:right;font-size:0.72rem;"
+            style="width:72px;text-align:right;font-size:0.62rem;"
             data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
             value="${actual.toFixed(0)}"></td>`;
         }
@@ -475,7 +475,7 @@
         let budCell;
         if (editMode && dataType !== 'bgact') {
           budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:78px;text-align:right;font-size:0.72rem;"
+            style="width:78px;text-align:right;font-size:0.62rem;"
             data-id="${esc(b.id)}" data-field="budget"
             value="${bAmt.toFixed(0)}"></td>`;
         } else {
@@ -496,7 +496,7 @@
           if (dataType === 'bg') {
             if (editMode) {
               return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-                style="width:72px;text-align:right;font-size:0.72rem;"
+                style="width:72px;text-align:right;font-size:0.62rem;"
                 data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
                 value="${bAmt.toFixed(0)}"></td>`;
             }
@@ -505,7 +505,7 @@
           /* data: actual, editable */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:72px;text-align:right;font-size:0.72rem;"
+              style="width:72px;text-align:right;font-size:0.62rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
               value="${actual.toFixed(0)}"></td>`;
           }
@@ -713,18 +713,6 @@
   async function saveBatchChanges() {
     const entries = Object.values(pendingChanges);
     if (!entries.length) return;
-
-    const lines = entries.map(e => {
-      if (e.kind === 'budget') {
-        return `- ${e.label} budget: ${fmt(e.oldVal)} → ${fmt(e.newVal)}`;
-      }
-      return `- ${e.label} actual ${e.monthKey}: ${fmt(e.oldVal)} → ${fmt(e.newVal)}`;
-    });
-
-    const confirmed = window.confirm(
-      'Saving ' + entries.length + ' change' + (entries.length === 1 ? '' : 's') + ':\n' + lines.join('\n')
-    );
-    if (!confirmed) return;
 
     const requests = entries.map(async e => {
       if (e.kind === 'budget') {

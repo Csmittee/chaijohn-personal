@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-27
-> Current highest lesson: L064
+> Current highest lesson: L067
 
 ---
 
@@ -391,6 +391,25 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** `saveBatchChanges()` used `try/catch` with only `console.error` on failure. When a save failed (network error, API 500, auth expiry), there was no toast or visual indicator — the data silently failed to persist and the user assumed the edit was "fake" or broken.
 **Rule:** Every save/delete function must show a visible toast on both success and failure. Add a module-level `showFlash(msg, type)` helper (same pattern as ideas-panel.injector.js) to each budget-like panel IIFE. Use `Promise.allSettled` instead of `Promise.all` to catch partial failures. Report count of failed vs saved changes in the toast. Always log full error details to console for debugging.
 **Tag:** #ux #feedback #save #bug-prevention
+
+---
+
+## FIX 9E-R4 — Budget Save, Category Dropdown, Duplicate Period Check (2026-05-27)
+
+### L065 — window.confirm() silently blocks saves when dismissed
+**Problem:** `saveBatchChanges()` called `window.confirm()` before saving. If the user dismissed (pressed Escape or Cancel), the function returned early with NO feedback — no toast, no error. User assumed the save was broken or "fake", unaware a confirm dialog had aborted it.
+**Rule:** Never use `window.confirm()` as a gate inside a save function that already has an explicit "Save Changes" button. The button click IS the confirmation. Remove `window.confirm()` and proceed to save immediately. Reserve `window.confirm()` for destructive/irreversible actions only (e.g., delete with typed name confirmation).
+**Tag:** #ux #save #bug-prevention
+
+### L066 — Entry category dropdown silently empty when categories fail to load on init
+**Problem:** `loadCategories()` in entry.injector.js is called once at DOMContentLoaded. If it fails (network hiccup, cold-start, session edge case), `categories = []` forever. The `budget-category` select remains empty. Later, clicking the Budgets tab loads the budget list fine but the category dropdown stays blank.
+**Rule:** Always re-populate dependent dropdowns on tab activation as a defensive fallback. In `initTabs()` for the `budgets` tab click: if `categories.length > 0`, call `renderCatSelect('budget-category', ...)` immediately; otherwise call `loadCategories()` to retry. This costs nothing extra on the happy path and fixes every failure-on-init scenario.
+**Tag:** #entry #categories #defensive #bug-prevention
+
+### L067 — Budget duplicate check must include period in uniqueness key
+**Problem:** The budget POST duplicate check blocked creation if label + category_id matched, regardless of period. User could not create "AIS net Monthly" and "AIS net Annual" under the same category — the second one was rejected as a duplicate even though the period differed.
+**Rule:** Budget uniqueness key is: label + category_id + period. All three must match to be a true duplicate. Compare `r.fields.period === body.period` (default 'Monthly' for null) in addition to label and category_id match.
+**Tag:** #budgets #validation #api
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.

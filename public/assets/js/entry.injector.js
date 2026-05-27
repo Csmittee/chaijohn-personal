@@ -59,6 +59,10 @@
         if (btn.dataset.tab === 'liabilities') loadLiabilityTab();
         if (btn.dataset.tab === 'budgets')     loadBudgetTab();
         if (btn.dataset.tab === 'utilities')   loadUtilityHistory();
+        if (btn.dataset.tab === 'budgets') {
+          if (categories.length > 0) renderCatSelect('budget-category', categories.filter(c => c.type === 'Expense'));
+          else loadCategories().catch(console.error);
+        }
       });
     });
 
