@@ -195,7 +195,7 @@
     .ideas-editor-panel { overflow-y: auto; padding: 1rem; }
     .ideas-seg-toggle { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; vertical-align:middle; }
     .ideas-seg-btn { padding:0.28rem 0.7rem; font-size:0.8rem; font-weight:500; border:none; cursor:pointer; transition:background 0.15s,color 0.15s; line-height:1.4; background:transparent; color:var(--text-muted); }
-    .ideas-seg-btn.active { background:var(--blue); color:#fff; }
+    .ideas-seg-btn.active { background:var(--color-primary,#3b82f6); color:#fff; }
     .ideas-seg-btn:not(.active):hover { background:rgba(255,255,255,0.06); }
 
     /* ─── Budget spreadsheet grid ─── */
@@ -941,16 +941,31 @@
 
         <!-- Left: entry list -->
         <div class="ideas-list-panel">
+          <!-- KPI strip -->
+          <div style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--border);display:flex;gap:1.25rem;flex-shrink:0">
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.58rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em">Entries</div>
+              <div id="ideas-kpi-total" style="font-size:1.1rem;font-weight:700">—</div>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.58rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em">Dist 1mo</div>
+              <div id="ideas-kpi-dist1" style="font-size:1.1rem;font-weight:700;color:var(--color-primary,#3b82f6)">—</div>
+            </div>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.58rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em">Dist 6mo</div>
+              <div id="ideas-kpi-dist6" style="font-size:1.1rem;font-weight:700;color:var(--text-secondary)">—</div>
+            </div>
+          </div>
           <div style="padding:0.65rem 0.75rem;border-bottom:1px solid var(--border);flex-shrink:0">
             <input type="search" id="ideas-search" placeholder="Search…" style="width:100%;margin-bottom:0.45rem">
             <div style="display:flex;gap:0.3rem;flex-wrap:wrap" id="ideas-type-filters">
-              <button class="badge badge-primary" data-type="">All</button>
-              <button class="badge badge-gray" data-type="Idea">Idea</button>
-              <button class="badge badge-gray" data-type="Story">Story</button>
-              <button class="badge badge-gray" data-type="Blog">Blog</button>
-              <button class="badge badge-gray" data-type="Project">Project</button>
-              <button class="badge badge-gray" data-type="Skill">Skill</button>
-              <button class="badge badge-gray" data-type="Memo">Memo</button>
+              <button class="btn btn-sm btn-outline active" data-type="" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">All</button>
+              <button class="btn btn-sm btn-outline" data-type="Idea" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Idea</button>
+              <button class="btn btn-sm btn-outline" data-type="Story" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Story</button>
+              <button class="btn btn-sm btn-outline" data-type="Blog" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Blog</button>
+              <button class="btn btn-sm btn-outline" data-type="Project" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Project</button>
+              <button class="btn btn-sm btn-outline" data-type="Skill" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Skill</button>
+              <button class="btn btn-sm btn-outline" data-type="Memo" style="border-radius:100px;font-size:0.72rem;padding:0.18rem 0.55rem;">Memo</button>
             </div>
           </div>
           <div id="ideas-entry-list" style="flex:1;overflow-y:auto"></div>
@@ -1056,7 +1071,7 @@
           </div>
 
           <!-- AI comparison panel -->
-          <div id="ideas-ai-comp-panel" class="hidden" style="border:1px solid var(--blue);border-radius:var(--radius);padding:0.75rem;margin-top:0.75rem;background:rgba(59,130,246,0.04)">
+          <div id="ideas-ai-comp-panel" class="hidden" style="display:none;border:1px solid var(--color-primary,#3b82f6);border-radius:var(--radius);padding:0.75rem;margin-top:0.75rem;background:rgba(59,130,246,0.04)">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
               <span style="font-weight:600;font-size:0.85rem">✨ AI Suggestion</span>
               <button class="btn btn-sm btn-outline" id="ideas-ai-comp-dismiss">✕</button>
@@ -1080,7 +1095,7 @@
               </div>
               <button class="btn btn-sm btn-outline" id="ideas-ai-pane-toggle">▼ AI</button>
             </div>
-            <div id="ideas-ai-pane-body" style="display:none">
+            <div id="ideas-ai-pane-body">
               <div id="ideas-ai-pane-loading" style="display:none;font-size:0.8rem;color:var(--text-muted);padding:0.25rem 0">⏳ AI is thinking…</div>
               <div id="ideas-ai-pane-output" style="min-height:56px;padding:0.6rem;background:var(--bg-raised);border-radius:var(--radius);font-size:0.85rem;white-space:pre-wrap;line-height:1.6;margin-bottom:0.45rem;border:1px solid var(--border)">Choose a mode above…</div>
               <div style="display:flex;gap:0.35rem;flex-wrap:wrap">
