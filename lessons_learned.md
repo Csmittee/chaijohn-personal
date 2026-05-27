@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
 > Last updated: 2026-05-27
-> Current highest lesson: L059
+> Current highest lesson: L064
 
 ---
 
@@ -362,6 +362,35 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Ideas panel had KPI strip nested inside the left list panel (KPI hidden at small widths), an AI bottom pane that occupied permanent vertical space, and no way to resize the list column. Entry button in the toolbar overlapped with panel navigation.
 **Rule:** Common page anatomy for content panels in the shell: (1) Full-width KPI strip at top (`flex-shrink:0`, horizontal strip spanning both columns). (2) Below: horizontal flex split — left resizable list panel (default 240px, min 160px, max 480px, drag handle `#ideas-resize-handle` via mousedown/mousemove/mouseup). (3) Right editor panel with two sub-panes toggled by Write/AI segmented buttons — Write pane (`#ideas-write-pane`) shows the form; AI pane (`#ideas-ai-pane`) shows mode buttons + output. (4) No separate AI bottom pane — replaced by the AI tab. (5) Toolbar buttons (+ New, Write/AI toggle, Edit/Preview) in a unified toolbar row at top of right panel — no overlap with sidebar nav since the panel is `padding:0` and the KPI strip takes the former "top" space.
 **Tag:** #ideas #layout #ux #anatomy #pattern
+
+---
+
+## FIX 9E-R3 — Budget Edit Mode Fixes (2026-05-27)
+
+### L060 — Budget edit: ID-selector display overrides route-panel hide
+**Problem:** `#panel-ideas { display:flex }` (ID specificity 100) silently overrides `.route-panel { display:none }` (class specificity 10), making the Ideas panel render on every page simultaneously.
+**Rule:** Never set `display` on a panel-level ID selector unconditionally. Split into: `#panel-ideas { flex-direction:column }` (no display) and `#panel-ideas.active { display:flex }` (only active when the route class is set). This way the `.route-panel { display:none }` rule wins when the panel is inactive.
+**Tag:** #css #specificity #ideas #shell #bug-prevention
+
+### L061 — Budget edit: input cells need larger width than read-only cells
+**Problem:** Reducing the spreadsheet font 20% also reduced edit-mode input widths from 72px/68px → 54px/58px, making them too narrow to see or type values like "฿1,268".
+**Rule:** Read-only cells and edit-mode input cells have different UX requirements. Apply font/padding reductions only to read-only display. Edit-mode `<input>` elements should keep at least 72–80px width and 0.72rem font to be comfortably typeable. Keep a separate set of constants for input sizing independent of cellBase.
+**Tag:** #budget #editmode #ux #inputs
+
+### L062 — Budget edit: period reversal required when saving budget amount
+**Problem:** The Budget/mo column shows `mbr(b)` = monthly rate (annual amount ÷ 12 for annual budgets). Edit mode prefills the input with this monthly rate. Saving `amount: newVal` directly wrote the monthly rate as the Airtable `amount` field, which for annual budgets is stored as the FULL annual amount. Result: an annual budget of ฿12,000 (shown ฿1,000/mo) edited to ฿1,200/mo would save `amount: 1200` instead of `amount: 14400` — silently corrupting the budget.
+**Rule:** In `saveBatchChanges()`, before writing `amount`, reverse the `mbr()` function: if period=Annual → `saveAmount = newVal * 12`; if 3x-year → `saveAmount = (newVal * 12) / 3`; if 6x-year → `saveAmount = (newVal * 12) / 6`; else Monthly → `saveAmount = newVal`. Always round to integer.
+**Tag:** #budget #editmode #data-integrity #airtable #bug-prevention
+
+### L063 — Budget pending bar: use display:flex not display:'' to show
+**Problem:** `updatePendingBar()` set `bar.style.display = ''` (empty string) to show the bar. This removes the inline display property, causing the bar to render as `display:block` (browser default for div). The bar uses `align-items`, `gap`, `flex-wrap` — flex properties that do nothing without `display:flex`. Result: buttons appeared but were stacked vertically with no gap.
+**Rule:** When making an element visible that needs a specific display mode, always set the exact value: `bar.style.display = 'flex'` not `bar.style.display = ''`. Empty string only removes the inline override and falls back to CSS cascade, which may not give the desired display mode.
+**Tag:** #css #flex #display #bug-prevention
+
+### L064 — Save functions must provide visible success/error feedback
+**Problem:** `saveBatchChanges()` used `try/catch` with only `console.error` on failure. When a save failed (network error, API 500, auth expiry), there was no toast or visual indicator — the data silently failed to persist and the user assumed the edit was "fake" or broken.
+**Rule:** Every save/delete function must show a visible toast on both success and failure. Add a module-level `showFlash(msg, type)` helper (same pattern as ideas-panel.injector.js) to each budget-like panel IIFE. Use `Promise.allSettled` instead of `Promise.all` to catch partial failures. Report count of failed vs saved changes in the toast. Always log full error details to console for debugging.
+**Tag:** #ux #feedback #save #bug-prevention
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
