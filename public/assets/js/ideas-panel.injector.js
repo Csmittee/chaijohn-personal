@@ -1,4 +1,4 @@
-/* ideas-panel.injector.js — M3.1 Ideas panel embedded in CHAIJOHN OS sidebar shell */
+/* ideas-panel.injector.js — M3.2 Ideas panel: full redesign */
 
 (function () {
   'use strict';
@@ -8,11 +8,12 @@
   var currentEntryId   = null;
   var activeTypeFilter = '';
   var isPreviewMode    = false;
-  var originalState    = null;   // snapshot on load for Cancel
-  var currentImageUrl  = '';     // cloudinary URL for current entry
-  var aiPreviousContent = null;  // stored for undo after Apply & Replace
+  var originalState    = null;
+  var currentImageUrl  = '';
+  var aiPreviousContent = null;
   var initialized      = false;
-  var paneLastType     = null;   // last AI pane mode button clicked
+  var paneLastType     = null;
+  var pinnedIds        = [];   // entry IDs pinned to top of list
 
   var TYPE_COLORS = {
     Story:   '#8b5cf6',
@@ -115,7 +116,6 @@
       }
     });
 
-    /* KPI strip */
     var kpiTotal = el('ideas-kpi-total');
     if (kpiTotal) kpiTotal.textContent = total;
 
@@ -159,7 +159,7 @@
   }
 
   /* ────────────────────────────────────────────
-     RENDER ENTRY LIST
+     RENDER ENTRY LIST (with pinned + 3-dot menu)
   ──────────────────────────────────────────── */
 
   function renderEntryList(entries) {
@@ -183,6 +183,15 @@
       });
     }
 
+    /* Pinned entries first */
+    filtered.sort(function (a, b) {
+      var aPinned = pinnedIds.indexOf(a.id) !== -1;
+      var bPinned = pinnedIds.indexOf(b.id) !== -1;
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    });
+
     if (filtered.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.45">' +
         (search || activeTypeFilter ? 'No matching entries.' : 'No entries yet. Create one!') + '</div>';
@@ -191,43 +200,93 @@
 
     container.innerHTML = filtered.map(function (entry) {
       var f = entry.fields;
-      var color   = TYPE_COLORS[f.entry_type] || '#94a3b8';
+      var color    = TYPE_COLORS[f.entry_type] || '#94a3b8';
       var isActive = entry.id === currentEntryId;
+      var isPinned = pinnedIds.indexOf(entry.id) !== -1;
       var preview  = (f.content || '').replace(/<[^>]*>/g, '').substring(0, 80);
       var thumb    = f.cloudinary_image_url
         ? '<img src="' + escHtml(f.cloudinary_image_url) + '" alt="" ' +
-          'style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0">'
+          'style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0">'
         : '';
 
       return '<div class="ideas-entry-item' + (isActive ? ' active' : '') + '" data-id="' + entry.id + '"' +
-        ' style="padding:0.7rem 0.85rem;border-radius:8px;cursor:pointer;margin-bottom:0.35rem;' +
+        ' style="position:relative;padding:0.6rem 0.75rem;border-radius:8px;cursor:pointer;margin-bottom:0.3rem;' +
         'border:1px solid ' + (isActive ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.04)') + ';' +
         'background:' + (isActive ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)') + ';' +
-        'display:flex;align-items:flex-start;gap:0.5rem">' +
+        'display:flex;align-items:flex-start;gap:0.45rem">' +
         '<div style="flex:1;min-width:0">' +
-        '<div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.25rem">' +
-        '<span style="background:' + color + '22;color:' + color + ';padding:0.1rem 0.45rem;border-radius:4px;font-size:0.68rem;font-weight:600">' +
+        '<div style="display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;margin-bottom:0.2rem">' +
+        '<span style="background:' + color + '22;color:' + color + ';padding:0.08rem 0.4rem;border-radius:4px;font-size:0.67rem;font-weight:600">' +
           escHtml(f.entry_type || 'Story') + '</span>' +
-        '<span style="font-size:0.72rem;color:rgba(255,255,255,0.4)">' + escHtml(f.date || '') + '</span>' +
+        '<span style="font-size:0.7rem;color:rgba(255,255,255,0.4)">' + escHtml(f.date || '') + '</span>' +
+        (isPinned ? '<span style="font-size:0.62rem;color:var(--text-dim)">📌</span>' : '') +
         (f.publish_to_web
-          ? '<span style="font-size:0.65rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:0.1rem 0.3rem;border-radius:3px">Web</span>'
+          ? '<span style="font-size:0.62rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:0.08rem 0.28rem;border-radius:3px">Web</span>'
           : '') +
         '</div>' +
-        '<div style="font-weight:500;font-size:0.86rem;margin-bottom:0.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+        '<div style="font-weight:500;font-size:0.84rem;margin-bottom:0.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
           escHtml(f.title || 'Untitled') + '</div>' +
-        (preview ? '<div style="font-size:0.76rem;opacity:0.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        (preview ? '<div style="font-size:0.74rem;opacity:0.42;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
           escHtml(preview) + '</div>' : '') +
         '</div>' +
         (thumb ? '<div style="flex-shrink:0">' + thumb + '</div>' : '') +
+        /* 3-dot menu button */
+        '<div class="ideas-entry-dot-menu">' +
+          '<button class="ideas-dot-btn" data-entry-id="' + entry.id + '"' +
+            ' style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:0.1rem 0.25rem;font-size:0.9rem;line-height:1;border-radius:4px;" title="More">⋯</button>' +
+          '<div class="ideas-entry-dot-dropdown" data-dropdown-id="' + entry.id + '">' +
+            '<button class="ideas-entry-dot-option" data-pin-id="' + entry.id + '">' +
+              (isPinned ? '📌 Unpin' : '📌 Pin to top') + '</button>' +
+          '</div>' +
+        '</div>' +
         '</div>';
     }).join('');
 
+    /* Wire click: entry select */
     container.querySelectorAll('.ideas-entry-item').forEach(function (item) {
-      item.addEventListener('click', function () {
+      item.addEventListener('click', function (evt) {
+        /* Ignore clicks on dot menu */
+        if (evt.target.closest('.ideas-entry-dot-menu')) return;
         var entry = allEntries.find(function (e) { return e.id === item.dataset.id; });
         if (entry) loadEntryInEditor(entry);
       });
     });
+
+    /* Wire 3-dot menu open/close */
+    container.querySelectorAll('.ideas-dot-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (evt) {
+        evt.stopPropagation();
+        var id = btn.dataset.entryId;
+        /* Close all others */
+        container.querySelectorAll('.ideas-entry-dot-dropdown').forEach(function (d) {
+          if (d.dataset.dropdownId !== id) d.classList.remove('open');
+        });
+        var dropdown = container.querySelector('.ideas-entry-dot-dropdown[data-dropdown-id="' + id + '"]');
+        if (dropdown) dropdown.classList.toggle('open');
+      });
+    });
+
+    /* Wire pin action */
+    container.querySelectorAll('[data-pin-id]').forEach(function (btn) {
+      btn.addEventListener('click', function (evt) {
+        evt.stopPropagation();
+        var id = btn.dataset.pinId;
+        var idx = pinnedIds.indexOf(id);
+        if (idx === -1) {
+          pinnedIds.push(id);
+        } else {
+          pinnedIds.splice(idx, 1);
+        }
+        renderEntryList(allEntries);
+      });
+    });
+
+    /* Close dropdowns on outside click */
+    document.addEventListener('click', function () {
+      container.querySelectorAll('.ideas-entry-dot-dropdown.open').forEach(function (d) {
+        d.classList.remove('open');
+      });
+    }, { once: false, capture: true });
   }
 
   /* ────────────────────────────────────────────
@@ -260,9 +319,11 @@
     toggleBlogSection(f.entry_type === 'Blog');
     toggleDistSection(f.entry_type || 'Story');
     updateImageDisplay();
-    originalState = captureState();   // snapshot for Cancel
+    originalState = captureState();
     setEditorButtons(true);
     if (isPreviewMode) setEditMode();
+    /* Switch to Write tab to show the entry */
+    showWritePane();
     renderEntryList(allEntries);
   }
 
@@ -293,12 +354,43 @@
     updateImageDisplay();
     setEditorButtons(false);
     if (isPreviewMode) setEditMode();
+    showWritePane();
     renderEntryList(allEntries);
 
     setTimeout(function () {
       var titleEl = el('ideas-title');
       if (titleEl) titleEl.focus();
     }, 50);
+  }
+
+  /* ────────────────────────────────────────────
+     WRITE / AI PANE SWITCHING
+  ──────────────────────────────────────────── */
+
+  function showWritePane() {
+    var writePane = el('ideas-write-pane');
+    var aiPane    = el('ideas-ai-pane');
+    var writeTab  = el('ideas-write-tab');
+    var aiTab     = el('ideas-ai-tab');
+    var prevWrap  = el('ideas-preview-toggle-wrap');
+    if (writePane) writePane.style.display = '';
+    if (aiPane)    aiPane.style.display    = 'none';
+    if (writeTab)  writeTab.classList.add('active');
+    if (aiTab)     aiTab.classList.remove('active');
+    if (prevWrap)  prevWrap.style.display  = '';
+  }
+
+  function showAiPane() {
+    var writePane = el('ideas-write-pane');
+    var aiPane    = el('ideas-ai-pane');
+    var writeTab  = el('ideas-write-tab');
+    var aiTab     = el('ideas-ai-tab');
+    var prevWrap  = el('ideas-preview-toggle-wrap');
+    if (writePane) writePane.style.display = 'none';
+    if (aiPane)    aiPane.style.display    = '';
+    if (writeTab)  writeTab.classList.remove('active');
+    if (aiTab)     aiTab.classList.add('active');
+    if (prevWrap)  prevWrap.style.display  = 'none';
   }
 
   /* ────────────────────────────────────────────
@@ -405,8 +497,8 @@
     if (previewEl) previewEl.style.display = 'none';
     var editBtn    = el('ideas-edit-btn');
     var prevBtn    = el('ideas-preview-btn');
-    if (editBtn) editBtn.classList.add('seg-active');
-    if (prevBtn) prevBtn.classList.remove('seg-active');
+    if (editBtn) editBtn.classList.add('active');
+    if (prevBtn) prevBtn.classList.remove('active');
   }
 
   function setPreviewMode() {
@@ -422,8 +514,8 @@
     if (contentEl) contentEl.style.display = 'none';
     var editBtn = el('ideas-edit-btn');
     var prevBtn = el('ideas-preview-btn');
-    if (editBtn) editBtn.classList.remove('seg-active');
-    if (prevBtn) prevBtn.classList.add('seg-active');
+    if (editBtn) editBtn.classList.remove('active');
+    if (prevBtn) prevBtn.classList.add('active');
   }
 
   /* ────────────────────────────────────────────
@@ -504,9 +596,9 @@
 
   function saveAs() {
     var savedId    = currentEntryId;
-    currentEntryId = null;   // force POST
+    currentEntryId = null;
     return saveEntry().then(function () {
-      if (!currentEntryId) currentEntryId = savedId;  // restore on failure
+      if (!currentEntryId) currentEntryId = savedId;
     });
   }
 
@@ -644,18 +736,59 @@
     var textEl = el('ideas-ai-comp-text');
     if (!panel || !textEl) return;
     textEl.textContent = aiText;
+    panel.style.display = '';
     panel.classList.remove('hidden');
+    /* Switch to write tab so comparison is visible */
+    showWritePane();
   }
 
   function hideAiComparison() {
     var panel = el('ideas-ai-comp-panel');
-    if (panel) panel.classList.add('hidden');
+    if (panel) { panel.classList.add('hidden'); panel.style.display = 'none'; }
   }
 
   function clearAiUndo() {
     aiPreviousContent = null;
     var undoBtn = el('ideas-undo-btn');
     if (undoBtn) undoBtn.classList.add('hidden');
+  }
+
+  /* ────────────────────────────────────────────
+     RESIZE HANDLE
+  ──────────────────────────────────────────── */
+
+  function initResizeHandle() {
+    var handle    = el('ideas-resize-handle');
+    var listPanel = el('ideas-list-panel');
+    if (!handle || !listPanel) return;
+
+    var dragging = false;
+    var startX   = 0;
+    var startW   = 0;
+
+    handle.addEventListener('mousedown', function (e) {
+      dragging = true;
+      startX   = e.clientX;
+      startW   = listPanel.offsetWidth;
+      document.body.style.cursor    = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      var newW = startW + (e.clientX - startX);
+      newW = Math.max(160, Math.min(480, newW));
+      listPanel.style.width = newW + 'px';
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (dragging) {
+        dragging = false;
+        document.body.style.cursor    = '';
+        document.body.style.userSelect = '';
+      }
+    });
   }
 
   /* ────────────────────────────────────────────
@@ -666,17 +799,23 @@
     if (initialized) return;
     initialized = true;
 
-    /* Initial data load */
     loadEntryList();
+    initResizeHandle();
+
+    /* ── Write / AI tab toggle ── */
+    var writeTab = el('ideas-write-tab');
+    var aiTab    = el('ideas-ai-tab');
+    if (writeTab) writeTab.addEventListener('click', showWritePane);
+    if (aiTab)    aiTab.addEventListener('click', showAiPane);
 
     /* ── Toolbar / action buttons ── */
     var btnMap = {
-      'ideas-new-btn':    clearEditor,
-      'ideas-save-btn':   saveEntry,
-      'ideas-saveas-btn': saveAs,
-      'ideas-cancel-btn': cancelChanges,
-      'ideas-delete-btn': deleteEntry,
-      'ideas-edit-btn':   setEditMode,
+      'ideas-new-btn':     clearEditor,
+      'ideas-save-btn':    saveEntry,
+      'ideas-saveas-btn':  saveAs,
+      'ideas-cancel-btn':  cancelChanges,
+      'ideas-delete-btn':  deleteEntry,
+      'ideas-edit-btn':    setEditMode,
       'ideas-preview-btn': setPreviewMode
     };
     Object.keys(btnMap).forEach(function (id) {
@@ -750,20 +889,8 @@
       });
     }
 
-    /* ── AI pane toggle (collapse/expand body) ── */
-    var aiPaneToggle = el('ideas-ai-pane-toggle');
-    if (aiPaneToggle) {
-      aiPaneToggle.addEventListener('click', function () {
-        var body  = el('ideas-ai-pane-body');
-        if (!body) return;
-        var isOpen = body.style.display !== 'none';
-        body.style.display  = isOpen ? 'none' : 'block';
-        aiPaneToggle.textContent = isOpen ? '▼ AI' : '▲ AI';
-      });
-    }
-
     /* ── AI pane mode buttons (Refine / Expand / Summary / Tags) ── */
-    var paneBtns = document.querySelectorAll('#ideas-ai-pane-body .ai-assist-type');
+    var paneBtns = document.querySelectorAll('#ideas-ai-pane .ideas-ai-mode');
     paneBtns.forEach(function (btn) {
       btn.dataset.originalText = btn.textContent;
       btn.addEventListener('click', function () {
@@ -771,18 +898,10 @@
         var content = el('ideas-content') ? el('ideas-content').value : '';
         if (!content.trim()) { showFlash('Write some content first', 'error'); return; }
 
-        /* Auto-expand pane if collapsed */
-        var paneBody = el('ideas-ai-pane-body');
-        if (paneBody && paneBody.style.display === 'none') {
-          paneBody.style.display = 'block';
-          if (aiPaneToggle) aiPaneToggle.textContent = '▲ AI';
-        }
-
         paneBtns.forEach(function (b) { b.disabled = true; });
         btn.textContent = '...';
         paneLastType = type;
 
-        /* Show/hide "Use as Tags" button based on mode */
         var useTagsBtn = el('ideas-ai-pane-use-tags');
         if (useTagsBtn) useTagsBtn.style.display = type === 'tags' ? 'inline-block' : 'none';
 
@@ -793,7 +912,7 @@
       });
     });
 
-    /* ── AI pane — Use in Content (shows comparison panel) ── */
+    /* ── AI pane — Use in Content ── */
     var useContentBtn = el('ideas-ai-pane-use-content');
     if (useContentBtn) {
       useContentBtn.addEventListener('click', function () {
@@ -820,6 +939,7 @@
         var sep = contentEl.value.trim() ? '\n\n---\n\n' : '';
         contentEl.value = contentEl.value + sep + output.textContent;
         showFlash('Appended!');
+        showWritePane();
       });
     }
 
@@ -832,6 +952,7 @@
         if (!output || !tagsEl) return;
         tagsEl.value = output.textContent.trim();
         showFlash('Tags applied!');
+        showWritePane();
       });
     }
 
