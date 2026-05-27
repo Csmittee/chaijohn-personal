@@ -375,7 +375,7 @@
 
       /* Budget/mo cell */
       let budCell;
-      if (editMode && dataType !== 'bgact' && (dataType === 'bg')) {
+      if (editMode && dataType !== 'bgact') {
         budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
           style="width:72px;text-align:right;font-size:0.75rem;"
           data-id="${esc(b.id)}" data-field="budget"
@@ -444,7 +444,7 @@
         let rowTotal = 0;
 
         let budCell;
-        if (editMode && dataType === 'bg') {
+        if (editMode && dataType !== 'bgact') {
           budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
             style="width:72px;text-align:right;font-size:0.75rem;"
             data-id="${esc(b.id)}" data-field="budget"
