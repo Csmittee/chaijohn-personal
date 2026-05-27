@@ -69,6 +69,9 @@
   /* Pending changes: key → { kind, id, monthKey, newVal, label, oldVal, dataType } */
   let pendingChanges = {};
 
+  /* Custom period start (YYYY-MM) */
+  let customStart = null;
+
   function el(id) { return document.getElementById(id); }
 
   async function apiFetch(path) {
@@ -97,7 +100,20 @@
       rollingMonthKeys.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
     }
 
-    const monthKeys = graphPeriod === 'fy' ? fyMonthKeys : rollingMonthKeys;
+    let monthKeys;
+    if (graphPeriod === 'fy') {
+      monthKeys = fyMonthKeys;
+    } else if (graphPeriod === 'custom' && customStart) {
+      const [cy, cm] = customStart.split('-').map(Number);
+      const customMonthKeys = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(cy, cm - 1 + i, 1);
+        customMonthKeys.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+      }
+      monthKeys = customMonthKeys;
+    } else {
+      monthKeys = rollingMonthKeys;
+    }
 
     /* Short labels like "Jan '25" */
     const monthLabels = monthKeys.map(k => {
@@ -251,6 +267,8 @@
     if (titleEl) {
       if (graphPeriod === 'fy') {
         titleEl.textContent = 'FY ' + new Date().getFullYear();
+      } else if (graphPeriod === 'custom' && customStart) {
+        titleEl.textContent = 'Custom from ' + customStart;
       } else {
         titleEl.textContent = 'Rolling 12mo';
       }
@@ -530,14 +548,25 @@
     ).join('');
 
     let totalActGap = 0;
-    const gapActMonthCells = monthKeys.map(ym => {
+    let cumActGap = 0;
+    const gapActMonthCells = [], gapCumMonthCells = [];
+    monthKeys.forEach(ym => {
       const earnAct  = incBudgets.reduce((s, b) => s + ((earnByBudgetMonth[b.id]  || {})[ym] || 0), 0);
       const spendAct = expBudgets.reduce((s, b) => s + ((spendByBudgetMonth[b.id] || {})[ym] || 0), 0);
-      const gapAct   = earnAct - spendAct - debtMonthly;
-      totalActGap   += gapAct;
-      const gc = gapAct >= 0 ? 'var(--green)' : 'var(--red)';
-      return `<td style="${numCell}color:${gc};font-weight:600;">${fmt(gapAct)}</td>`;
-    }).join('');
+      const hasData  = earnAct > 0 || spendAct > 0;
+      if (!hasData) {
+        gapActMonthCells.push(`<td style="${numCell}color:var(--text-dim);">—</td>`);
+        gapCumMonthCells.push(`<td style="${numCell}color:var(--text-dim);">—</td>`);
+        return;
+      }
+      const gapAct = earnAct - spendAct;
+      totalActGap += gapAct;
+      cumActGap   += gapAct;
+      const gc  = gapAct  >= 0 ? 'var(--green)' : 'var(--red)';
+      const gcc = cumActGap >= 0 ? 'var(--green)' : 'var(--red)';
+      gapActMonthCells.push(`<td style="${numCell}color:${gc};font-weight:600;">${fmt(gapAct)}</td>`);
+      gapCumMonthCells.push(`<td style="${numCell}color:${gcc};font-size:0.72rem;">${fmt(cumActGap)}</td>`);
+    });
 
     const gapRow = `
       <tr>
@@ -549,8 +578,14 @@
       <tr>
         <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);">Actual</td>
         <td style="${numCell}color:var(--text-dim);">—</td>
-        ${gapActMonthCells}
+        ${gapActMonthCells.join('')}
         <td style="${numCell}font-weight:700;color:${totalActGap >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(totalActGap)}</td>
+      </tr>
+      <tr>
+        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);font-style:italic;">Cumulative</td>
+        <td style="${numCell}color:var(--text-dim);">—</td>
+        ${gapCumMonthCells.join('')}
+        <td style="${numCell}color:var(--text-dim);">—</td>
       </tr>`;
 
     /* ── Assemble ── */
@@ -777,8 +812,27 @@
     wireGroup('bud-graphperiod-toggle', 'gperiod',
       () => graphPeriod,
       v => { graphPeriod = v; },
-      () => { const m = computeMaps(); renderChart(m); renderGrid(m); renderStats(m); }
+      () => {
+        const customInput = el('bud-custom-start');
+        if (customInput) customInput.style.display = graphPeriod === 'custom' ? '' : 'none';
+        if (graphPeriod === 'custom') {
+          /* Need data that may predate rolling window — reload */
+          loadAndRender().catch(console.error);
+        } else {
+          const m = computeMaps(); renderChart(m); renderGrid(m); renderStats(m);
+        }
+      }
     );
+
+    /* Custom start month input */
+    const customInput = el('bud-custom-start');
+    if (customInput) {
+      customInput.style.display = 'none';
+      customInput.addEventListener('change', () => {
+        customStart = customInput.value || null;
+        if (graphPeriod === 'custom') loadAndRender().catch(console.error);
+      });
+    }
 
     /* Graph data */
     wireGroup('bud-graphdata-toggle', 'gdata',
@@ -834,7 +888,11 @@
 
   /* ── loadAndRender() ── */
   async function loadAndRender() {
-    const start = isoMonth(11);
+    let start = isoMonth(11);
+    if (graphPeriod === 'custom' && customStart) {
+      const customStartDate = customStart + '-01';
+      if (customStartDate < start) start = customStartDate;
+    }
     const [txR, bR, cR, lR] = await Promise.allSettled([
       apiFetch('/api/transactions?start=' + start),
       apiFetch('/api/budgets'),

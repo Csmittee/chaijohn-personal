@@ -1,5 +1,5 @@
 # 🌱 MASTERSEED — Chaijohn Personal Diary (CPD)
-> Last Updated: 2026-05-26 — Fix 9E complete; budget 12-month FY matrix + edit mode + batch save, diary Memo + AI pane, Ideas panel full editor in shell, dashboard stat spans, sidebar Entry nav removed
+> Last Updated: 2026-05-27 — Fix 9E-R2 complete; budget custom start month + GAP actual/cumulative fix; ideas panel full redesign (KPI strip full-width, resizable list, Write/AI toggle, 3-dot pin)
 
 ---
 
@@ -201,8 +201,8 @@ CHAIJOHN_KV                   ← KV namespace binding (id: 7e2dcb214e17435c9ec8
             ├── cashflow.injector.js    ✅ NEW — IIFE, lazy via panelactivated
             ├── expenses.injector.js    ✅ NEW — IIFE, lazy via panelactivated
             ├── liabilities-panel.injector.js ✅ NEW — IIFE, lazy via panelactivated
-            ├── budget-panel.injector.js ✅ 9E rewrite — 12-mo matrix, graph/data filter zones, edit mode batch save
-            ├── ideas-panel.injector.js  ✅ NEW 9E — IIFE, lazy via panelactivated (M3.1 diary editor in shell)
+            ├── budget-panel.injector.js ✅ 9E-R2 — custom start month selector, GAP actual (no debtMonthly, — for empty months), GAP cumulative row
+            ├── ideas-panel.injector.js  ✅ 9E-R2 — full redesign: KPI strip full-width, resizable list panel (drag handle), Write/AI tab toggle, 3-dot pin-to-top
             └── dash-overview.injector.js ✅ NEW — IIFE, lazy via panelactivated, stat spans populated 9E
 functions/
 ├── _middleware.js                       ✅
@@ -250,6 +250,7 @@ functions/
 | Fix 9B2 | QA fixes: F1a/b/c cashflow toggle+range+view; F2a-d expenses chart order+period+responsive+view; F3a liabilities chart swap; F4a/b entry utility chart toggle+collapse | ✅ COMPLETE |
 | Fix 9B3 | Card section bands (CASH IN/OUT, expense group, liability type), proportional card sizing, Bundle/Details toggle, bar chart single-month, entry FAB fixed top-right, frosted glass drawer, utility chart 220px | ✅ COMPLETE |
 | Fix 9E | E1: Budget panel full redesign — 12-mo FY/Rolling matrix, analysis collapsible at top (Thai tax), graph filter zone (above chart: view/period/data), data filter zone (below chart: sps/card, dtype, edit mode), edit mode batch save (PATCH budget + POST actual w/ "mass update by owner"), pending changes bar, card view · E2: Diary Memo type + count badges + thumbnails + dist buttons + AI bottom pane · Ideas panel (M3.1) full diary editor embedded in shell (ideas-panel.injector.js IIFE) · Dashboard mini-chart stat spans populated · Sidebar Entry nav link removed | ✅ COMPLETE |
+| Fix 9E-R2 | Budget: Custom start month picker (Custom button + month input in period toggle, fetches from customStart if earlier than rolling window) · GAP Actual row: remove debtMonthly from actual, show — for months with no transaction data · GAP Cumulative row added (running month-over-month actual) · Ideas panel full redesign: KPI strip full-width at top, left 20% resizable list panel (drag handle, 160–480px), right 80% editor with Write/AI tab toggle (✏ Write / ✨ AI), 3-dot pin-to-top per entry, theme-compliant btn-outline buttons, removed old AI bottom pane | ✅ COMPLETE |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ NEXT |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ NEXT |
 | Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
@@ -266,7 +267,7 @@ functions/
   - Cashflow: 1M/3M/6M range toggle, 30/70 date window, list/card view toggle; card view = CASH IN / CASH OUT section bands + proportional sizing ✅
   - Expenses: trend left + pareto right, current/3M/6M period selector, responsive min-width:0; list/card/bundle/details toggle; details = group section bands + proportional cards; bar chart for single-month period ✅
   - Liabilities: trend left + bar right; static cards grouped by creditor_type (Bank→Family→Friend→Other) with section bands, interest on card face, proportional sizing ✅
-  - Budget: 4 stat chips + 12-month FY/Rolling matrix with graph/data filter zones (separate); analysis collapsible at top (Thai tax); spreadsheet mode (EARN/EXPENSES/DEBT/GAP sections, editable cells); card mode (expense budget cards with progress bars); edit mode with batch PATCH/POST save; pending changes bar ✅ 9E
+  - Budget: 4 stat chips + 12-month FY/Rolling/Custom matrix with graph/data filter zones (separate); analysis collapsible at top (Thai tax); GAP section = Budget Plan row + Actual row (no debtMonthly, — for empty months) + Cumulative row; custom start month picker shows month input on Custom button; spreadsheet mode (EARN/EXPENSES/DEBT/GAP sections, editable cells); card mode (expense budget cards with progress bars); edit mode with batch PATCH/POST save; pending changes bar ✅ 9E-R2
 - Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts (click → M2 panel) + stat spans (cash balance, expenses/mo, total debt, budget gap/mo) ✅ 9E
 - Entry drawer: embedded in shell (all 4 tabs), context-aware (cashflow→transactions, expenses/budget→budgets, liabilities→liabilities), pin-able, frosted glass background ✅
 - Entry FAB: ⊕ Entry button fixed top-right (position:fixed, z-index:400) always accessible from all panels ✅
@@ -274,7 +275,7 @@ functions/
 - Collection + AI panels: embedded in shell via collection.injector.js + ai-advisor.injector.js ✅
 - Entry: Transactions (entity autocomplete datalist, inline edit + DELETE button, budget_id for expense) ✅, Utilities (YoY charts, FT note) ✅, Liabilities (collapse form + expandable row + payment history) ✅, Budgets (inline edit + card/group view + category create) ✅
 - Diary (diary.html): list + editor + preview + AI modal assist + AI bottom pane + Undo + Memo type + type count badges + thumbnail in list + dist buttons (Blog/Idea/Story/Project) ✅ 9E
-- Ideas panel (M3.1 in shell): full diary editor embedded — list panel (search, type filter, thumbnails) + editor panel (date/type/title/content/tags/concept/image/AI pane/dist buttons); powered by ideas-panel.injector.js IIFE ✅ 9E
+- Ideas panel (M3.2 in shell): KPI strip full-width at top (Entries, Dist 1mo, Dist 6mo); left resizable list panel (160–480px, drag handle, 3-dot pin-to-top per entry, search + type filters); right editor panel with Write/AI tab toggle (✏ Write = form fields; ✨ AI = Refine/Expand/Summary/Tags output + Use in Content/Append); AI comparison panel in write pane; theme-compliant btn-outline buttons ✅ 9E-R2
 - Sidebar nav: Entry link removed (FAB top-right is the only entry point) ✅ 9E
 - Drop Zone: image/PDF upload + AI extract ✅, text/markdown file support ✅, Approve → Airtable ✅
 - Import scripts: import-utilities.js, import-assets.js ✅

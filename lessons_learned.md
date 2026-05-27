@@ -1,7 +1,7 @@
 # 📚 LESSONS LEARNED — Chaijohn Personal Diary (CPD)
 > CC reads this at the start of every session. Never delete lessons — only add.
-> Last updated: 2026-05-26
-> Current highest lesson: L056
+> Last updated: 2026-05-27
+> Current highest lesson: L059
 
 ---
 
@@ -343,6 +343,25 @@ Fetch field ID from Meta API — do not hardcode. Then create the record.
 **Problem:** Mixing graph controls and data display controls in the same filter bar confuses users — changing "Period: FY/Rolling" changes the chart but users expect it to affect the table too; and "View: Card/Spreadsheet" should only affect the table below.
 **Rule:** Two distinct filter zones: (1) GRAPH FILTER ZONE above the chart (controls chart axis/data only): View (Mo-by-Mo/Accum), Period (Std FY/Rolling), Filter (BG vs Act/Gap only). (2) DATA FILTER ZONE below the chart (controls table/card display only): View (Spreadsheet/Card), Filter (BG+Act/Data only/BG only), Mode (Edit ON/OFF). Never mix graph controls and data controls in the same bar. Label them clearly (e.g. small monospace "GRAPH:" and "DATA:" headers above each zone).
 **Tag:** #budget #ux #layout #pattern
+
+---
+
+## FIX 9E-R2 — Budget Custom Period + GAP Fix + Ideas Panel Redesign (2026-05-27)
+
+### L057 — Budget GAP actual: never subtract debtMonthly; show — for empty months
+**Problem:** The GAP Actual row subtracted `debtMonthly` (sum of all liability monthly_payments, ~฿40,750) from every month even when no actual income or expense transactions existed for that month. Every month showed a large negative value like -฿40,750 even though it had no data — completely misleading.
+**Rule:** GAP Actual row must use only actual transaction data: `earnAct - spendAct` where both come from transaction records. Debt payments are tracked as expense transactions if they exist — do not add them separately. For any month where `earnAct === 0 AND spendAct === 0`, show "—" (dimmed) instead of a number. This correctly distinguishes "no data yet" from "data shows a gap of ฿0".
+**Tag:** #budget #gap #ux #bug-prevention
+
+### L058 — Budget custom start month: dynamic fetch window required
+**Problem:** The budget panel fetched transactions from `isoMonth(11)` (11 months ago). When user picks a custom start month earlier than that (e.g. Jan 2025 when current month is May 2026), the transaction fetch would return no data for those earlier months because they fell outside the fetch window.
+**Rule:** In `loadAndRender()`, compute `start` dynamically: use `isoMonth(11)` as default; if `graphPeriod === 'custom' && customStart`, compare `customStart + '-01'` with the default start and use whichever is earlier. Store `customStart` in module state (YYYY-MM format from `<input type="month">`). Show/hide the month input when Custom button is clicked via the period toggle's `onChanged` callback.
+**Tag:** #budget #period #fetch #ux
+
+### L059 — Ideas panel common anatomy: KPI strip top, resizable split, Write/AI tab toggle
+**Problem:** Ideas panel had KPI strip nested inside the left list panel (KPI hidden at small widths), an AI bottom pane that occupied permanent vertical space, and no way to resize the list column. Entry button in the toolbar overlapped with panel navigation.
+**Rule:** Common page anatomy for content panels in the shell: (1) Full-width KPI strip at top (`flex-shrink:0`, horizontal strip spanning both columns). (2) Below: horizontal flex split — left resizable list panel (default 240px, min 160px, max 480px, drag handle `#ideas-resize-handle` via mousedown/mousemove/mouseup). (3) Right editor panel with two sub-panes toggled by Write/AI segmented buttons — Write pane (`#ideas-write-pane`) shows the form; AI pane (`#ideas-ai-pane`) shows mode buttons + output. (4) No separate AI bottom pane — replaced by the AI tab. (5) Toolbar buttons (+ New, Write/AI toggle, Edit/Preview) in a unified toolbar row at top of right panel — no overlap with sidebar nav since the panel is `padding:0` and the KPI strip takes the former "top" space.
+**Tag:** #ideas #layout #ux #anatomy #pattern
 
 ### L038 — Dashboard content zones: compact 2-col grid + proportional mosaic for T2
 **Problem:** Dashboard content zones (T1-T4) were rendering as full-width stacked cards/rows — sparse and hard to scan when there are many items.
