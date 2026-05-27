@@ -345,10 +345,10 @@
   function renderGridSps(maps) {
     const { catMap, spendByBudgetMonth, earnByBudgetMonth, monthKeys, monthLabels, activeDebt, debtMonthly } = maps;
 
-    const cellBase  = 'font-size:0.76rem;padding:0.25rem 0.4rem;border-bottom:1px solid var(--border);white-space:nowrap;';
+    const cellBase  = 'font-size:0.62rem;padding:0.18rem 0.3rem;border-bottom:1px solid var(--border);white-space:nowrap;';
     const labelCell = cellBase + 'text-align:left;';
     const numCell   = cellBase + 'text-align:right;';
-    const thBase    = 'font-size:0.7rem;padding:0.3rem 0.4rem;font-weight:500;color:var(--text-dim);text-align:right;white-space:nowrap;border-bottom:2px solid var(--border);';
+    const thBase    = 'font-size:0.57rem;padding:0.22rem 0.3rem;font-weight:500;color:var(--text-dim);text-align:right;white-space:nowrap;border-bottom:2px solid var(--border);';
 
     /* Build column headers */
     const shortMoLabels = monthKeys.map(k => {
@@ -358,18 +358,18 @@
 
     const theadCols = shortMoLabels.map(lbl => `<th style="${thBase}">${esc(lbl)}</th>`).join('');
     const thead = `<thead><tr>
-      <th style="${thBase}text-align:left;min-width:160px;">Item</th>
+      <th style="${thBase}text-align:left;min-width:128px;">Item</th>
       <th style="${thBase}">Budget/mo</th>
       ${theadCols}
       <th style="${thBase}">Total</th>
     </tr></thead>`;
 
     function sectionRow(label, colspan) {
-      return `<tr><td colspan="${colspan}" style="${labelCell}background:var(--bg-raised);font-family:var(--font-mono,monospace);font-size:0.67rem;font-weight:600;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;padding:0.45rem 0.5rem;">${esc(label)}</td></tr>`;
+      return `<tr><td colspan="${colspan}" style="${labelCell}background:var(--bg-raised);font-family:var(--font-mono,monospace);font-size:0.54rem;font-weight:600;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;padding:0.36rem 0.4rem;">${esc(label)}</td></tr>`;
     }
 
     function subheaderRow(label, colspan) {
-      return `<tr><td colspan="${colspan}" style="${labelCell}font-size:0.71rem;color:var(--text-dim);padding-left:0.75rem;background:var(--bg-surface,var(--bg-raised));">&#8627; ${esc(label.toUpperCase())}</td></tr>`;
+      return `<tr><td colspan="${colspan}" style="${labelCell}font-size:0.57rem;color:var(--text-dim);padding-left:0.6rem;background:var(--bg-surface,var(--bg-raised));">&#8627; ${esc(label.toUpperCase())}</td></tr>`;
     }
 
     const totalCols = 2 + monthKeys.length + 1; // Item + Budget/mo + months + Total
@@ -395,7 +395,7 @@
       let budCell;
       if (editMode && dataType !== 'bgact') {
         budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-          style="width:72px;text-align:right;font-size:0.75rem;"
+          style="width:58px;text-align:right;font-size:0.60rem;"
           data-id="${esc(b.id)}" data-field="budget"
           value="${bAmt.toFixed(0)}"></td>`;
       } else {
@@ -418,7 +418,7 @@
           /* Show budget amount for each month (same as Budget/mo) */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:68px;text-align:right;font-size:0.75rem;"
+              style="width:54px;text-align:right;font-size:0.60rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
               value="${bAmt.toFixed(0)}"></td>`;
           }
@@ -427,7 +427,7 @@
         /* data: show actual, editable */
         if (editMode) {
           return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:68px;text-align:right;font-size:0.75rem;"
+            style="width:54px;text-align:right;font-size:0.60rem;"
             data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
             value="${actual.toFixed(0)}"></td>`;
         }
@@ -436,7 +436,7 @@
       }).join('');
 
       return `<tr>
-        <td style="${labelCell}padding-left:1rem;">${esc(b.label || '—')}</td>
+        <td style="${labelCell}padding-left:0.8rem;">${esc(b.label || '—')}</td>
         ${budCell}
         ${monthCells}
         <td style="${numCell}font-weight:600;">${fmt(rowTotal)}</td>
@@ -464,7 +464,7 @@
         let budCell;
         if (editMode && dataType !== 'bgact') {
           budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:72px;text-align:right;font-size:0.75rem;"
+            style="width:58px;text-align:right;font-size:0.60rem;"
             data-id="${esc(b.id)}" data-field="budget"
             value="${bAmt.toFixed(0)}"></td>`;
         } else {
@@ -485,7 +485,7 @@
           if (dataType === 'bg') {
             if (editMode) {
               return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-                style="width:68px;text-align:right;font-size:0.75rem;"
+                style="width:54px;text-align:right;font-size:0.60rem;"
                 data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
                 value="${bAmt.toFixed(0)}"></td>`;
             }
@@ -494,7 +494,7 @@
           /* data: actual, editable */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:68px;text-align:right;font-size:0.75rem;"
+              style="width:54px;text-align:right;font-size:0.60rem;"
               data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
               value="${actual.toFixed(0)}"></td>`;
           }
@@ -503,7 +503,7 @@
         }).join('');
 
         return `<tr>
-          <td style="${labelCell}padding-left:1.5rem;">${esc(b.label || '—')}</td>
+          <td style="${labelCell}padding-left:1.2rem;">${esc(b.label || '—')}</td>
           ${budCell}
           ${monthCells}
           <td style="${numCell}font-weight:600;">${fmt(rowTotal)}</td>
@@ -526,17 +526,17 @@
           /* Past months: show scheduled payment dimmed (historical plan) */
           return `<td style="${numCell}color:var(--text-dim);">${fmt(mp)}</td>`;
         }
-        if (remaining <= 0) return `<td style="${numCell}color:var(--text-dim);font-size:0.7rem;">✓</td>`;
+        if (remaining <= 0) return `<td style="${numCell}color:var(--text-dim);font-size:0.56rem;">✓</td>`;
         const pay = Math.min(mp, remaining);
         remaining -= pay;
         return `<td style="${numCell}">${fmt(pay)}</td>`;
       }).join('');
 
       return `<tr>
-        <td style="${labelCell}padding-left:1rem;">${esc(l.name || '—')}</td>
+        <td style="${labelCell}padding-left:0.8rem;">${esc(l.name || '—')}</td>
         <td style="${numCell}">${fmt(mp)}</td>
         ${monthCells}
-        <td style="${numCell}color:var(--text-dim);font-size:0.72rem;">${fmt(balance)}</td>
+        <td style="${numCell}color:var(--text-dim);font-size:0.58rem;">${fmt(balance)}</td>
       </tr>`;
     }).join('');
 
@@ -565,24 +565,24 @@
       const gc  = gapAct  >= 0 ? 'var(--green)' : 'var(--red)';
       const gcc = cumActGap >= 0 ? 'var(--green)' : 'var(--red)';
       gapActMonthCells.push(`<td style="${numCell}color:${gc};font-weight:600;">${fmt(gapAct)}</td>`);
-      gapCumMonthCells.push(`<td style="${numCell}color:${gcc};font-size:0.72rem;">${fmt(cumActGap)}</td>`);
+      gapCumMonthCells.push(`<td style="${numCell}color:${gcc};font-size:0.58rem;">${fmt(cumActGap)}</td>`);
     });
 
     const gapRow = `
       <tr>
-        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);">Budget Plan</td>
+        <td style="${labelCell}padding-left:0.6rem;font-size:0.58rem;color:var(--text-dim);">Budget Plan</td>
         <td style="${numCell}font-weight:700;color:${gapBudColor};">${fmt(gapBud)}</td>
         ${gapBudMonthCells}
         <td style="${numCell}font-weight:700;color:${gapBudColor};">${fmt(gapBud * 12)}</td>
       </tr>
       <tr>
-        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);">Actual</td>
+        <td style="${labelCell}padding-left:0.6rem;font-size:0.58rem;color:var(--text-dim);">Actual</td>
         <td style="${numCell}color:var(--text-dim);">—</td>
         ${gapActMonthCells.join('')}
         <td style="${numCell}font-weight:700;color:${totalActGap >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(totalActGap)}</td>
       </tr>
       <tr>
-        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);font-style:italic;">Cumulative</td>
+        <td style="${labelCell}padding-left:0.6rem;font-size:0.58rem;color:var(--text-dim);font-style:italic;">Cumulative</td>
         <td style="${numCell}color:var(--text-dim);">—</td>
         ${gapCumMonthCells.join('')}
         <td style="${numCell}color:var(--text-dim);">—</td>
@@ -594,7 +594,7 @@
     const noDebt = `<tr><td colspan="${totalCols}" style="${labelCell}color:var(--text-dim);">No active liabilities</td></tr>`;
 
     return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table style="width:100%;border-collapse:collapse;font-size:0.76rem;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.62rem;">
         ${thead}
         <tbody>
           ${sectionRow('EARN', totalCols)}
