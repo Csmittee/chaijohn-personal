@@ -114,6 +114,22 @@
         btn.textContent = type + (n > 0 ? ' (' + n + ')' : '');
       }
     });
+
+    /* KPI strip */
+    var kpiTotal = el('ideas-kpi-total');
+    if (kpiTotal) kpiTotal.textContent = total;
+
+    var now = new Date();
+    var mo1Start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    var mo6Start = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split('T')[0];
+    var dist1 = allEntries.filter(function (e) {
+      return e.fields.publish_to_web && (e.fields.date || '') >= mo1Start;
+    }).length;
+    var dist6 = allEntries.filter(function (e) {
+      return e.fields.publish_to_web && (e.fields.date || '') >= mo6Start;
+    }).length;
+    var kpi1 = el('ideas-kpi-dist1'); if (kpi1) kpi1.textContent = dist1;
+    var kpi6 = el('ideas-kpi-dist6'); if (kpi6) kpi6.textContent = dist6;
   }
 
   /* ────────────────────────────────────────────
@@ -681,7 +697,11 @@
         var f = btn.dataset.type;
         activeTypeFilter = (activeTypeFilter === f && f !== '') ? '' : f;
         filterBtns.forEach(function (b) {
-          b.className = 'badge ' + (b.dataset.type === activeTypeFilter ? 'badge-primary' : 'badge-gray');
+          if (b.dataset.type === activeTypeFilter) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
         });
         renderEntryList(allEntries);
       });

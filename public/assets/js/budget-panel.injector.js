@@ -375,7 +375,7 @@
 
       /* Budget/mo cell */
       let budCell;
-      if (editMode && (dataType === 'bgact' || dataType === 'bg')) {
+      if (editMode && dataType !== 'bgact' && (dataType === 'bg')) {
         budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
           style="width:72px;text-align:right;font-size:0.75rem;"
           data-id="${esc(b.id)}" data-field="budget"
@@ -389,6 +389,13 @@
         const actual = byMonth[ym] || 0;
         rowTotal += actual;
 
+        if (dataType === 'bgact') {
+          /* Variance view: actual − budget, read-only. Positive = earned more (green) */
+          const v = actual - bAmt;
+          const vc = v >= 0 ? 'color:var(--green);' : 'color:var(--red);';
+          const vs = v >= 0 ? '+' : '';
+          return `<td style="${numCell}${vc}">${vs}${fmt(Math.abs(v))}</td>`;
+        }
         if (dataType === 'bg') {
           /* Show budget amount for each month (same as Budget/mo) */
           if (editMode) {
@@ -399,18 +406,7 @@
           }
           return `<td style="${numCell}">${fmt(bAmt)}</td>`;
         }
-        if (dataType === 'data') {
-          /* Show actual, editable */
-          if (editMode) {
-            return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:68px;text-align:right;font-size:0.75rem;"
-              data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
-              value="${actual.toFixed(0)}"></td>`;
-          }
-          const color = actual > bAmt ? 'color:var(--green);' : '';
-          return `<td style="${numCell}${color}">${fmt(actual)}</td>`;
-        }
-        /* bgact: show actual, green if > budget */
+        /* data: show actual, editable */
         if (editMode) {
           return `<td style="${numCell}"><input type="number" class="bud-cell-input"
             style="width:68px;text-align:right;font-size:0.75rem;"
@@ -448,7 +444,7 @@
         let rowTotal = 0;
 
         let budCell;
-        if (editMode && (dataType === 'bgact' || dataType === 'bg')) {
+        if (editMode && dataType === 'bg') {
           budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
             style="width:72px;text-align:right;font-size:0.75rem;"
             data-id="${esc(b.id)}" data-field="budget"
@@ -461,6 +457,13 @@
           const actual = byMonth[ym] || 0;
           rowTotal += actual;
 
+          if (dataType === 'bgact') {
+            /* Variance: actual − budget, read-only. Negative = under-budget (good for expenses) */
+            const v = actual - bAmt;
+            const vc = v <= 0 ? 'color:var(--green);' : 'color:var(--red);';
+            const vs = v >= 0 ? '+' : '';
+            return `<td style="${numCell}${vc}">${vs}${fmt(Math.abs(v))}</td>`;
+          }
           if (dataType === 'bg') {
             if (editMode) {
               return `<td style="${numCell}"><input type="number" class="bud-cell-input"
@@ -470,17 +473,7 @@
             }
             return `<td style="${numCell}">${fmt(bAmt)}</td>`;
           }
-          if (dataType === 'data') {
-            if (editMode) {
-              return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-                style="width:68px;text-align:right;font-size:0.75rem;"
-                data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
-                value="${actual.toFixed(0)}"></td>`;
-            }
-            const over = actual > bAmt;
-            return `<td style="${numCell}${over ? 'color:var(--red);' : ''}">${fmt(actual)}</td>`;
-          }
-          /* bgact */
+          /* data: actual, editable */
           if (editMode) {
             return `<td style="${numCell}"><input type="number" class="bud-cell-input"
               style="width:68px;text-align:right;font-size:0.75rem;"
@@ -502,37 +495,63 @@
       return sub + rows;
     }).join('');
 
-    /* ── DEBT PAYBACK rows ── */
+    /* ── DEBT PAYBACK rows — monthly_payment in each month, stops at payoff ── */
+    const nowYM = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0');
     const debtRowsHtml = activeDebt.map(l => {
-      const mp = Number(l.monthly_payment || 0);
-      const dashCols = monthKeys.map(() => `<td style="${numCell}color:var(--text-dim);">—</td>`).join('');
+      const mp      = Number(l.monthly_payment || 0);
+      const balance = Number(l.current_balance || 0);
+      let remaining = balance;
+
+      const monthCells = monthKeys.map(ym => {
+        if (mp === 0) return `<td style="${numCell}color:var(--text-dim);">—</td>`;
+        if (ym < nowYM) {
+          /* Past months: show scheduled payment dimmed (historical plan) */
+          return `<td style="${numCell}color:var(--text-dim);">${fmt(mp)}</td>`;
+        }
+        if (remaining <= 0) return `<td style="${numCell}color:var(--text-dim);font-size:0.7rem;">✓</td>`;
+        const pay = Math.min(mp, remaining);
+        remaining -= pay;
+        return `<td style="${numCell}">${fmt(pay)}</td>`;
+      }).join('');
+
       return `<tr>
         <td style="${labelCell}padding-left:1rem;">${esc(l.name || '—')}</td>
         <td style="${numCell}">${fmt(mp)}</td>
-        ${dashCols}
-        <td style="${numCell}color:var(--text-dim);">—</td>
+        ${monthCells}
+        <td style="${numCell}color:var(--text-dim);font-size:0.72rem;">${fmt(balance)}</td>
       </tr>`;
     }).join('');
 
-    /* ── GAP row ── */
+    /* ── GAP rows: Budget Plan (static forecast) + Actual (per-month) ── */
     const gapBud = totalEarnBud - totalSpendBud - debtMonthly;
-    const gapColor = gapBud >= 0 ? 'var(--green)' : 'var(--red)';
+    const gapBudColor = gapBud >= 0 ? 'var(--green)' : 'var(--red)';
+    const gapBudMonthCells = monthKeys.map(() =>
+      `<td style="${numCell}color:${gapBudColor};font-weight:600;">${fmt(gapBud)}</td>`
+    ).join('');
 
-    /* Month-by-month GAP */
-    const gapMonthCells = monthKeys.map(ym => {
+    let totalActGap = 0;
+    const gapActMonthCells = monthKeys.map(ym => {
       const earnAct  = incBudgets.reduce((s, b) => s + ((earnByBudgetMonth[b.id]  || {})[ym] || 0), 0);
       const spendAct = expBudgets.reduce((s, b) => s + ((spendByBudgetMonth[b.id] || {})[ym] || 0), 0);
       const gapAct   = earnAct - spendAct - debtMonthly;
-      const gc       = gapAct >= 0 ? 'var(--green)' : 'var(--red)';
+      totalActGap   += gapAct;
+      const gc = gapAct >= 0 ? 'var(--green)' : 'var(--red)';
       return `<td style="${numCell}color:${gc};font-weight:600;">${fmt(gapAct)}</td>`;
     }).join('');
 
-    const gapRow = `<tr>
-      <td style="${labelCell}font-weight:700;">Gap (earn − spend − debt)</td>
-      <td style="${numCell}font-weight:700;color:${gapColor};">${fmt(gapBud)}</td>
-      ${gapMonthCells}
-      <td style="${numCell}color:var(--text-dim);">—</td>
-    </tr>`;
+    const gapRow = `
+      <tr>
+        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);">Budget Plan</td>
+        <td style="${numCell}font-weight:700;color:${gapBudColor};">${fmt(gapBud)}</td>
+        ${gapBudMonthCells}
+        <td style="${numCell}font-weight:700;color:${gapBudColor};">${fmt(gapBud * 12)}</td>
+      </tr>
+      <tr>
+        <td style="${labelCell}padding-left:0.75rem;font-size:0.72rem;color:var(--text-dim);">Actual</td>
+        <td style="${numCell}color:var(--text-dim);">—</td>
+        ${gapActMonthCells}
+        <td style="${numCell}font-weight:700;color:${totalActGap >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(totalActGap)}</td>
+      </tr>`;
 
     /* ── Assemble ── */
     const noInc  = `<tr><td colspan="${totalCols}" style="${labelCell}color:var(--text-dim);">No income budgets</td></tr>`;
@@ -707,6 +726,16 @@
 
   /* ── toggleEditMode() ── */
   function toggleEditMode() {
+    /* bgact is read-only variance view — auto-switch to 'data' when enabling edit */
+    if (!editMode && dataType === 'bgact') {
+      dataType = 'data';
+      const dtZone = el('bud-datatype-toggle');
+      if (dtZone) {
+        dtZone.querySelectorAll('[data-dtype]').forEach(b => b.classList.remove('active'));
+        const dataBtn = dtZone.querySelector('[data-dtype="data"]');
+        if (dataBtn) dataBtn.classList.add('active');
+      }
+    }
     editMode = !editMode;
     const btn = el('bud-edit-btn');
     if (btn) btn.textContent = 'Edit Mode: ' + (editMode ? 'ON' : 'OFF');
