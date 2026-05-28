@@ -43,7 +43,7 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 | Fix 9E | Budget panel full redesign — 12-mo matrix, analysis collapsible, graph/data filter zones, edit mode batch save, pending bar, card view · Diary Memo type + badges + thumbnails · Ideas panel full redesign · Dashboard stat spans | ✅ COMPLETE |
 | Fix 9E-R2 | Budget: custom start month picker, GAP actual (no debtMonthly, — for empty months), GAP cumulative row · Ideas: KPI strip, resizable list panel, Write/AI tab toggle, 3-dot pin | ✅ COMPLETE |
 | Fix budget | Fix budget save (removed window.confirm), entry category dropdown retry, duplicate period check, input font 0.62rem | ✅ COMPLETE |
-| Fix 9B4 | Cashflow card restoration + X-days due tool + cut cost simulation | ⬜ NEXT |
+| Fix 9B4 | Cashflow card restoration + X-days due tool + cut cost simulation | ✅ COMPLETE |
 | Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) — SCHEDULED NEXT WEEK | ⬜ SCHEDULED |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ FUTURE |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ FUTURE |
@@ -66,11 +66,9 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 - Diary (diary.html): list + editor + preview + AI modal + AI bottom pane + Undo + Memo type ✅
 
 **In progress / broken:**
-- Cashflow card view: missing budget spending cards, debt payback cards, project funding cards, presale income cards, borrow cards (only actual transactions and sales income show)
-- Cashflow simulation layer: not yet built
+- None currently known
 
 **Pending phases:**
-- Fix 9B4: Cashflow card restoration + X-days due tool + cut cost simulation
 - Fix 9C: Projects module (next week)
 
 ---
