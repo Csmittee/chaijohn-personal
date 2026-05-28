@@ -4,6 +4,15 @@
 
 ---
 
+## CASHFLOW PANEL (9B4)
+
+L049  Cashflow simulation: ghost line = original forecast (dashed), solid = simulated — never mutate original txData or stats for simulation; offset only
+L048  Parallel fetch pattern for card view: budgets + liabilities + projects fetched simultaneously with Promise.allSettled — never block on one fetch
+L048b cashflow-sync API uses `amount` field (not `balance`) — injector must send `{ amount, date }` on POST and read `syncPoint.amount` on GET
+L048c Cut-button delegation: attach once in init() on the permanent zone element — never add per-render to avoid listener accumulation
+
+---
+
 ## SHELL & PANELS (9A/9B/9B2)
 
 L047  Collapse+summary pattern: default collapsed, show 1-line summary above toggle, guard with `_utilToggleInit` flag to prevent double-bind

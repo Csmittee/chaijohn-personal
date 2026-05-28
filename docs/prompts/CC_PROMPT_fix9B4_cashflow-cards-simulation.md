@@ -1,3 +1,5 @@
+✅ COMPLETE — 2026-05-28 — Cashflow card restoration (budget/debt/borrow cards) + X-days due window tool + cut cost simulation with ghost chart comparison
+
 # CC_PROMPT_fix9B4_cashflow-cards-simulation.md
 > Restore missing cashflow card types + add X-days due window tool + cut cost simulation
 > Scope: cashflow.injector.js only — do NOT touch any other injector or API file
