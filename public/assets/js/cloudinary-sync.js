@@ -85,13 +85,13 @@
       const res = await fetch('/api/assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({
-        name: itemName,
-        category: category,
-        status: 'Holding',
-        cloudinary_image_url: mainUrl,
-        cloudinary_gallery_urls: JSON.stringify(galleryUrls)
-      })
+        body: JSON.stringify({
+          name: itemName,
+          category: category,
+          status: 'Holding',
+          cloudinary_image_url: mainUrl,
+          cloudinary_gallery_urls: JSON.stringify(galleryUrls)
+        })
       });
 
       if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + await res.text());
