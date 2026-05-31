@@ -79,7 +79,20 @@ export async function onRequestGet(context) {
   const group = url.searchParams.get('group');
   const item  = url.searchParams.get('item');
   const auth  = getAuth(env);
+// TEMP TEST — remove after confirming
+if (url.searchParams.get('test_collection')) {
+  const name = url.searchParams.get('test_collection');
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/collections/${encodeURIComponent(name)}/resources?max_results=10`,
+    { headers: { 'Authorization': auth } }
+  );
+  const text = await res.text();
+  return new Response(text, { status: res.status, headers: { 'Content-Type': 'application/json' } });
+}
 
+
+
+  
   try {
     if (item) {
       // Get images using asset_folder search (handles drag-drop uploads correctly)
