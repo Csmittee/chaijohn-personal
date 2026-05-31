@@ -1,3 +1,5 @@
+✅ COMPLETE — 2026-05-31 — FAB centering + Cloudinary sync button + gallery hover arrows applied to collection.injector.js
+
 # Collection Panel — Patch Instructions
 # 3 changes to collection.injector.js + 1 new API file
 

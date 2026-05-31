@@ -4,6 +4,14 @@
 
 ---
 
+## COLLECTION PANEL (gallery-sync)
+
+L050  Gallery hover: inject FAB CSS via `<style>` tag in init (not index.html) — clear FAB inner nodes so ::before provides the + unambiguously; attach gallery arrows via addEventListener not inline onclick
+L050b Filter bar sync button: find parent via `statusBtns[0].parentElement`, set display:flex on parent, use margin-left:auto on sync button for far-right alignment
+L050c Gallery multi-image: store allImages = [mainImage, ...galleryUrls]; parse cloudinary_gallery_urls as JSON; navigate with currentImageIndex closure per card
+
+---
+
 ## CASHFLOW PANEL (9B4)
 
 L049  Cashflow simulation: ghost line = original forecast (dashed), solid = simulated — never mutate original txData or stats for simulation; offset only

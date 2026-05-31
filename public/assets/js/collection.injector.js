@@ -1,6 +1,7 @@
 /**
  * collection.injector.js — Collection/Assets page logic.
  * Handles asset grid, filters, add/edit/sell/share modals.
+ * fix/collection-gallery-sync: FAB centering, Sync button, gallery hover
  */
 
 /* ─── Utility helpers ─── */
@@ -73,6 +74,34 @@ function gainLossHtml(cost, value) {
   return '<div style="font-size:0.78rem;' + cls + ';font-weight:600">' + (pct >= 0 ? '+' : '') + pct + '% vs cost</div>';
 }
 
+/* ─── CHANGE 1: FAB CSS injection for centered plus icon ─── */
+function injectFabCss() {
+  if (document.getElementById('collection-fab-style')) return;
+  const style = document.createElement('style');
+  style.id = 'collection-fab-style';
+  style.textContent = [
+    '.collection-fab{',
+    'position:fixed;bottom:24px;right:24px;',
+    'width:52px;height:52px;border-radius:50%;',
+    'background:#f0c040;border:none;cursor:pointer;',
+    'display:flex;align-items:center;justify-content:center;',
+    'font-size:24px;line-height:1;color:#0a0a18;',
+    'box-shadow:0 4px 16px rgba(240,192,64,0.4);z-index:100;',
+    '}',
+    '.collection-fab::before{content:"+";display:block;line-height:1;margin:0;padding:0;}',
+    '.collection-fab i,.collection-fab span,.collection-fab svg{display:none !important;}'
+  ].join('');
+  document.head.appendChild(style);
+
+  // Ensure FAB button has the class and no leftover icon children
+  const fab = document.getElementById('add-asset-btn') || document.getElementById('open-add-asset');
+  if (fab) {
+    fab.classList.add('collection-fab');
+    // Remove child nodes so ::before provides the + icon unambiguously
+    while (fab.firstChild) fab.removeChild(fab.firstChild);
+  }
+}
+
 /* ─── Load assets ─── */
 async function loadAssets() {
   const grid = document.getElementById('asset-grid');
@@ -103,60 +132,153 @@ async function loadAssets() {
   }
 }
 
-/* ─── Render asset grid ─── */
+/* ─── CHANGE 3: Build asset card with gallery hover ─── */
+function buildAssetCard(asset) {
+  const f = asset.fields || {};
+  const mainImage = f.cloudinary_image_url || '';
+
+  // Parse gallery URLs from cloudinary_gallery_urls field
+  let galleryUrls = [];
+  if (f.cloudinary_gallery_urls) {
+    try { galleryUrls = JSON.parse(f.cloudinary_gallery_urls); } catch (e) { galleryUrls = []; }
+  }
+  const allImages = mainImage ? [mainImage, ...galleryUrls] : galleryUrls;
+  let currentImageIndex = 0;
+
+  const card = document.createElement('div');
+  card.className = 'card asset-card';
+  card.style.cssText = 'border-radius:12px;overflow:hidden;display:flex;flex-direction:column';
+
+  // ── Image section ──────────────────────────────────────────────────────────
+  const imgWrap = document.createElement('div');
+  imgWrap.style.cssText = 'position:relative;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.03)';
+
+  if (allImages.length > 0) {
+    imgWrap.style.height = '160px';
+
+    const img = document.createElement('img');
+    img.src = allImages[0];
+    img.alt = f.name || '';
+    img.loading = 'lazy';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;transition:opacity 0.2s';
+    img.onerror = function () { this.style.display = 'none'; };
+    imgWrap.appendChild(img);
+
+    if (allImages.length > 1) {
+      // Gallery counter badge
+      const counter = document.createElement('div');
+      counter.style.cssText = 'position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:3px;pointer-events:none';
+      counter.textContent = '1 / ' + allImages.length;
+      imgWrap.appendChild(counter);
+
+      // Left arrow
+      const arrowLeft = document.createElement('button');
+      arrowLeft.textContent = '‹';
+      arrowLeft.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:14px;cursor:pointer;opacity:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center;line-height:1';
+
+      // Right arrow
+      const arrowRight = document.createElement('button');
+      arrowRight.textContent = '›';
+      arrowRight.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:14px;cursor:pointer;opacity:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center;line-height:1';
+
+      imgWrap.appendChild(arrowLeft);
+      imgWrap.appendChild(arrowRight);
+
+      // Show/hide arrows on hover
+      imgWrap.addEventListener('mouseenter', function () {
+        arrowLeft.style.opacity = '1';
+        arrowRight.style.opacity = '1';
+      });
+      imgWrap.addEventListener('mouseleave', function () {
+        arrowLeft.style.opacity = '0';
+        arrowRight.style.opacity = '0';
+        currentImageIndex = 0;
+        img.src = allImages[0];
+        counter.textContent = '1 / ' + allImages.length;
+      });
+
+      function navigate(dir) {
+        currentImageIndex = (currentImageIndex + dir + allImages.length) % allImages.length;
+        img.style.opacity = '0';
+        setTimeout(function () {
+          img.src = allImages[currentImageIndex];
+          img.style.opacity = '1';
+          counter.textContent = (currentImageIndex + 1) + ' / ' + allImages.length;
+        }, 150);
+      }
+
+      arrowLeft.addEventListener('click', function (e) { e.stopPropagation(); navigate(-1); });
+      arrowRight.addEventListener('click', function (e) { e.stopPropagation(); navigate(1); });
+    }
+  } else {
+    // No image placeholder
+    imgWrap.style.height = '100px';
+    imgWrap.style.display = 'flex';
+    imgWrap.style.alignItems = 'center';
+    imgWrap.style.justifyContent = 'center';
+    imgWrap.style.fontSize = '2.5rem';
+    imgWrap.style.background = 'rgba(255,255,255,0.02)';
+    imgWrap.textContent = '🗃️';
+  }
+
+  card.appendChild(imgWrap);
+
+  // ── Card body — matches existing structure ─────────────────────────────────
+  const body = document.createElement('div');
+  body.style.cssText = 'padding:0.85rem;flex:1;display:flex;flex-direction:column';
+  body.innerHTML =
+    '<div style="font-weight:600;font-size:0.9rem;margin-bottom:0.4rem;line-height:1.3">' + escHtml(f.name || 'Unnamed Asset') + '</div>' +
+    '<div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.55rem">' +
+      '<span style="' + statusBadgeStyle(f.status) + ';padding:0.12rem 0.4rem;border-radius:4px;font-size:0.68rem;font-weight:600">' + escHtml(f.status || 'Holding') + '</span>' +
+      (f.category ? '<span style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);padding:0.12rem 0.4rem;border-radius:4px;font-size:0.68rem">' + escHtml(f.category) + '</span>' : '') +
+      (f.velocity ? '<span style="background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.45);padding:0.12rem 0.4rem;border-radius:4px;font-size:0.65rem">' + escHtml(f.velocity) + '</span>' : '') +
+    '</div>' +
+    '<div style="font-size:0.8rem;margin-bottom:0.2rem;opacity:0.65">Cost: ' + formatThb(f.cost_price) + '</div>' +
+    '<div style="font-size:0.85rem;margin-bottom:0.25rem">Value: <strong>' + formatThb(f.estimated_value) + '</strong></div>' +
+    gainLossHtml(f.cost_price, f.estimated_value) +
+    (f.notes ? '<div style="font-size:0.73rem;opacity:0.45;margin-top:0.35rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(f.notes) + '">' + escHtml(f.notes.substring(0, 50)) + (f.notes.length > 50 ? '…' : '') + '</div>' : '');
+  card.appendChild(body);
+
+  // ── Action buttons ─────────────────────────────────────────────────────────
+  const actions = document.createElement('div');
+  actions.style.cssText = 'padding:0.6rem 0.85rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:0.4rem;flex-wrap:wrap';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn btn-sm btn-outline';
+  editBtn.style.cssText = 'flex:1;min-width:50px';
+  editBtn.textContent = 'Edit';
+  editBtn.addEventListener('click', function () { openEditAssetModal(asset.id); });
+  actions.appendChild(editBtn);
+
+  if (f.status !== 'Sold') {
+    const sellBtn = document.createElement('button');
+    sellBtn.className = 'btn btn-sm btn-success';
+    sellBtn.style.cssText = 'flex:0 0 auto';
+    sellBtn.textContent = 'Sell';
+    sellBtn.addEventListener('click', function () { openSellModal(asset.id); });
+    actions.appendChild(sellBtn);
+  }
+
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'btn btn-sm btn-outline';
+  shareBtn.style.cssText = 'flex:0 0 auto';
+  shareBtn.textContent = 'Share';
+  shareBtn.addEventListener('click', function () {
+    openShareModal(asset.id, f.name || '', f.estimated_value || 0, f.notes || '', f.cloudinary_image_url || '');
+  });
+  actions.appendChild(shareBtn);
+
+  card.appendChild(actions);
+  return card;
+}
+
+/* ─── Render asset grid — uses buildAssetCard for gallery support ─── */
 function renderAssetGrid(assets) {
   const grid = document.getElementById('asset-grid');
   if (!grid) return;
-
-  grid.innerHTML = assets.map(function (asset) {
-    const f = asset.fields || {};
-    const hasImage = !!f.cloudinary_image_url;
-
-    return `<div class="card asset-card" style="border-radius:12px;overflow:hidden;display:flex;flex-direction:column">
-      ${hasImage
-        ? `<div style="height:160px;overflow:hidden;background:rgba(255,255,255,0.03);flex-shrink:0">
-             <img src="${escHtml(f.cloudinary_image_url)}" alt="${escHtml(f.name)}" loading="lazy"
-               style="width:100%;height:100%;object-fit:cover"
-               onerror="this.parentElement.style.display='none'">
-           </div>`
-        : `<div style="height:100px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);font-size:2.5rem;flex-shrink:0">🗃️</div>`}
-      <div style="padding:0.85rem;flex:1;display:flex;flex-direction:column">
-        <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.4rem;line-height:1.3">${escHtml(f.name || 'Unnamed Asset')}</div>
-        <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.55rem">
-          <span style="${statusBadgeStyle(f.status)};padding:0.12rem 0.4rem;border-radius:4px;font-size:0.68rem;font-weight:600">${escHtml(f.status || 'Holding')}</span>
-          ${f.category ? `<span style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);padding:0.12rem 0.4rem;border-radius:4px;font-size:0.68rem">${escHtml(f.category)}</span>` : ''}
-          ${f.velocity ? `<span style="background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.45);padding:0.12rem 0.4rem;border-radius:4px;font-size:0.65rem">${escHtml(f.velocity)}</span>` : ''}
-        </div>
-        <div style="font-size:0.8rem;margin-bottom:0.2rem;opacity:0.65">Cost: ${formatThb(f.cost_price)}</div>
-        <div style="font-size:0.85rem;margin-bottom:0.25rem">Value: <strong>${formatThb(f.estimated_value)}</strong></div>
-        ${gainLossHtml(f.cost_price, f.estimated_value)}
-        ${f.notes ? `<div style="font-size:0.73rem;opacity:0.45;margin-top:0.35rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(f.notes)}">${escHtml(f.notes.substring(0, 50))}${f.notes.length > 50 ? '…' : ''}</div>` : ''}
-      </div>
-      <div style="padding:0.6rem 0.85rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:0.4rem;flex-wrap:wrap">
-        <button class="btn btn-sm btn-outline edit-asset-btn" data-id="${asset.id}" style="flex:1;min-width:50px">Edit</button>
-        ${f.status !== 'Sold' ? `<button class="btn btn-sm btn-success sell-asset-btn" data-id="${asset.id}" style="flex:0 0 auto">Sell</button>` : ''}
-        <button class="btn btn-sm btn-outline share-asset-btn"
-          data-id="${asset.id}"
-          data-name="${escHtml(f.name || '')}"
-          data-value="${f.estimated_value || 0}"
-          data-notes="${escHtml(f.notes || '')}"
-          data-image="${escHtml(f.cloudinary_image_url || '')}"
-          style="flex:0 0 auto">Share</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  // Wire buttons
-  grid.querySelectorAll('.edit-asset-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () { openEditAssetModal(btn.dataset.id); });
-  });
-  grid.querySelectorAll('.sell-asset-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () { openSellModal(btn.dataset.id); });
-  });
-  grid.querySelectorAll('.share-asset-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      openShareModal(btn.dataset.id, btn.dataset.name, btn.dataset.value, btn.dataset.notes, btn.dataset.image);
-    });
+  grid.innerHTML = '';
+  assets.forEach(function (asset) {
+    grid.appendChild(buildAssetCard(asset));
   });
 }
 
@@ -175,7 +297,6 @@ function updateSummaryStrip(assets) {
   const totalValue = assets.filter(function (a) { return a.fields.status !== 'Sold'; })
     .reduce(function (s, a) { return s + (a.fields.estimated_value || a.fields.cost_price || 0); }, 0);
 
-  // Update DOM elements if present
   const els = {
     'summary-holding': formatThb(holdingTotal),
     'summary-for-sale': forSaleCount + ' items',
@@ -275,7 +396,6 @@ async function saveAsset() {
 
   try {
     let cloudinaryUrl = null;
-    // Upload image if selected
     if (imageFileInput && imageFileInput.files && imageFileInput.files[0]) {
       const formData = new FormData();
       formData.append('file', imageFileInput.files[0]);
@@ -302,7 +422,6 @@ async function saveAsset() {
       date_acquired: dateAcquired || undefined,
       cloudinary_image_url: cloudinaryUrl || undefined
     };
-    // Remove undefined
     Object.keys(body).forEach(function (k) { if (body[k] === undefined) delete body[k]; });
 
     let res;
@@ -400,7 +519,6 @@ function openShareModal(assetId, name, value, notes, imageUrl) {
     else thumbEl.style.display = 'none';
   }
 
-  // Store asset ID for share buttons
   const fbBtn = document.getElementById('share-facebook-btn');
   if (fbBtn) fbBtn.dataset.assetId = assetId;
   const igBtn = document.getElementById('share-instagram-btn');
@@ -408,7 +526,6 @@ function openShareModal(assetId, name, value, notes, imageUrl) {
   const ploikongBtn = document.getElementById('share-ploikong-btn');
   if (ploikongBtn) ploikongBtn.dataset.assetId = assetId;
 
-  // Show share status messages cleared
   const statusEl = document.getElementById('share-status');
   if (statusEl) statusEl.textContent = '';
 
@@ -430,15 +547,11 @@ async function shareFacebook(assetId) {
     if (!res.ok) throw new Error('Export failed');
     const data = await res.json();
 
-    // Copy caption to clipboard
     if (data.ig_caption || data.fb_url) {
       const caption = data.ig_caption || data.asset_name;
-      try {
-        await navigator.clipboard.writeText(caption);
-      } catch (e) { /* clipboard may be blocked */ }
+      try { await navigator.clipboard.writeText(caption); } catch (e) { /* clipboard may be blocked */ }
     }
 
-    // Open Facebook share
     if (data.fb_url) {
       window.open(data.fb_url, '_blank', 'width=600,height=400');
     }
@@ -467,10 +580,7 @@ async function shareInstagram(assetId) {
     const data = await res.json();
 
     const caption = data.ig_caption || (data.asset_name + '\n\nPrice: ' + formatThb(data.estimated_value || 0));
-
-    try {
-      await navigator.clipboard.writeText(caption);
-    } catch (e) { /* clipboard may be blocked */ }
+    try { await navigator.clipboard.writeText(caption); } catch (e) { /* clipboard may be blocked */ }
 
     window.open('https://www.instagram.com', '_blank');
 
@@ -512,6 +622,9 @@ function openModal(modalId) {
 
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
+  // CHANGE 1: Fix FAB plus icon centering
+  injectFabCss();
+
   // Load initial assets
   loadAssets();
 
@@ -535,9 +648,44 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // CHANGE 2: Add Sync button to filter bar far right
+  const filterBar = statusBtns.length > 0 ? statusBtns[0].parentElement : null;
+  if (filterBar) {
+    filterBar.style.display = 'flex';
+    filterBar.style.alignItems = 'center';
+    filterBar.style.flexWrap = 'wrap';
+    if (!filterBar.style.gap) filterBar.style.gap = '0.4rem';
+
+    const syncBtn = document.createElement('button');
+    syncBtn.id = 'cloudinary-sync-btn';
+    syncBtn.textContent = '⬆ Sync from Cloudinary';
+    syncBtn.style.cssText = [
+      'margin-left:auto',
+      'background:transparent',
+      'border:.5px solid #2a2a4e',
+      'border-radius:6px',
+      'padding:4px 12px',
+      'font-size:10px',
+      'color:#85b7eb',
+      'cursor:pointer',
+      'white-space:nowrap'
+    ].join(';');
+    syncBtn.addEventListener('click', function () {
+      if (window.openCloudinarySync) {
+        window.openCloudinarySync();
+      } else {
+        console.error('cloudinary-sync.js not loaded');
+      }
+    });
+    filterBar.appendChild(syncBtn);
+  }
+
   // FAB / Add Asset button
   const addBtn = document.getElementById('add-asset-btn');
   if (addBtn) addBtn.addEventListener('click', openAddAssetModal);
+
+  // Expose refresh for cloudinary-sync.js to call after import
+  window._collectionRefresh = function () { loadAssets(); };
 
   // Asset modal save
   const assetSaveBtn = document.getElementById('asset-save-btn');
