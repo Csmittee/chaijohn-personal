@@ -44,6 +44,7 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 | Fix 9E-R2 | Budget: custom start month picker, GAP actual (no debtMonthly, — for empty months), GAP cumulative row · Ideas: KPI strip, resizable list panel, Write/AI tab toggle, 3-dot pin | ✅ COMPLETE |
 | Fix budget | Fix budget save (removed window.confirm), entry category dropdown retry, duplicate period check, input font 0.62rem | ✅ COMPLETE |
 | Fix 9B4 | Cashflow card restoration + X-days due tool + cut cost simulation | ✅ COMPLETE |
+| Collection gallery+sync | FAB centering · Cloudinary sync button · gallery hover arrows + counter on asset cards | ✅ COMPLETE |
 | Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) — SCHEDULED NEXT WEEK | ⬜ SCHEDULED |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ FUTURE |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ FUTURE |
@@ -62,7 +63,8 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 - Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
 - Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
 - Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅
-- Collection + AI panels: embedded in shell ✅ (not end-to-end tested)
+- Collection panel: FAB centered, Sync button in filter bar, gallery hover with arrows + counter on cards ✅ (collection-gallery-sync)
+- AI panel: embedded in shell ✅ (not end-to-end tested)
 - Diary (diary.html): list + editor + preview + AI modal + AI bottom pane + Undo + Memo type ✅
 
 **In progress / broken:**
