@@ -53,17 +53,21 @@
       resources.forEach(function (r) {
         const parts = r.public_id.split('/');
         if (parts.length < 3) return;
-        const folderName = parts[2];
-        const folderPath = parts.slice(0, 3).join('/');
-        if (!folderMap[folderName]) {
-          folderMap[folderName] = {
-            name: folderName,
-            path: folderPath,
-            parent: 'Collections',
+       // parts[2] = category folder (Knives/Vice/etc)
+        // parts[3] = item folder (Ajak UK/634/etc) — THIS is the asset name
+        if (parts.length < 4) return; // skip loose files in Collections root
+        const categoryName = parts[2];
+        const assetName = parts[3];
+        const assetKey = categoryName + '/' + assetName;
+        if (!folderMap[assetKey]) {
+          folderMap[assetKey] = {
+            name: assetName,
+            path: parts.slice(0, 4).join('/'),
+            parent: categoryName,
             resources: []
-          };
-        }
-        folderMap[folderName].resources.push(r);
+  };
+}
+folderMap[assetKey].resources.push(r);
       });
 
       const folders = Object.values(folderMap);
@@ -126,7 +130,7 @@
       const folder = resourcesByFolder[folderName];
       if (!folder) continue;
 
-      const category = FOLDER_CATEGORY_MAP[folderName] || 'Other';
+      const category = FOLDER_CATEGORY_MAP[folder.parent] || 'Other';
       log('info', '── ' + folderName + ' → ' + category);
 
       if (existingNames.has(folderName.toLowerCase().trim())) {
