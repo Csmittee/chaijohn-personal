@@ -69,7 +69,7 @@ async function getAssetsInFolder(folderPath, auth) {
   try {
     // Use search API to get all resources in folder
     const searchBody = {
-      expression: 'folder="' + folderPath + '"',
+      expression: 'public_id:' + folderPath + '/*',
       sort_by: [{ created_at: 'asc' }],
       max_results: 100,
       with_field: ['context', 'tags']
