@@ -26,6 +26,21 @@ L059b Balance sheet foundation (M1.1 — future): Net Worth = Total Assets (esti
 
 ---
 
+## PROJECTS MODULE (9C)
+
+L054  Projects: schema-projects.js must be called once by owner (POST /api/setup/schema-projects) before the panel works — it creates 5 Airtable tables in two phases (tables first, linked-record fields second)
+L054b Projects: when a project is created, auto-create 5 phases (DS/PT/PD/PV/LA), 4 exit milestones (FTS/PI/PL/PX), and seed tasks + resources for the detected type
+L054c Projects: when a task status→Done, check if ALL tasks in the same phase are Done — if so, auto-set phase status=Complete and milestone status=Reached with auto_date=today
+L054d Projects: depends_on_project_id is a linked-record field to Projects (cross-project dependency) — dependency_active=true blocks the dependent project; set to false when source project reaches 'Active'
+L054e Projects: auto_date field on milestones is a formula-type field in Airtable — do not attempt to write it; it auto-calculates from phase completion. The API returns it read-only
+L054f Projects: phase colors are fixed — DS=#3b82f6, PT=#8b5cf6, PD=#06b6d4, PV=#f59e0b, LA=#22c55e; do not invent new phases
+L054g Projects: renderLaneView() uses a 12-week window from Monday of (today + weekOffset*7); phase bands are drawn as percentage spans across the lane; launch diamond marker is always shown
+L054h Projects: openRedClearance(id) is the DEF CON equivalent for projects — shown when type=Active and health=critical; checklist must all be checked before "Mark resolved" unlocks
+L054i Projects: AI inquiry (runAiInquiry) calls /api/ai-chat with a structured prompt; types: 'feasibility', 'tasks', 'extend' — extend takes duration_weeks param
+L054j Projects: GET /api/projects returns enriched records with computed fields: total_tasks, delayed_tasks, pending_tasks, investment_total, days_to_launch — never compute these in the injector
+
+---
+
 ## CASHFLOW PANEL (9B5)
 
 L053  Cashflow: all card amounts must prorate via prorateAmount() — never use raw budget.amount for display or forecast
