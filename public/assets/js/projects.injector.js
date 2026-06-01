@@ -490,6 +490,7 @@
               <div>Net monthly <strong style="color:#22c55e">${fmt(netMo)}</strong></div>
               ${payback ? `<div>Payback <strong>${payback} yr</strong></div>` : ''}
             </div>
+            ${p.sales_forecast_sent ? `<div style="margin-top:0.5rem;font-size:0.72rem;color:#14b8a6;font-weight:700">✓ LIVE IN M2.2 SALES · ${fmt(revMo)}/mo forecast active</div>` : ''}
           </div>
           <!-- Action buttons -->
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -499,6 +500,13 @@
               style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
             ${!p.finance_opened ? `<button id="proj-focus-finance" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #22c55e;border-radius:var(--radius);background:transparent;color:#22c55e;cursor:pointer">Open Finance</button>` : ''}
+            ${p.sales_forecast_sent
+              ? `<button disabled style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #14b8a6;border-radius:var(--radius);background:rgba(20,184,166,0.1);color:#14b8a6;cursor:default;opacity:0.7">✓ In Sales</button>`
+              : (revMo > 0
+                ? `<button id="proj-focus-sales" data-projid="${p.id}"
+                    style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #14b8a6;border-radius:var(--radius);background:transparent;color:#14b8a6;cursor:pointer">→ Send to Sales</button>`
+                : `<button disabled title="Set target_revenue_monthly first" style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text-dim);cursor:not-allowed;opacity:0.5">→ Send to Sales</button>`
+              )}
             ${hb === 'red' ? `<button id="proj-focus-clear" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #ef4444;border-radius:var(--radius);background:rgba(239,68,68,0.1);color:#ef4444;cursor:pointer">⚡ Clear red</button>` : ''}
           </div>
@@ -511,6 +519,7 @@
       document.getElementById('proj-focus-finance')?.addEventListener('click', () => {
         window.location.hash = `finance-projects?project=${projectId}`;
       });
+      document.getElementById('proj-focus-sales')?.addEventListener('click', () => sendToSales(projectId));
       document.getElementById('proj-focus-clear')?.addEventListener('click', () => openRedClearance(projectId));
       document.getElementById('proj-add-task-btn')?.addEventListener('click', () => openDrawer('addtask', projectId));
 
@@ -947,6 +956,22 @@
       }
     } catch (err) {
       showMsg('pd-msg', err.message, false);
+    }
+  }
+
+  async function sendToSales(projectId) {
+    const msg = document.getElementById('proj-focus-msg');
+    if (!confirm('Send this project\'s monthly revenue forecast to M2.2 Sales?\nThe project will appear as a revenue lane until it matures into an active business.')) return;
+    try {
+      const res = await api('/api/projects/' + projectId, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sales_forecast_sent: true })
+      });
+      await loadAll();
+      renderFocusView(document.getElementById('proj-content'));
+      if (msg) { msg.textContent = '✓ Now live in M2.2 Sales'; msg.style.color = '#14b8a6'; msg.style.display = 'block'; }
+    } catch (err) {
+      if (msg) { msg.textContent = err.message; msg.style.color = '#ef4444'; msg.style.display = 'block'; }
     }
   }
 

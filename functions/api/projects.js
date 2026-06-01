@@ -91,9 +91,10 @@ export async function onRequestPost(context) {
 
   const fields = {
     name,
-    type:   body.type || 'Draft',
-    sga_pct: body.sga_pct !== undefined ? Number(body.sga_pct) : 10,
-    finance_opened: false
+    type:                 body.type || 'Draft',
+    sga_pct:              body.sga_pct !== undefined ? Number(body.sga_pct) : 10,
+    finance_opened:       false,
+    sales_forecast_sent:  false
   };
   if (body.idea)                    fields.idea                    = body.idea;
   if (body.customer_group)          fields.customer_group          = body.customer_group;

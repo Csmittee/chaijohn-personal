@@ -64,8 +64,17 @@ export async function onRequestPatch(context) {
 
   const fields = {};
   const allowed = ['name','idea','customer_group','problem_solved','competitor_url','type','current_phase',
-    'life_goal_link','repo_url','sga_pct','target_revenue_monthly','investment_total','finance_opened','notes'];
+    'life_goal_link','repo_url','sga_pct','target_revenue_monthly','investment_total','finance_opened',
+    'sales_forecast_sent','notes'];
   allowed.forEach(k => { if (body[k] !== undefined) fields[k] = body[k]; });
+
+  // Validate: sales_forecast_sent requires target_revenue_monthly
+  if (body.sales_forecast_sent === true) {
+    const existing = await getRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id);
+    const rev = body.target_revenue_monthly ?? existing.fields.target_revenue_monthly;
+    if (!rev || Number(rev) <= 0)
+      return errorResponse('target_revenue_monthly must be set before sending to Sales', 422);
+  }
 
   try {
     const updated = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id, fields);

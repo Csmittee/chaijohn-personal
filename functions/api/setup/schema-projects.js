@@ -68,6 +68,7 @@ export async function onRequestPost(context) {
       { name: 'investment_total',        type: 'currency',      options: { precision: 0, symbol: '฿' } },
       { name: 'payback_years',           type: 'number',        options: { precision: 2 } },
       { name: 'finance_opened',          type: 'checkbox',      options: { color: 'greenBright', icon: 'check' } },
+      { name: 'sales_forecast_sent',     type: 'checkbox',      options: { color: 'tealBright',  icon: 'check' } },
       { name: 'created_at',              type: 'date',          options: { dateFormat: { name: 'iso' } } },
       { name: 'notes',                   type: 'multilineText' }
     ]
