@@ -19,6 +19,7 @@
   let txMap       = {};
   let elecChart, waterChart, activeUtilChart = 'electricity', lastUtilRecords = [];
   let budgetActiveFilter = 'active';
+  let activeDefcon       = null; // DEF CON 5 strategy from KV
 
   function periodShort(p) {
     if (p === 'Monthly')  return 'mo';
@@ -91,6 +92,14 @@
     } catch { allBudgets = []; }
   }
 
+  /* ── DEF CON active strategy ── */
+  async function loadActiveStrategy() {
+    try {
+      const res = await api('/api/active-strategy');
+      activeDefcon = (res && res.active) ? res : null;
+    } catch { activeDefcon = null; }
+  }
+
   /* ── G6: populate dropdowns correctly ── */
   function populateCategoryDropdowns() {
     const earns    = categories.filter(c => c.type === 'Earn');
@@ -118,18 +127,43 @@
   function renderBudgetSelect(selId, buds) {
     const sel = document.getElementById(selId);
     if (!sel) return;
+
+    // DEF CON enforcement: separate on-hold from available budgets
+    const dc        = activeDefcon;
+    const onHoldIds = new Set(dc?.ticket?.onHold || []);
+    const intents   = dc?.ticket?.intents || {};
+
+    const available = buds.filter(b => !onHoldIds.has(b.id));
+    const onHold    = buds.filter(b => onHoldIds.has(b.id));
+
     const grouped = {};
-    buds.forEach(b => {
+    available.forEach(b => {
       const g = b.category_group || 'Other';
       if (!grouped[g]) grouped[g] = [];
       grouped[g].push(b);
     });
-    sel.innerHTML = '<option value="">— Select Budget —</option>' +
-      Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([grp, items]) =>
-        `<optgroup label="${grp}">` +
-        items.map(b => `<option value="${b.id}">${b.label} — ${fmt(b.amount)}/${periodShort(b.period)}</option>`).join('') +
-        '</optgroup>'
-      ).join('');
+
+    let html = '<option value="">— Select Budget —</option>';
+
+    html += Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([grp, items]) =>
+      `<optgroup label="${grp}">` +
+      items.map(b => {
+        const intentAmt = intents[b.id];
+        const suffix = intentAmt !== undefined
+          ? ` — intent: ${fmt(intentAmt)} ⚠`
+          : ` — ${fmt(b.amount)}/${periodShort(b.period)}`;
+        return `<option value="${b.id}">${b.label}${suffix}</option>`;
+      }).join('') +
+      '</optgroup>'
+    ).join('');
+
+    if (onHold.length > 0) {
+      html += `<optgroup label="▾ ${onHold.length} budget${onHold.length>1?'s':''} on hold — DEF CON 5" disabled>`;
+      html += onHold.map(b => `<option value="" disabled style="opacity:0.5">${b.label} — on hold · carry debt</option>`).join('');
+      html += '</optgroup>';
+    }
+
+    sel.innerHTML = html;
   }
 
   function renderCatSelect(selId, cats) {
@@ -1673,7 +1707,7 @@
   document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
     try {
-      await Promise.all([loadCategories(), loadBudgets()]);
+      await Promise.all([loadCategories(), loadBudgets(), loadActiveStrategy()]);
     } catch (err) {
       console.error('Failed to load initial data:', err);
     }
