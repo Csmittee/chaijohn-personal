@@ -89,7 +89,7 @@
     if (!zone) return;
     zone.innerHTML = `
       <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-        <button id="proj-create-btn" style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Create project</button>
+        <button id="proj-create-btn" style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Create project</button>
         <div class="range-toggle">
           ${['card','lane'].map(v=>`<button class="range-btn${currentView===v?' active':''}" data-projview="${v}" style="font-size:0.75rem">${v==='card'?'Card':'Lane'}</button>`).join('')}
         </div>
