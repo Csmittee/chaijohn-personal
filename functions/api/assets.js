@@ -1,18 +1,28 @@
-import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
+import { listAllRecords, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Assets';
+const KV_KEY = 'assets_all_v1';
+const KV_TTL = 300; // 5 minutes
 
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
   const status = url.searchParams.get('status');
   const category = url.searchParams.get('category');
+  const refresh = url.searchParams.get('refresh') === '1';
+
+  // KV cache for the unfiltered full-list — client handles filtering
+  if (!status && !category && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   const filters = [];
   if (status) filters.push(`{status}='${status}'`);
   if (category) filters.push(`{category}='${category}'`);
-
   const filterByFormula = filters.length === 0
     ? undefined
     : filters.length === 1
@@ -20,11 +30,17 @@ export async function onRequestGet(context) {
       : `AND(${filters.join(', ')})`;
 
   try {
-    const data = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
+    const data = await listAllRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
       filterByFormula,
       sort: [{ field: 'date_acquired', direction: 'desc' }],
-      maxRecords: 500
+      pageSize: 100
     });
+
+    // Cache only the unfiltered full-list
+    if (!status && !category && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(data.records), { expirationTtl: KV_TTL }).catch(() => {});
+    }
+
     return jsonResponse({ records: data.records });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -61,6 +77,8 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+    // Invalidate KV cache so next full load is fresh
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);

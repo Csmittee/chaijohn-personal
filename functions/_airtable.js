@@ -58,6 +58,17 @@ export async function getRecord(apiKey, baseId, tableName, recordId) {
   return res.json();
 }
 
+export async function listAllRecords(apiKey, baseId, tableName, params = {}) {
+  const all = [];
+  let offset;
+  do {
+    const page = await listRecords(apiKey, baseId, tableName, offset ? { ...params, offset } : params);
+    all.push(...(page.records || []));
+    offset = page.offset;
+  } while (offset);
+  return { records: all };
+}
+
 export function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

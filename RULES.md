@@ -4,6 +4,14 @@
 
 ---
 
+## COLLECTION PANEL (cache + pagination)
+
+L052  Cache-first rendering: load ALL assets once into `allAssets`; filter/sort client-side with `renderFilteredGrid()` — never re-fetch for filter changes
+L052b After add/edit/delete: update `allAssets` in memory from API response, call `renderFilteredGrid()` — never call `loadAssets()` after a mutation
+L052c Airtable pagination: `listRecords` returns only 100 records per call — use `listAllRecords` (auto-follows `offset`) for tables that may exceed 100 rows
+L052d KV cache for assets GET: store full unfiltered list in CHAIJOHN_KV with 5-min TTL; invalidate on every POST/PATCH/DELETE via `assets_all_v1` key
+L052e Force-refresh trigger: pass `?refresh=1` to `/api/assets` to bypass KV cache (e.g. after cloudinary-sync import)
+
 ## COLLECTION PANEL (edit-gallery)
 
 L051  Modal button IDs: HTML uses `save-asset-btn`, `asset-modal-cancel`, `confirm-sell`, `sell-cancel` — injector must bind these exact IDs; mismatches silently fail

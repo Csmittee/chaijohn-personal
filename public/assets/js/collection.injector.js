@@ -1,6 +1,7 @@
 /**
- * collection.injector.js — Collection/Assets page logic.
- * fix/collection-edit-gallery: modal save/cancel/delete, image URL pre-fill, summary bar fix
+ * collection.injector.js — Collection/Assets panel logic.
+ * Cache-first: load ALL assets once from API, filter/render client-side.
+ * Add/Edit/Delete update local cache + re-render — no full API reload.
  */
 
 /* ─── Utility helpers ─── */
@@ -40,8 +41,14 @@ function escHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function parseGalleryUrls(raw) {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
 /* ─── State ─── */
-let allAssets = [];
+let allAssets = [];         // local cache — full unfiltered list
+let assetsLoaded = false;   // true once first API fetch completes
 let activeStatusFilter = '';
 let activeCategoryFilter = '';
 let editingAssetId = null;
@@ -64,7 +71,7 @@ function gainLossHtml(cost, value) {
   return '<div style="font-size:0.78rem;' + cls + ';font-weight:600">' + (pct >= 0 ? '+' : '') + pct + '% vs cost</div>';
 }
 
-/* ─── FAB CSS injection for centered plus icon ─── */
+/* ─── FAB CSS injection ─── */
 function injectFabCss() {
   if (document.getElementById('collection-fab-style')) return;
   const style = document.createElement('style');
@@ -90,33 +97,45 @@ function injectFabCss() {
   }
 }
 
-/* ─── Load assets ─── */
-async function loadAssets() {
+/* ─── Client-side filter + render — no API call ─── */
+function renderFilteredGrid() {
+  let filtered = allAssets;
+  if (activeStatusFilter) filtered = filtered.filter(function (a) { return (a.fields.status || '') === activeStatusFilter; });
+  if (activeCategoryFilter) filtered = filtered.filter(function (a) { return (a.fields.category || '') === activeCategoryFilter; });
+
   const grid = document.getElementById('asset-grid');
   if (!grid) return;
 
-  grid.innerHTML = '<div style="text-align:center;padding:3rem;opacity:0.45;grid-column:1/-1">Loading…</div>';
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div style="text-align:center;padding:3rem;opacity:0.45;grid-column:1/-1">No assets found.</div>';
+  } else {
+    grid.innerHTML = '';
+    filtered.forEach(function (asset) { grid.appendChild(buildAssetCard(asset)); });
+  }
+
+  updateSummaryStrip(allAssets); // summary always from full list
+}
+
+/* ─── Load ALL assets from API (paginated via server), cache in allAssets ─── */
+async function loadAssets(force) {
+  if (assetsLoaded && !force) {
+    renderFilteredGrid();
+    return;
+  }
+
+  const grid = document.getElementById('asset-grid');
+  if (grid) grid.innerHTML = '<div style="text-align:center;padding:3rem;opacity:0.45;grid-column:1/-1">Loading…</div>';
 
   try {
-    let url = '/api/assets?';
-    if (activeStatusFilter) url += 'status=' + encodeURIComponent(activeStatusFilter) + '&';
-    if (activeCategoryFilter) url += 'category=' + encodeURIComponent(activeCategoryFilter) + '&';
-
-    const res = await api(url.replace(/[?&]$/, ''));
+    const url = force ? '/api/assets?refresh=1' : '/api/assets';
+    const res = await api(url);
     if (!res.ok) throw new Error('Failed to load assets');
     const data = await res.json();
     allAssets = data.records || [];
-
-    if (allAssets.length === 0) {
-      grid.innerHTML = '<div style="text-align:center;padding:3rem;opacity:0.45;grid-column:1/-1">No assets found. Add your first item!</div>';
-      updateSummaryStrip([]);
-      return;
-    }
-
-    renderAssetGrid(allAssets);
-    updateSummaryStrip(allAssets);
+    assetsLoaded = true;
+    renderFilteredGrid();
   } catch (e) {
-    grid.innerHTML = '<div style="color:#ef4444;padding:1rem;grid-column:1/-1">Error: ' + e.message + '</div>';
+    if (grid) grid.innerHTML = '<div style="color:#ef4444;padding:1rem;grid-column:1/-1">Error: ' + e.message + '</div>';
   }
 }
 
@@ -124,18 +143,16 @@ async function loadAssets() {
 function buildAssetCard(asset) {
   const f = asset.fields || {};
   const mainImage = f.cloudinary_image_url || '';
-
-  let galleryUrls = [];
-  if (f.cloudinary_gallery_urls) {
-    try { galleryUrls = JSON.parse(f.cloudinary_gallery_urls); } catch (e) { galleryUrls = []; }
-  }
+  const galleryUrls = parseGalleryUrls(f.cloudinary_gallery_urls);
   const allImages = mainImage ? [mainImage, ...galleryUrls] : galleryUrls;
   let currentImageIndex = 0;
 
   const card = document.createElement('div');
   card.className = 'card asset-card';
+  card.dataset.assetId = asset.id;
   card.style.cssText = 'border-radius:12px;overflow:hidden;display:flex;flex-direction:column';
 
+  // ── Image section ────────────────────────────────────────────────────────────
   const imgWrap = document.createElement('div');
   imgWrap.style.cssText = 'position:relative;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.03)';
 
@@ -204,6 +221,7 @@ function buildAssetCard(asset) {
 
   card.appendChild(imgWrap);
 
+  // ── Card body ────────────────────────────────────────────────────────────────
   const body = document.createElement('div');
   body.style.cssText = 'padding:0.85rem;flex:1;display:flex;flex-direction:column';
   body.innerHTML =
@@ -219,6 +237,7 @@ function buildAssetCard(asset) {
     (f.notes ? '<div style="font-size:0.73rem;opacity:0.45;margin-top:0.35rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(f.notes) + '">' + escHtml(f.notes.substring(0, 50)) + (f.notes.length > 50 ? '…' : '') + '</div>' : '');
   card.appendChild(body);
 
+  // ── Action buttons ───────────────────────────────────────────────────────────
   const actions = document.createElement('div');
   actions.style.cssText = 'padding:0.6rem 0.85rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:0.4rem;flex-wrap:wrap';
 
@@ -251,17 +270,15 @@ function buildAssetCard(asset) {
   return card;
 }
 
-/* ─── Render asset grid ─── */
+/* ─── Render asset grid from pre-filtered array ─── */
 function renderAssetGrid(assets) {
   const grid = document.getElementById('asset-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  assets.forEach(function (asset) {
-    grid.appendChild(buildAssetCard(asset));
-  });
+  assets.forEach(function (asset) { grid.appendChild(buildAssetCard(asset)); });
 }
 
-/* ─── Summary strip — IDs match index.html: sum-holding, sum-forsale, sum-sold-ytd, sum-knife, sum-vice, sum-plant, sum-doll ─── */
+/* ─── Summary strip — IDs match index.html ─── */
 function updateSummaryStrip(assets) {
   const currentYear = new Date().getFullYear();
 
@@ -272,9 +289,7 @@ function updateSummaryStrip(assets) {
   const forSaleCount = assets.filter(function (a) { return a.fields.status === 'For Sale'; }).length;
 
   const soldYtd = assets
-    .filter(function (a) {
-      return a.fields.status === 'Sold' && (a.fields.sold_date || '').startsWith(String(currentYear));
-    })
+    .filter(function (a) { return a.fields.status === 'Sold' && (a.fields.sold_date || '').startsWith(String(currentYear)); })
     .reduce(function (s, a) { return s + (a.fields.sold_price || 0); }, 0);
 
   function catVal(cat) {
@@ -297,6 +312,44 @@ function updateSummaryStrip(assets) {
     const el = document.getElementById(id);
     if (el) el.textContent = map[id];
   });
+}
+
+/* ─── Refresh preview thumbnails in edit modal ─── */
+function renderModalPreview(mainUrl, galleryRaw) {
+  const previewEl = document.getElementById('asset-image-preview');
+  if (!previewEl) return;
+  previewEl.innerHTML = '';
+
+  const urls = [];
+  if (mainUrl) urls.push(mainUrl);
+  parseGalleryUrls(galleryRaw).forEach(function (u) { urls.push(u); });
+
+  if (urls.length === 0) return;
+
+  const strip = document.createElement('div');
+  strip.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:0.4rem';
+
+  urls.forEach(function (url, idx) {
+    const img = document.createElement('img');
+    img.src = url;
+    img.title = idx === 0 ? 'Main image' : 'Gallery ' + idx;
+    img.style.cssText = 'height:56px;width:56px;object-fit:cover;border-radius:4px;cursor:pointer;border:' + (idx === 0 ? '1.5px solid #f0c040' : '1px solid rgba(255,255,255,0.1)');
+    img.onerror = function () { this.style.display = 'none'; };
+    // Click thumbnail to paste URL into main URL field
+    img.addEventListener('click', function () {
+      const urlField = document.getElementById('asset-image-url');
+      if (urlField) { urlField.value = url; renderModalPreview(url, null); }
+    });
+    strip.appendChild(img);
+  });
+
+  previewEl.appendChild(strip);
+  if (urls.length > 1) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:0.68rem;opacity:0.45;margin-top:2px';
+    hint.textContent = 'Gold border = main image · click to set as main';
+    previewEl.appendChild(hint);
+  }
 }
 
 /* ─── Asset modal (add/edit) ─── */
@@ -323,10 +376,8 @@ function openAddAssetModal() {
   const hiddenId = document.getElementById('asset-edit-id');
   if (hiddenId) hiddenId.value = '';
 
-  const previewEl = document.getElementById('asset-image-preview');
-  if (previewEl) previewEl.innerHTML = '';
+  renderModalPreview('', null);
 
-  // Hide delete button in add mode
   const deleteBtn = document.getElementById('delete-asset-btn');
   if (deleteBtn) deleteBtn.style.display = 'none';
 
@@ -350,20 +401,15 @@ function openEditAssetModal(assetId) {
     'asset-value': f.estimated_value || '',
     'asset-notes': f.notes || '',
     'asset-date': f.date_acquired || '',
-    'asset-image-url': f.cloudinary_image_url || ''  // pre-fill URL field from Airtable
+    'asset-image-url': f.cloudinary_image_url || ''
   };
   Object.keys(fieldMap).forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.value = fieldMap[id];
   });
 
-  // Show image preview if URL exists
-  const previewEl = document.getElementById('asset-image-preview');
-  if (previewEl) {
-    previewEl.innerHTML = f.cloudinary_image_url
-      ? '<img src="' + escHtml(f.cloudinary_image_url) + '" style="max-height:80px;border-radius:6px;margin-top:0.3rem" onerror="this.style.display=\'none\'">'
-      : '';
-  }
+  // Show all images: main + gallery thumbnails
+  renderModalPreview(f.cloudinary_image_url || '', f.cloudinary_gallery_urls || '');
 
   const catSel = document.getElementById('asset-category');
   if (catSel) catSel.value = f.category || 'Other';
@@ -375,7 +421,6 @@ function openEditAssetModal(assetId) {
   const hiddenId = document.getElementById('asset-edit-id');
   if (hiddenId) hiddenId.value = assetId;
 
-  // Show delete button in edit mode
   const deleteBtn = document.getElementById('delete-asset-btn');
   if (deleteBtn) deleteBtn.style.display = '';
 
@@ -419,7 +464,7 @@ async function saveAsset() {
       }
     }
 
-    // Priority 2: URL text field (existing or newly pasted)
+    // Priority 2: URL text field
     if (!cloudinaryUrl && imageUrlInput && imageUrlInput.value.trim()) {
       cloudinaryUrl = imageUrlInput.value.trim();
     }
@@ -445,10 +490,22 @@ async function saveAsset() {
     }
 
     if (res.ok) {
+      const data = await res.json();
+      const savedRecord = data.record;
+
+      // Update local cache — no full reload needed
+      if (editingAssetId) {
+        const idx = allAssets.findIndex(function (a) { return a.id === editingAssetId; });
+        if (idx !== -1) allAssets[idx] = savedRecord;
+        else allAssets.unshift(savedRecord);
+      } else {
+        allAssets.unshift(savedRecord);
+      }
+
       showFlash(editingAssetId ? 'Asset updated!' : 'Asset added!');
       closeModal('asset-modal');
       if (imageFileInput) imageFileInput.value = '';
-      await loadAssets();
+      renderFilteredGrid(); // instant, from local cache
     } else {
       const d = await res.json().catch(function () { return {}; });
       showFlash(d.error || 'Save failed', 'error');
@@ -506,9 +563,14 @@ async function confirmSell() {
     });
 
     if (res.ok) {
+      const data = await res.json();
+      const savedRecord = data.record;
+      const idx = allAssets.findIndex(function (a) { return a.id === assetId; });
+      if (idx !== -1) allAssets[idx] = savedRecord;
+
       showFlash('Sold! 🎉');
       closeModal('sell-modal');
-      await loadAssets();
+      renderFilteredGrid();
     } else {
       const d = await res.json().catch(function () { return {}; });
       showFlash(d.error || 'Failed to mark as sold', 'error');
@@ -556,21 +618,13 @@ async function shareFacebook(assetId) {
       method: 'POST',
       body: JSON.stringify({ asset_id: assetId })
     });
-
     if (!res.ok) throw new Error('Export failed');
     const data = await res.json();
-
     if (data.ig_caption || data.fb_url) {
-      const caption = data.ig_caption || data.asset_name;
-      try { await navigator.clipboard.writeText(caption); } catch (e) { /* clipboard may be blocked */ }
+      try { await navigator.clipboard.writeText(data.ig_caption || data.asset_name); } catch (e) {}
     }
-
-    if (data.fb_url) {
-      window.open(data.fb_url, '_blank', 'width=600,height=400');
-    }
-
-    if (statusEl) statusEl.textContent = 'Caption copied! Facebook opened.';
-    if (statusEl) statusEl.style.color = '#22c55e';
+    if (data.fb_url) window.open(data.fb_url, '_blank', 'width=600,height=400');
+    if (statusEl) { statusEl.textContent = 'Caption copied! Facebook opened.'; statusEl.style.color = '#22c55e'; }
   } catch (e) {
     if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = '#ef4444'; }
   } finally {
@@ -588,17 +642,12 @@ async function shareInstagram(assetId) {
       method: 'POST',
       body: JSON.stringify({ asset_id: assetId })
     });
-
     if (!res.ok) throw new Error('Export failed');
     const data = await res.json();
-
     const caption = data.ig_caption || (data.asset_name + '\n\nPrice: ' + formatThb(data.estimated_value || 0));
-    try { await navigator.clipboard.writeText(caption); } catch (e) { /* clipboard may be blocked */ }
-
+    try { await navigator.clipboard.writeText(caption); } catch (e) {}
     window.open('https://www.instagram.com', '_blank');
-
-    if (statusEl) statusEl.textContent = 'Caption copied! Open Instagram and paste.';
-    if (statusEl) statusEl.style.color = '#22c55e';
+    if (statusEl) { statusEl.textContent = 'Caption copied! Open Instagram and paste.'; statusEl.style.color = '#22c55e'; }
   } catch (e) {
     if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = '#ef4444'; }
   } finally {
@@ -610,11 +659,9 @@ async function syncPloikong(assetId) {
   const statusEl = document.getElementById('share-status');
   const btn = document.getElementById('share-ploikong-btn');
   if (btn) btn.disabled = true;
-
   try {
     await api('/api/assets/' + assetId + '/ploikong-sync', { method: 'POST' });
-    if (statusEl) statusEl.textContent = 'Logged for Ploikong sync — available in v2';
-    if (statusEl) statusEl.style.color = '#60a5fa';
+    if (statusEl) { statusEl.textContent = 'Logged for Ploikong sync — available in v2'; statusEl.style.color = '#60a5fa'; }
   } catch (e) {
     if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = '#ef4444'; }
   } finally {
@@ -633,27 +680,29 @@ document.addEventListener('DOMContentLoaded', function () {
   injectFabCss();
   loadAssets();
 
-  // Status filter buttons
+  // Status filter — client-side only after initial load
   const statusBtns = document.querySelectorAll('[data-status-filter]');
   statusBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
       statusBtns.forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       activeStatusFilter = btn.dataset.statusFilter === 'all' ? '' : btn.dataset.statusFilter;
-      loadAssets();
+      if (assetsLoaded) renderFilteredGrid();
+      else loadAssets();
     });
   });
 
-  // Category filter dropdown
+  // Category filter — client-side only after initial load
   const catFilter = document.getElementById('category-filter');
   if (catFilter) {
     catFilter.addEventListener('change', function () {
       activeCategoryFilter = catFilter.value;
-      loadAssets();
+      if (assetsLoaded) renderFilteredGrid();
+      else loadAssets();
     });
   }
 
-  // Sync button — added to collection-filters bar (not to .period-toggle inner div)
+  // Sync button in outer filter bar
   const filterBar = document.getElementById('collection-filters');
   if (filterBar && !document.getElementById('cloudinary-sync-btn')) {
     const syncBtn = document.createElement('button');
@@ -671,12 +720,12 @@ document.addEventListener('DOMContentLoaded', function () {
   const addBtn = document.getElementById('add-asset-btn');
   if (addBtn) addBtn.addEventListener('click', openAddAssetModal);
 
-  // Expose refresh for cloudinary-sync.js to call after import
-  window._collectionRefresh = function () { loadAssets(); };
+  // Force-refresh after cloudinary-sync imports
+  window._collectionRefresh = function () { loadAssets(true); };
 
   // ── Asset modal ─────────────────────────────────────────────────────────────
 
-  // Inject Delete button into modal footer (between Cancel and Save) — only once
+  // Inject Delete button into modal footer (hidden by default)
   const modalFooter = document.querySelector('#asset-modal .flex.justify-between');
   if (modalFooter && !document.getElementById('delete-asset-btn')) {
     const deleteBtn = document.createElement('button');
@@ -694,21 +743,27 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!confirm('Delete this asset? This cannot be undone.')) return;
       try {
         const res = await api('/api/assets/' + id, { method: 'DELETE' });
-        if (res.ok) { showFlash('Deleted'); closeModal('asset-modal'); await loadAssets(); }
-        else showFlash('Delete failed', 'error');
+        if (res.ok) {
+          allAssets = allAssets.filter(function (a) { return a.id !== id; });
+          showFlash('Deleted');
+          closeModal('asset-modal');
+          renderFilteredGrid();
+        } else {
+          showFlash('Delete failed', 'error');
+        }
       } catch (e) { showFlash('Error: ' + e.message, 'error'); }
     });
   }
 
-  // Save button — HTML ID is save-asset-btn
+  // Save — HTML ID is save-asset-btn
   const assetSaveBtn = document.getElementById('save-asset-btn');
   if (assetSaveBtn) assetSaveBtn.addEventListener('click', saveAsset);
 
-  // Cancel button — HTML ID is asset-modal-cancel
+  // Cancel — HTML ID is asset-modal-cancel
   const assetCancelBtn = document.getElementById('asset-modal-cancel');
   if (assetCancelBtn) assetCancelBtn.addEventListener('click', function () { closeModal('asset-modal'); });
 
-  // Close (×) button and backdrop
+  // Close × and backdrop
   const assetModalClose = document.getElementById('asset-modal-close');
   if (assetModalClose) assetModalClose.addEventListener('click', function () { closeModal('asset-modal'); });
   const assetBackdrop = document.getElementById('asset-modal');
@@ -720,15 +775,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── Sell modal ──────────────────────────────────────────────────────────────
 
-  // Confirm Sale — HTML ID is confirm-sell
   const sellConfirmBtn = document.getElementById('confirm-sell');
   if (sellConfirmBtn) sellConfirmBtn.addEventListener('click', confirmSell);
 
-  // Cancel — HTML ID is sell-cancel
   const sellCancelBtn = document.getElementById('sell-cancel');
   if (sellCancelBtn) sellCancelBtn.addEventListener('click', function () { closeModal('sell-modal'); });
 
-  // Close (×) button and backdrop
   const sellModalClose = document.getElementById('sell-modal-close');
   if (sellModalClose) sellModalClose.addEventListener('click', function () { closeModal('sell-modal'); });
   const sellBackdrop = document.getElementById('sell-modal');
@@ -758,14 +810,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Escape closes any open modal
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      ['asset-modal', 'sell-modal', 'share-modal'].forEach(closeModal);
-    }
+    if (e.key === 'Escape') ['asset-modal', 'sell-modal', 'share-modal'].forEach(closeModal);
   });
 });
 
-// Reload assets when collection panel activates
-var collectionLoaded = false;
+// Panel re-activation — use cache, no re-fetch
 window.addEventListener('panelactivated', function (e) {
-  if (e.detail === 'collection') { loadAssets(); collectionLoaded = true; }
+  if (e.detail === 'collection') loadAssets(); // guard inside loadAssets handles cache hit
 });
