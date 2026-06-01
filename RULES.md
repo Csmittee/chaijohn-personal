@@ -4,6 +4,21 @@
 
 ---
 
+## CASHFLOW PANEL (9B5)
+
+L053  Cashflow: all card amounts must prorate via prorateAmount() — never use raw budget.amount for display or forecast
+L053b Cashflow: buildForecast() is the single source of truth — never calculate running balance anywhere else
+L053c Cashflow: 3 budget types — standard (daily burn fixed per calendar month), one-day-bound (lump on start_date), force-pay (lump on period_due_day each month)
+L053d Cashflow: daily_burn = monthly_prorated / total_days_in_month (fixed rate) — NEVER divide by days remaining
+L053e Cashflow: debt payments booked only on payment_due_day — no spreading, default 5th if missing
+L053f DEF CON: checkFirewall() runs after every buildForecast() completion — never manually triggered
+L053g DEF CON: exit test uses GROSS budget amounts (no intents, no on-hold) — honest test only
+L053h Carry debt: budget backlog_type field — 'carry' accumulates as family debt, 'forgive' disappears; default 'forgive' if missing
+L053i Simulation: state persists in CF module object — never localStorage; dies on panel nav or Reset
+L053j Cashflow: active-strategy GET/POST uses KV key 'active_strategy' — not cashflow_sync
+
+---
+
 ## COLLECTION PANEL (cache + pagination)
 
 L052  Cache-first rendering: load ALL assets once into `allAssets`; filter/sort client-side with `renderFilteredGrid()` — never re-fetch for filter changes

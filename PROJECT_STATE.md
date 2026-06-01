@@ -47,6 +47,7 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 | Collection gallery+sync | FAB centering · Cloudinary sync button · gallery hover arrows + counter on asset cards | ✅ COMPLETE |
 | Fix collection-edit | Edit modal save/cancel/delete · image URL pre-fill · summary bar IDs · API cloudinary_gallery_urls | ✅ COMPLETE |
 | Fix collection-cache | Cache-first rendering · no reload on edit/add/delete · listAllRecords pagination · KV 5-min cache for assets GET · gallery thumbnails in modal | ✅ COMPLETE |
+| Fix 9B5 | Cashflow complete redesign: correct forecast engine (3 budget types, debt on due dates), DEF CON 5 firewall, simulation mode (on hold + intent + action plan), card view with DEBT/BUDGET/INCOME sections, drag-to-reorder, X-days due tool, Other month navigation, entry drawer DEF CON enforcement | ✅ COMPLETE |
 | Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) — SCHEDULED NEXT WEEK | ⬜ SCHEDULED |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ FUTURE |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ FUTURE |
@@ -70,7 +71,7 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 - Diary (diary.html): list + editor + preview + AI modal + AI bottom pane + Undo + Memo type ✅
 
 **In progress / broken:**
-- None currently known
+- None currently known (Fix 9B5 cashflow rewrite complete — awaiting QA)
 
 **Pending phases:**
 - Fix 9C: Projects module (next week)
@@ -122,7 +123,7 @@ Every CC session must preserve:
         └── js/
             ├── auth.js                   ✅
             ├── dropzone.js               ✅
-            ├── cashflow.injector.js      ✅ IIFE, lazy via panelactivated
+            ├── cashflow.injector.js      ✅ 9B5 — forecast engine + DEF CON 5 + simulation mode
             ├── expenses.injector.js      ✅ IIFE, lazy via panelactivated
             ├── liabilities-panel.injector.js ✅ IIFE, lazy via panelactivated
             ├── budget-panel.injector.js  ✅ 9E-R2 — 12-mo matrix, GAP rows, edit mode
@@ -143,6 +144,7 @@ functions/
     ├── liabilities.js                    ✅ loan received → Income tx
     ├── liabilities/[id].js               ✅ payment → Expense tx
     ├── cashflow-sync.js                  ✅ GET/POST KV sync point
+    ├── active-strategy.js               ✅ 9B5 — GET/POST KV active_strategy (DEF CON 5)
     ├── budgets.js                        ✅ GET/POST with period duplicate check
     ├── budgets/[id].js                   ✅ PATCH/DELETE
     ├── assets.js                         ✅
