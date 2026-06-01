@@ -324,12 +324,18 @@ The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) 
 
 **Next:**
 1. Fix 9E-hard — M3.3 Hard Assets (physical property, vehicles, valuables)
+Note: The immediate next task is CC_PROMPT_fix9C-rewire_m24-finance-projects.md
+— this comes BEFORE Fix 9E-hard. M2.4 Finance Projects and presale bridge
+are not yet built. PROJECT_STATE.md roadmap will be updated by CC after this session.
+
 
 **Medium term (in order):**
 4. Fix 9F — M4.3 Time Management (today view from project tasks)
 5. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
 6. Fix 9H — M5 Life (personal timeline, vision goals)
 7. Fix 9I — M4.1 AI Advisor upgrade (full system context)
+
+
 
 **Long term:**
 8. M1.1 Dashboard — balance sheet (Net Worth = Assets − Liabilities), requires liability interest/principal split
