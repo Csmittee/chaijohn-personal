@@ -114,8 +114,8 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix collection-edit | Edit modal save/cancel/delete · image URL pre-fill · summary bar IDs · API cloudinary_gallery_urls | ✅ COMPLETE |
 | Fix collection-cache | Cache-first rendering · no reload on edit/add/delete · listAllRecords pagination · KV 5-min cache for assets GET · gallery thumbnails in modal | ✅ COMPLETE |
 | Fix 9B5 | Cashflow complete redesign: correct forecast engine (3 budget types, debt on due dates), DEF CON 5 firewall, simulation mode (on hold + intent + action plan), card view with DEBT/BUDGET/INCOME sections, X-days due tool, Other month navigation, entry drawer DEF CON enforcement | ✅ COMPLETE |
-| Fix 9C | Full M3.4 Projects module (schema, 6 API endpoints, projects.injector.js, card/lane/focus views, drawers, AI inquiry) | ✅ COMPLETE |
-| Fix 9D | M2.2 Sales module: dynamic lanes from Categories, Business Airtable read, AR tracking, cashflow injection | ⬜ NEXT |
+| Fix 9C | Full M3.4 Projects module (schema, 6 API endpoints, projects.injector.js, card/lane/focus views, drawers, AI inquiry, sales_forecast_sent bridge) | ✅ COMPLETE |
+| Fix 9D | M2.2 Sales module: dynamic lanes from Business ID table, Business Airtable read, AR tracking, cashflow injection, project forecast lanes, personal asset sales | ✅ COMPLETE |
 | Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
@@ -141,12 +141,27 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - AI panel: embedded in shell ✅
 - Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
 
+**Working (confirmed):**
+- PIN auth, sessions (KV)
+- Schema: all 11 tables + seeded categories/liabilities/budgets
+- Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
+- M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
+- Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts + stat spans ✅
+- Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
+- Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
+- Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅
+- Collection panel: FAB centered, Sync button, gallery hover arrows, edit modal, KV cache ✅
+- AI panel: embedded in shell ✅
+- Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
+- Sales panel (M2.2): dynamic lanes, AR tracking, cashflow injection, stacked bar chart + pareto, project forecast lanes, asset sales ✅
+
 **In progress / broken:**
-- None currently known (Fix 9B5 + 9C complete — awaiting QA)
-- OWNER ACTION REQUIRED: call POST /api/setup/schema-projects once to create 5 Airtable tables
+- None known — 9C + 9D complete, awaiting QA
+- OWNER ACTION: set AIRTABLE_BUSINESS_BASE_ID env var in Cloudflare Pages for Sales panel business lanes
+- OWNER ACTION: call POST /api/setup/schema-projects once to provision 5 project tables
 
 **Pending phases:**
-- Fix 9D: M2.2 Sales (prompt ready — see CC_PROMPT_fix9D_m22-sales.md)
+- Fix 9E-hard: M3.3 Hard Assets (physical property, vehicles, valuables)
 
 ---
 
@@ -202,6 +217,7 @@ Every CC session must preserve:
             ├── budget-panel.injector.js  ✅ 9E-R2 — 12-mo matrix, GAP rows, edit mode
             ├── ideas-panel.injector.js   ✅ 9E-R2 — KPI strip, resizable list, Write/AI toggle
             ├── projects.injector.js      ✅ 9C — card/lane/focus views, drawers, AI inquiry, DEF CON red clearance
+            ├── sales.injector.js         ✅ 9D — dynamic lanes, AR tracking, cashflow injection, stacked chart + pareto
             ├── dash-overview.injector.js ✅
             ├── entry.injector.js         ✅ binds entry drawer form
             ├── diary.injector.js         ✅
@@ -236,7 +252,8 @@ functions/
     ├── project-tasks.js                  ✅ 9C — GET (by project or due_today) + POST
     ├── project-tasks/[id].js             ✅ 9C — PATCH (auto-complete phase + milestone) + DELETE
     ├── project-resources.js              ✅ 9C — GET + POST
-    └── project-resources/[id].js        ✅ 9C — PATCH + DELETE
+    ├── project-resources/[id].js        ✅ 9C — PATCH + DELETE
+    └── sales.js                          ✅ 9D — GET unified aggregator (biz+projects+personal) + POST manual entry
 ```
 
 ---
@@ -302,11 +319,11 @@ The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) 
 
 ## ROADMAP
 
-**Now:**
-1. Fix 9D — M2.2 Sales panel (prompt ready — see CC_PROMPT_fix9D_m22-sales.md)
+**Now (QA):**
+- Fix 9C + 9D both complete — owner QA in progress
 
-**After 9D:**
-2. Fix 9E-hard — M3.3 Hard Assets (physical property, vehicles, valuables)
+**Next:**
+1. Fix 9E-hard — M3.3 Hard Assets (physical property, vehicles, valuables)
 
 **Medium term (in order):**
 4. Fix 9F — M4.3 Time Management (today view from project tasks)

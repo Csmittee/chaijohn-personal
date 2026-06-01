@@ -4,6 +4,17 @@
 
 ---
 
+## SALES PANEL (9D — M2.2) — IMPLEMENTATION LESSONS
+
+L061  Business Airtable env var: AIRTABLE_BUSINESS_BASE_ID must be set in Cloudflare Pages env — if missing, panel loads with biz_unavailable=true and shows per-lane warning. NEVER crash on missing biz data.
+L061b Sale_record grouping: rows are grouped by quote_id to build invoices. A single invoice may have multiple payment rows (deposit, at_ship, balance). paid_total = sum of all actual_sale values per quote_id.
+L061c Cashflow injection is idempotent: dedup check uses AND(source='M2.2', date=X, amount=Y, entity=Z). Called on every GET /api/sales — safe to call multiple times. Failures are swallowed (logged, not thrown).
+L061d Product image resolution: products fetched from Business Airtable Products table; indexed by lowercase name for lookup. main_image field is the Cloudinary URL. If not found, card renders without thumbnail.
+L061e listBizRecords pattern: defined locally in sales.js (not in _airtable.js) because it targets a different base. Follow same offset-pagination pattern as listAllRecords but keep it local to avoid polluting shared helpers.
+L061f Category cleanup: legacy earn categories (Ploikong, Satu, Old stocks sale, Stock earn) should be set active=false if they have no transaction references — NOT deleted. sales.js does NOT run this cleanup; it is a one-time admin action.
+
+---
+
 ## SALES PANEL (9D — M2.2)
 
 L060  Sales lanes are DYNAMIC: fetch all Categories WHERE type='Earn', group by fixed_variable field value — 'Bus-earn' → Active Business section, 'Per-earn' → Personal section. NEVER hardcode BUS01/BUS02/BUS04 or any lane name in code.
