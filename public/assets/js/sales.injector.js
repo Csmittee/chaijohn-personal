@@ -580,8 +580,8 @@
     if (panel?.classList.contains('active')) init();
   }
 
-  document.addEventListener('panelactivated', e => {
-    if (e.detail?.panelId === 'panel-sales') init();
+  window.addEventListener('panelactivated', e => {
+    if (e.detail === 'sales') init();
   });
 
   if (document.readyState === 'loading') {
