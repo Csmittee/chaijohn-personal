@@ -89,6 +89,15 @@ export async function onRequestPost(context) {
   const { name } = body;
   if (!name) return errorResponse('name is required');
 
+  // Dedup: reject if project with same name already exists (case-insensitive)
+  try {
+    const nameFilter = `LOWER({name})=LOWER("${name.replace(/"/g, '\\"')}")`;
+    const existing = await listAllRecords(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, { filterByFormula: nameFilter });
+    if (existing.records.length > 0) {
+      return jsonResponse({ error: 'A project with this name already exists', existing_id: existing.records[0].id }, 409);
+    }
+  } catch { /* non-fatal — proceed with create if dedup check fails */ }
+
   const fields = {
     name,
     type:                 body.type || 'Draft',
@@ -108,12 +117,19 @@ export async function onRequestPost(context) {
   if (body.notes)                   fields.notes                   = body.notes;
   fields.created_at = new Date().toISOString().split('T')[0];
 
+  let project;
   try {
-    const project = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, fields);
-    const pid = project.id;
+    project = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, fields);
+  } catch (err) {
+    return errorResponse(err.message, 500);
+  }
 
-    // Auto-create 5 phases
-    const phaseMap = {};
+  const pid = project.id;
+  const warnings = [];
+
+  // Auto-create 5 phases — wrapped individually; missing table must not block
+  const phaseMap = {};
+  try {
     for (const ph of PHASE_DEFS) {
       const phRec = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, PHASES, {
         project_id:  [pid],
@@ -123,8 +139,13 @@ export async function onRequestPost(context) {
       });
       phaseMap[ph.code] = phRec.id;
     }
+  } catch (e) {
+    console.error('Phase auto-create failed:', e.message);
+    warnings.push('phases — run POST /api/setup/schema-projects to create ProjectPhases table');
+  }
 
-    // Auto-create 4 exit milestones
+  // Auto-create 4 exit milestones
+  try {
     for (const md of MILESTONE_DEFS) {
       await createRecord(env.AIRTABLE_API_KEY, BASE_ID, MILESTONES, {
         project_id:     [pid],
@@ -134,26 +155,36 @@ export async function onRequestPost(context) {
         status:         'Pending'
       });
     }
+  } catch (e) {
+    console.error('Milestone auto-create failed:', e.message);
+    warnings.push('milestones');
+  }
 
-    // Seed tasks if provided
-    if (Array.isArray(body.tasks) && body.tasks.length > 0) {
+  // Seed tasks if provided
+  if (Array.isArray(body.tasks) && body.tasks.length > 0) {
+    try {
       for (const t of body.tasks) {
         const taskFields = {
-          project_id: [pid],
-          title:      t.title,
-          status:     'Open',
+          project_id:  [pid],
+          title:       t.title,
+          status:      'Open',
           assigned_to: t.assigned_to || 'Me',
-          priority:   t.priority || 'Medium'
+          priority:    t.priority || 'Medium'
         };
         if (t.finish_by) taskFields.finish_by = t.finish_by;
         if (t.measure)   taskFields.measure   = t.measure;
         if (t.phase_code && phaseMap[t.phase_code]) taskFields.phase_id = [phaseMap[t.phase_code]];
         await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TASKS, taskFields);
       }
+    } catch (e) {
+      console.error('Task seed failed:', e.message);
+      warnings.push('tasks');
     }
+  }
 
-    // Seed resources if provided
-    if (Array.isArray(body.resources) && body.resources.length > 0) {
+  // Seed resources if provided
+  if (Array.isArray(body.resources) && body.resources.length > 0) {
+    try {
       for (const r of body.resources) {
         if (!r.item) continue;
         await createRecord(env.AIRTABLE_API_KEY, BASE_ID, RESOURCES, {
@@ -164,10 +195,14 @@ export async function onRequestPost(context) {
           status:      'Planned'
         });
       }
+    } catch (e) {
+      console.error('Resource seed failed:', e.message);
+      warnings.push('resources');
     }
-
-    return jsonResponse({ record: { id: pid, ...project.fields } }, 201);
-  } catch (err) {
-    return errorResponse(err.message, 500);
   }
+
+  return jsonResponse({
+    record: { id: pid, ...project.fields },
+    warnings: warnings.length ? warnings : undefined
+  }, 201);
 }

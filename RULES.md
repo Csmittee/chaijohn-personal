@@ -4,6 +4,19 @@
 
 ---
 
+## QA BLOCKER FIXES (bugfix session)
+
+L063  403 from Airtable on table create/read = table does not exist, NOT a permissions error. Token is full access. Check table existence first. Call POST /api/setup/schema-projects to provision missing tables.
+L064  Secondary auto-creates (phases, milestones, tasks, resources) must be individually wrapped in try/catch. Primary record save must ALWAYS return 201. Secondary failures log to console + return in warnings array. Never let a missing table block the primary save.
+L065  isSubmitting guard on all save buttons. Set true on first click, disable all save buttons, show "Saving…". Re-enable only on error. Reset in finally block. Prevents duplicate records on slow Cloudflare cold start.
+L066  POST dedup — case-insensitive name filter: LOWER({name})=LOWER("name"). Return 409 with existing_id if found. Injector handles 409 by showing inline error, keeping drawer open.
+L067  Harvest-before-add — call readDrawerData() before pushing new row. Re-render full innerHTML from state array (not +=). Prevents existing values from being lost when new row is added.
+L068  panelactivated event is dispatched on window (not document) with detail = route string (e.g. 'sales'). Always use window.addEventListener, match e.detail === routeString. Never check e.detail?.panelId.
+L069  AI chat payload must be: { messages: [{ role:'user', content: promptString }], session_id: string }. Field is 'messages' (array), not 'message' (string). Sending wrong shape returns "messages array is required".
+L070  Panel init must call panel.innerHTML = '' or set innerHTML to loading state before rendering. Clears any placeholder .coming-soon div left in HTML. Never append to placeholder.
+
+---
+
 ## M2.4 FINANCE PROJECTS + PRESALE BRIDGE (9C-rewire)
 
 L062  Panel ID mapping (PERMANENT): M3.4 Project Assets = #panel-proj-assets (route: proj-assets). M2.4 Finance Projects = #panel-projects (route: projects). These are fixed — never swap them again.

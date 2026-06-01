@@ -15,7 +15,7 @@ export async function onRequestGet(context) {
   const { env, params } = context;
   const id = params.id;
   try {
-    const [proj, phasesRes, milestonesRes, tasksRes, resourcesRes] = await Promise.all([
+    const [proj, phasesRes, milestonesRes, tasksRes, resourcesRes] = await Promise.allSettled([
       getRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id),
       listRecords(env.AIRTABLE_API_KEY, BASE_ID, PHASES,     { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` }),
       listRecords(env.AIRTABLE_API_KEY, BASE_ID, MILESTONES, { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` }),
@@ -23,11 +23,13 @@ export async function onRequestGet(context) {
       listRecords(env.AIRTABLE_API_KEY, BASE_ID, RESOURCES,  { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` })
     ]);
 
-    const project    = flat(proj);
-    const phases     = (phasesRes.records || []).map(flat);
-    const milestones = (milestonesRes.records || []).map(flat);
-    const tasks      = (tasksRes.records || []).map(flat);
-    const resources  = (resourcesRes.records || []).map(flat);
+    if (proj.status === 'rejected') throw new Error(proj.reason?.message || 'Project not found');
+
+    const project    = flat(proj.value);
+    const phases     = phasesRes.status === 'fulfilled'     ? (phasesRes.value.records || []).map(flat)     : [];
+    const milestones = milestonesRes.status === 'fulfilled' ? (milestonesRes.value.records || []).map(flat) : [];
+    const tasks      = tasksRes.status === 'fulfilled'     ? (tasksRes.value.records || []).map(flat)     : [];
+    const resources  = resourcesRes.status === 'fulfilled' ? (resourcesRes.value.records || []).map(flat) : [];
 
     // Compute task counts per phase
     const phaseMap = {};
