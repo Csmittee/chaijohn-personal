@@ -117,6 +117,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix 9C | Full M3.4 Projects module (schema, 6 API endpoints, projects.injector.js, card/lane/focus views, drawers, AI inquiry, sales_forecast_sent bridge) | ✅ COMPLETE |
 | Fix 9D | M2.2 Sales module: dynamic lanes from Business ID table, Business Airtable read, AR tracking, cashflow injection, project forecast lanes, personal asset sales | ✅ COMPLETE |
 | Fix 9C-rewire | Rewire M3.4 → #panel-proj-assets, build M2.4 Finance Projects, presale bridge (Entry→Transactions→M2.4+M2.2+M2.1) | ✅ COMPLETE |
+| Fix QA-blockers | ProjectPhases 403 guard, duplicate save isSubmitting, harvest-before-add rows, sales panel event listener, AI inquiry payload | ✅ COMPLETE |
 | Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
@@ -156,6 +157,10 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
 - Sales panel (M2.2): dynamic lanes, AR tracking, cashflow injection, stacked bar chart + pareto, project forecast lanes, asset sales ✅
 - Finance Projects (M2.4): boundary cards, budget cards (Planned/Purchased/In use), presale cards, Send to Sales action ✅
+- Save project: isSubmitting guard (no duplicates), 409 name dedup, secondary auto-creates resilient to missing tables ✅
+- Sales panel (M2.2): panelactivated listener fixed — was listening on document with wrong event shape ✅
+- AI inquiry in Projects drawer: messages payload fixed ✅
+- Add resource/task rows: harvest-before-add (existing values preserved) ✅
 - Project Assets (M3.4): now correctly at #panel-proj-assets (route: proj-assets) ✅
 - Presale bridge: Entry → EARN → Pre-sale → project dropdown → source='presale' + project_id in Transactions ✅
 
