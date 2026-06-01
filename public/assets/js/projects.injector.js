@@ -40,6 +40,7 @@
   let drawerTasks      = [];
   let drawerResourcesExpanded = false;
   let drawerTasksExpanded     = false;
+  let isSubmitting   = false;
 
   /* ── Panel root ──────────────────────────────────────────────────────────── */
   function panelEl()   { return el('panel-proj-assets'); }
@@ -497,7 +498,7 @@
             <button id="proj-focus-edit" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer">Edit</button>
             ${p.type === 'Draft' ? `<button id="proj-focus-push" data-projid="${p.id}"
-              style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
+              style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
             ${!p.finance_opened ? `<button id="proj-focus-finance" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #22c55e;border-radius:var(--radius);background:transparent;color:#22c55e;cursor:pointer">Open Finance</button>` : ''}
             ${p.sales_forecast_sent
@@ -794,7 +795,7 @@
             <option value="Low">Low</option>
           </select></div>
       </div>
-      <button id="at-save" style="width:100%;margin-top:0.75rem;padding:0.45rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700;font-size:0.85rem">Save task</button>
+      <button id="at-save" style="width:100%;margin-top:0.75rem;padding:0.45rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700;font-size:0.85rem">Save task</button>
       <div id="at-msg" style="display:none;font-size:0.78rem;margin-top:0.4rem"></div>
     </div>`;
   }
@@ -846,20 +847,22 @@
       syncDrawerTaskSummary(drawer);
     });
 
-    // Add resource row
+    // Add resource row — harvest current DOM values first to preserve existing rows
     drawer.querySelector('#pd-res-add')?.addEventListener('click', () => {
+      readDrawerData(drawer);
       drawerResources.push({ item:'', time_needed:'', cost:0, status:'Planned' });
       const cont = drawer.querySelector('#pd-res-rows');
-      cont.innerHTML += resourceRowHtml(drawerResources[drawerResources.length-1], drawerResources.length-1);
+      cont.innerHTML = drawerResources.map((r, j) => resourceRowHtml(r, j)).join('');
       wireResourceRows(drawer);
       syncDrawerResourceSummary(drawer);
     });
 
-    // Add task row
+    // Add task row — harvest current DOM values first to preserve existing rows
     drawer.querySelector('#pd-task-add')?.addEventListener('click', () => {
+      readDrawerData(drawer);
       drawerTasks.push({ title:'', finish_by:'', assigned_to:'Me', measure:'', phase_code:'DS' });
       const cont = drawer.querySelector('#pd-task-rows');
-      cont.innerHTML += taskRowHtml(drawerTasks[drawerTasks.length-1], drawerTasks.length-1);
+      cont.innerHTML = drawerTasks.map((t, j) => taskRowHtml(t, j)).join('');
       wireTaskRows(drawer);
       syncDrawerTaskSummary(drawer);
     });
@@ -926,14 +929,24 @@
   }
 
   async function saveProject(type, isEdit, push) {
+    if (isSubmitting) return;
     const body = {
       ...drawerData,
       type,
       resources: drawerResources.filter(r => r.item),
       tasks:     drawerTasks.filter(t => t.title).map(t => ({ ...t, assigned_to: t.assigned_to || 'Me' }))
     };
-    const msgEl = el('pd-msg');
     if (!body.name) { showMsg('pd-msg', 'Project name is required', false); return; }
+
+    isSubmitting = true;
+    const saveDraftBtn = el('pd-save-draft');
+    const pushBtn      = el('pd-push');
+    const activeBtn    = push ? pushBtn : saveDraftBtn;
+    const origText     = activeBtn?.textContent || '';
+    if (saveDraftBtn) { saveDraftBtn.disabled = true; }
+    if (pushBtn)      { pushBtn.disabled      = true; }
+    if (activeBtn)    { activeBtn.textContent  = 'Saving…'; }
+
     try {
       let res;
       if (isEdit && drawerProjId) {
@@ -941,9 +954,17 @@
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
         });
       } else {
-        res = await api('/api/projects', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        const r = await fetch('/api/projects', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin', body: JSON.stringify(body)
         });
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 409) {
+          showMsg('pd-msg', j.error || 'A project with this name already exists', false);
+          return;
+        }
+        if (!r.ok) throw new Error(j.error || `API ${r.status}`);
+        res = j;
       }
       await loadAll();
       closeDrawer();
@@ -951,11 +972,16 @@
 
       if (push && res.record) {
         const projId = res.record.id;
-        const confirm = window.confirm('Open M2.4 Finance for this project?');
-        if (confirm) window.location.hash = `finance-projects?project=${projId}`;
+        const doOpen = window.confirm('Open M2.4 Finance for this project?');
+        if (doOpen) window.location.hash = `finance-projects?project=${projId}`;
       }
     } catch (err) {
       showMsg('pd-msg', err.message, false);
+      if (saveDraftBtn) { saveDraftBtn.disabled = false; }
+      if (pushBtn)      { pushBtn.disabled      = false; }
+      if (activeBtn)    { activeBtn.textContent  = origText; }
+    } finally {
+      isSubmitting = false;
     }
   }
 
@@ -1147,7 +1173,7 @@
     try {
       const res = await api('/api/ai-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompts[type], session_id: 'project-ai-' + Date.now() })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompts[type] }], session_id: 'project-ai-' + Date.now() })
       });
       resultEl.style.whiteSpace = 'pre-wrap';
       resultEl.textContent = res.reply || res.message || 'No response';
