@@ -13,17 +13,21 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const params = url.searchParams;
 
-  const type     = params.get('type');
-  const category = params.get('category');
-  const start    = params.get('start');
-  const end      = params.get('end');
-  const limit    = parseInt(params.get('limit') || '200', 10);
+  const type      = params.get('type');
+  const category  = params.get('category');
+  const start     = params.get('start');
+  const end       = params.get('end');
+  const source    = params.get('source');
+  const projectId = params.get('project_id');
+  const limit     = parseInt(params.get('limit') || '200', 10);
 
   const filters = [];
-  if (type) filters.push(`{type}='${type}'`);
-  if (category) filters.push(`{category_id}='${category}'`);
-  if (start) filters.push(`NOT(IS_BEFORE({date}, '${start}'))`);
-  if (end) filters.push(`IS_BEFORE({date}, '${end}')`);
+  if (type)      filters.push(`{type}='${type}'`);
+  if (category)  filters.push(`{category_id}='${category}'`);
+  if (start)     filters.push(`NOT(IS_BEFORE({date}, '${start}'))`);
+  if (end)       filters.push(`IS_BEFORE({date}, '${end}')`);
+  if (source)    filters.push(`{source}='${source}'`);
+  if (projectId) filters.push(`{project_id}='${projectId}'`);
 
   const filterByFormula = filters.length === 0
     ? undefined
@@ -133,6 +137,7 @@ export async function onRequestPost(context) {
   if (body.category_id && type !== 'Expense') {
     fields.category_id = Array.isArray(body.category_id) ? body.category_id : [body.category_id];
   }
+  if (body.project_id) fields.project_id = body.project_id;
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);

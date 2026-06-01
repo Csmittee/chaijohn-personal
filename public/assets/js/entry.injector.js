@@ -6,6 +6,7 @@
 
   let categories         = [];
   let allBudgets         = [];   // expense budgets with category enrichment
+  let cachedActiveProjects = []; // for presale project dropdown
   let budgetsData        = [];   // loaded budgets for inline edit
   let activeBudgetEditId = null;
   let activeLiabDetailId = null;
@@ -183,6 +184,31 @@
       ).join('');
   }
 
+  /* ── Presale project dropdown ── */
+  async function fetchActiveProjects() {
+    try {
+      const res = await api('/api/projects?type=Active');
+      cachedActiveProjects = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
+    } catch { cachedActiveProjects = []; }
+    populatePresaleProjectSelect();
+  }
+
+  function populatePresaleProjectSelect() {
+    const sel = document.getElementById('presale-project-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select project —</option>' +
+      cachedActiveProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  }
+
+  function updatePresaleRow(catValue) {
+    const row = document.getElementById('presale-project-row');
+    if (!row) return;
+    const selectedCat = categories.find(c => c.id === catValue);
+    const isPresale = selectedCat && selectedCat.name === 'Pre-sale';
+    row.style.display = isPresale ? 'block' : 'none';
+    if (isPresale && cachedActiveProjects.length === 0) fetchActiveProjects();
+  }
+
   /* ── G3: Budget bar — now keyed by budget ID ── */
   async function updateBudgetBar(selectedId) {
     const bar = document.getElementById('tx-budget-bar');
@@ -244,17 +270,34 @@
 
       const bar = document.getElementById('tx-budget-bar');
       if (bar) bar.style.display = 'none';
+      const presaleRow = document.getElementById('presale-project-row');
+      if (presaleRow && type === 'Expense') presaleRow.style.display = 'none';
     }
 
     btnIncome?.addEventListener('click',  () => setType('Income'));
     btnExpense?.addEventListener('click', () => setType('Expense'));
     setType('Expense');
 
-    // G3: budget bar on selection change
+    // G3: budget bar on selection change + presale project row
     document.getElementById('tx-category')?.addEventListener('change', () => {
       const selectedId = document.getElementById('tx-category')?.value;
       updateBudgetBar(selectedId || '');
+      if (txType === 'Income') updatePresaleRow(selectedId || '');
     });
+
+    // Ensure presale project row exists in DOM after tx-category
+    const catSel = document.getElementById('tx-category');
+    if (catSel && !document.getElementById('presale-project-row')) {
+      const row = document.createElement('div');
+      row.id = 'presale-project-row';
+      row.style.display = 'none';
+      row.innerHTML = `
+        <label style="font-size:0.85rem;color:var(--text-secondary);display:block;margin-top:0.5rem">Link to project</label>
+        <select id="presale-project-select" style="width:100%;margin-top:0.25rem;font-size:0.85rem;padding:0.35rem 0.5rem">
+          <option value="">— Select project —</option>
+        </select>`;
+      catSel.parentNode.insertBefore(row, catSel.nextSibling);
+    }
 
     ensureMsgEl('tx-msg', 'save-tx');
 
@@ -271,7 +314,15 @@
       // G3: require budget for expense
       if (txType === 'Expense' && !selectedId) return alert('Please select a budget for this expense');
 
-      const body = { date, amount: Number(amount), type: txType, description, entity, note, source: 'Manual' };
+      const selectedCat = txType === 'Income' ? categories.find(c => c.id === selectedId) : null;
+      const isPresale   = selectedCat?.name === 'Pre-sale';
+      const projectSel  = document.getElementById('presale-project-select');
+      const projectId   = isPresale && projectSel ? projectSel.value : '';
+
+      const body = {
+        date, amount: Number(amount), type: txType, description, entity, note,
+        source: isPresale ? 'presale' : 'Manual'
+      };
 
       // G3: send budget_id for expense, category_id for earn
       if (txType === 'Expense') {
@@ -279,6 +330,7 @@
       } else {
         if (selectedId) body.category_id = [selectedId];
       }
+      if (projectId) body.project_id = projectId;
 
       try {
         await api('/api/transactions', {

@@ -266,8 +266,17 @@ export async function onRequestGet(context) {
     return { ...biz, invoices: bizInvoices, summary, unavailable: bizUnavailable };
   }));
 
-  // ── Projects section ──────────────────────────────────────────────────────
-  const projects = (projectsRes.records || []).map(r => {
+  // ── Projects section — fetch presale totals in parallel ──────────────────
+  const rawProjects = projectsRes.records || [];
+  const presaleTotals = await Promise.all(rawProjects.map(r =>
+    listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
+      filterByFormula: `AND({source}='presale',{project_id}='${r.id}')`,
+      maxRecords: 500
+    }).then(res => (res.records || []).reduce((s, tx) => s + Number(tx.fields.amount || 0), 0))
+      .catch(() => 0)
+  ));
+
+  const projects = rawProjects.map((r, i) => {
     const f = r.fields;
     const launchDate = f.launch_date || null;
     const daysToLaunch = launchDate
@@ -278,7 +287,8 @@ export async function onRequestGet(context) {
       name:                    f.name || '',
       target_revenue_monthly:  Number(f.target_revenue_monthly || 0),
       current_phase:           f.current_phase || '',
-      days_to_launch:          daysToLaunch
+      days_to_launch:          daysToLaunch,
+      presale_total:           presaleTotals[i]
     };
   });
 

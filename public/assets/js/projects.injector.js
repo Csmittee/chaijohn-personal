@@ -42,7 +42,7 @@
   let drawerTasksExpanded     = false;
 
   /* ── Panel root ──────────────────────────────────────────────────────────── */
-  function panelEl()   { return el('panel-projects'); }
+  function panelEl()   { return el('panel-proj-assets'); }
   function contentEl() { return el('proj-content'); }
 
   /* ── Data load ───────────────────────────────────────────────────────────── */
@@ -1221,6 +1221,6 @@
     renderAll();
   }
 
-  window.addEventListener('panelactivated', e => { if (e.detail === 'projects') init(); });
-  if (document.getElementById('panel-projects')?.classList.contains('active')) init();
+  window.addEventListener('panelactivated', e => { if (e.detail === 'proj-assets') init(); });
+  if (document.getElementById('panel-proj-assets')?.classList.contains('active')) init();
 })();
