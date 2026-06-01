@@ -1,4 +1,4 @@
-   # Chaijohn Dashboard
+# Chaijohn Dashboard
 
 A private personal financial diary and command center for one Thai entrepreneur in Rayong, Thailand.
 
@@ -12,12 +12,14 @@ A private personal financial diary and command center for one Thai entrepreneur 
 - Drop Zone: drag-and-drop any image/receipt for AI extraction and review
 - Budget tracking with real-time vs-actual progress indicators
 - Utility tracking (electricity + water) with rate calculations
+- Sales aggregation — reads live revenue from business operations system
 - Random quote banner pulled from your quotes library
 
 ## Tech Stack
 
 - **Cloudflare Pages** — static hosting + Functions for all API routes
-- **Airtable** — database (all tables)
+- **Airtable (chaijohn-core)** — personal database (all personal tables)
+- **Airtable (Janis Business DB)** — business operations database (read-only from this dashboard)
 - **Cloudinary** — image storage (assets, diary, drop zone)
 - **Anthropic Claude API** — AI features (drop zone OCR, diary assist, AI advisor)
 - **Cloudflare KV** — session storage (HttpOnly cookie auth)
@@ -30,8 +32,8 @@ Set these in Cloudflare Pages → Settings → Environment Variables:
 | Variable | Description |
 |---|---|
 | `AIRTABLE_API_KEY` | Personal Access Token from Airtable |
-| `AIRTABLE_BASE_ID` | Base ID of your chaijohn-core base (e.g. `apphBGWfSPL45oSFd`) |
-| `AIRTABLE_BUSINESS_BASE_ID` | Business base ID for blog push (e.g. `appMBjlfYyVd8I7ML`) |
+| `AIRTABLE_BASE_ID` | Base ID of chaijohn-core personal base (`apphBGWfSPL45oSFd`) |
+| `AIRTABLE_BUSINESS_BASE_ID` | Janis Business DB base ID (`appMBjlfYyVd8I7ML`) — used for Sales data read + Blog push |
 | `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name (e.g. `dfiomi0lb`) |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
@@ -39,6 +41,8 @@ Set these in Cloudflare Pages → Settings → Environment Variables:
 | `CHAIJOHN_KV` | Cloudflare KV namespace binding name |
 
 > **Note:** `AIRTABLE_BASE_ID` and `CLOUDINARY_CLOUD_NAME` are already set as plain vars in `wrangler.toml`. All others must be added as **encrypted secrets** in the Cloudflare Pages dashboard.
+
+> **Business Base note:** `AIRTABLE_BUSINESS_BASE_ID` points to the Janis Business DB — a full business operations database containing Products, Sale records, Customer data, Quotes, and Blog content across 5 business units (BUS00–BUS04). This dashboard reads from it but never writes to it (except Blog push). All writes to business data are handled by the separate Operational Dashboard system.
 
 ## Setup Steps
 
@@ -140,8 +144,16 @@ Both scripts skip records that already exist in Airtable (by name / month) to pr
 
 - Create a Diary entry with type set to **Blog**
 - Check "Publish to web" before saving
-- The entry is pushed to your business Airtable base (`AIRTABLE_BUSINESS_BASE_ID`, table: `Blogs`)
+- The entry is pushed to Janis Business DB (`AIRTABLE_BUSINESS_BASE_ID`, table: `Blogs`)
 - Your Cloudflare Workers on janishammer-central and i-flexthailand.com can query this table
+
+### Sales Panel
+
+- Aggregates revenue from all streams: active businesses, project revenue, personal asset sales
+- Business revenue is read-only — sourced from the Operational Dashboard's Airtable base
+- Manual income entries via Entry button (EARN tab) with Income Source dropdown
+- AR tracking: outstanding balances shown with overdue items in red
+- All confirmed payments automatically inject into Cashflow
 
 ### Collection Sharing
 
@@ -168,9 +180,9 @@ Each asset card has a **Share** button with three options:
 
 ```
 public/                        ← Static files (Cloudflare Pages CDN)
-  index.html                   ← PIN login page
-  dashboard.html               ← Finance dashboard
-  entry.html                   ← Data entry (Transactions, Utilities, Debts, Budgets)
+  index.html                   ← Single-page shell (sidebar + panels + entry drawer)
+  dashboard.html               ← Redirect to /#dashboard
+  entry.html                   ← Redirect to /
   diary.html                   ← Diary + Blog editor
   collection.html              ← Collection asset management
   ai-advisor.html              ← AI strategy chat
@@ -181,52 +193,81 @@ public/                        ← Static files (Cloudflare Pages CDN)
     js/
       auth.js                  ← Auth check + login form on all pages
       dropzone.js              ← Drop Zone component (all pages)
-      dashboard.injector.js    ← Dashboard charts + analytics
-      entry.injector.js        ← Data entry tabs
+      cashflow.injector.js     ← M2.1 Cashflow — DEF CON 5, simulation, 3 budget types
+      expenses.injector.js     ← M2.3 Expenses — trend+pareto, period selector
+      liabilities-panel.injector.js ← M2.6 Liabilities — charts + static cards
+      budget-panel.injector.js ← M2.5 Budget — 12-mo matrix, GAP rows
+      ideas-panel.injector.js  ← M3.1 Ideas — KPI strip, AI toggle, pin
+      dash-overview.injector.js← M1.1 Dashboard overview
+      entry.injector.js        ← Entry drawer — all 4 tabs
       diary.injector.js        ← Diary editor + AI assist
-      collection.injector.js   ← Collection grid + modals
+      collection.injector.js   ← Collection grid + modals + gallery
+      projects.injector.js     ← M3.4 Projects (9C — in progress)
+      sales.injector.js        ← M2.2 Sales (9D — planned)
       ai.injector.js           ← AI advisor chat
 
 functions/                     ← Cloudflare Pages Functions (server-side API)
   _middleware.js               ← Auth guard for all /api/* routes
   _airtable.js                 ← Shared Airtable helpers
   api/
-    auth.js                    ← POST /api/auth/verify|setup|logout
-    auth/
-      check.js                 ← GET /api/auth/check
+    auth.js + auth/check.js    ← POST /api/auth/verify|setup|logout
     transactions.js            ← CRUD /api/transactions
     categories.js              ← CRUD /api/categories
-    debts.js                   ← CRUD /api/debts (with payments)
+    debts.js                   ← CRUD /api/debts
     assets.js                  ← CRUD /api/assets + ploikong-sync
+    liabilities.js             ← CRUD /api/liabilities
+    liabilities/[id].js        ← PATCH/payment /api/liabilities/:id
     diary.js                   ← CRUD /api/diary
     utilities.js               ← GET/POST /api/utilities
     quotes.js                  ← CRUD /api/quotes + random
-    budgets.js                 ← CRUD /api/budgets
+    budgets.js + budgets/[id].js ← CRUD /api/budgets
+    cashflow-sync.js           ← GET/POST KV sync point
+    active-strategy.js         ← GET/POST KV DEF CON 5 state
     dropzone.js                ← POST /api/dropzone + approve
     upload-image.js            ← POST /api/upload-image (Cloudinary)
-    ai-chat.js                 ← POST /api/ai-chat (SSE streaming) + save + context
+    ai-chat.js                 ← POST /api/ai-chat (SSE streaming)
     export-social.js           ← POST /api/export-social
-    setup/
-      schema.js                ← POST /api/setup/schema (one-time init)
-
-import-utilities.js            ← Node.js script: import utility records from Excel
-import-assets.js               ← Node.js script: import asset records from Excel
+    projects.js                ← CRUD /api/projects (9C)
+    project-tasks.js           ← CRUD /api/project-tasks (9C)
+    project-resources.js       ← CRUD /api/project-resources (9C)
+    sales.js                   ← GET/POST /api/sales (9D — planned)
+    setup/schema.js            ← POST /api/setup/schema (one-time init)
 ```
 
 ## Airtable Schema
 
+### chaijohn-core (personal base)
+
 | Table | Key Fields |
 |---|---|
-| `Categories` | name, type (Income/Expense), fixed_variable |
-| `Transactions` | date, type, amount, category_name, entity, description, note, source |
-| `Debts` | creditor_name, creditor_type, original_amount, current_balance, interest_rate, monthly_payment, due_date, status |
-| `Assets` | name, category, cost_price, estimated_value, status, velocity, date_acquired, sold_price, sold_date, sold_via, cloudinary_image_url, notes |
+| `Categories` | name, group, type (Earn/Expense/Loan/Investment), fixed_variable (Bus-earn/Per-earn/etc) |
+| `Transactions` | date, type, amount, budget_id, category_id (legacy), entity, description, note, source |
+| `Debts` | creditor_name, creditor_type, original_amount, current_balance, interest_rate, monthly_payment |
+| `Liabilities` | name, creditor_type, loan_size, interest_rate, monthly_payment, current_balance, active |
+| `Liability_Payments` | liability_id, date, amount, note |
+| `Assets` | name, category, cost_price, estimated_value, status, velocity, date_acquired, sold_price, sold_date, cloudinary_image_url |
 | `Diary` | date, title, content, entry_type, tags, publish_to_web, connected_concept, cloudinary_image_url |
 | `AI_Chats` | session_id, messages_json, topic, created_at |
 | `Utilities` | month, electricity_units, electricity_charge, water_units, water_charge, notes |
 | `Quotes` | text, author, source, date_added, mood_tag, active |
 | `Drop_Zone_Queue` | cloudinary_url, filename, mime_type, status, ai_result, suggested_type |
-| `Budgets` | label, amount, period, start_date, end_date, active |
+| `Budgets` | label, category_id, amount, period, start_date, end_date, active, backlog_type, period_due_day |
+| `Projects` | name, type, current_phase, sales_forecast_sent, finance_opened, target_revenue_monthly |
+| `ProjectPhases` | project_id, phase_code, status, exit_checklist_complete |
+| `ProjectMilestones` | project_id, phase_id, name, auto_date, status |
+| `ProjectTasks` | project_id, phase_id, title, finish_by, status, priority, depends_on_task_id |
+| `ProjectResources` | project_id, item, cost, status |
+
+### Janis Business DB (business base — read-only from this dashboard)
+
+| Table | Used for |
+|---|---|
+| `Business ID` | Registry of all businesses — drives dynamic Sales lanes |
+| `Products` | Product catalog — sale card images and pareto display |
+| `Sale_record` | All invoices + payment stages — primary M2.2 Sales data |
+| `customer` | Customer names for AR display |
+| `quote` | Open quotes/proposals for Sales summary bubbles |
+| `Blogs` | Blog push destination (write-only from Diary) |
 
 ## Security Notes
 
@@ -237,6 +278,7 @@ import-assets.js               ← Node.js script: import asset records from Exc
 - All Airtable, Cloudinary, and Anthropic API calls are made server-side in Functions
 - PIN is hashed with SHA-256 + random salt before storage in KV
 - All `/api/*` routes are protected by `_middleware.js` auth check
+- Business base access is read-only — no writes except Blog push
 
 ## Development Notes
 
@@ -252,6 +294,7 @@ Set local secrets in `.dev.vars` file (never commit this):
 ```
 AIRTABLE_API_KEY=xxx
 AIRTABLE_BASE_ID=xxx
+AIRTABLE_BUSINESS_BASE_ID=xxx
 CLOUDINARY_CLOUD_NAME=xxx
 CLOUDINARY_API_KEY=xxx
 CLOUDINARY_API_SECRET=xxx

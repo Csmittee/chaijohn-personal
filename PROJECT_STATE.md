@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-05-28 — System migration from masterseed to new lean system
+> Last updated: 2026-06-01 — Added M2.2 Sales design, corrected Business Base role, full phase roadmap
 
 ---
 
@@ -19,7 +19,73 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 2. Knowledge & Diary (Obsidian replacement) — entries, AI assist, blog push
 3. Collection Asset Registry — knives, vices, plants, dolls (photo → value → legacy)
 4. AI Strategy Advisor — auto-loads live snapshot, strategic questions, session history
-5. Project Management Hub — full lifecycle from idea to launch (NOT YET BUILT)
+5. Project Management Hub — full lifecycle from idea to launch
+
+---
+
+## EARN ARCHITECTURE (critical — read before touching any earn-related code)
+
+The owner has 4 income streams. All feed M2.1 Cashflow via M2.2 Sales aggregation:
+
+```
+1. Personal Asset Sales (M3.2)
+   → Assets table WHERE status='Sold' → sold_price feeds M2.2 Personal section
+
+2. Project Revenue (M2.4 → M2.2)
+   → Projects WHERE sales_forecast_sent=true → appear in M2.2 Projects section
+   → Pre-launch + SOP revenue while project has no dedicated business system
+   → Once project matures and joins Business Dashboard → removed from M2.4, gains own lane in M2.2
+
+3. Active Business Revenue (M2.2 Business section)
+   → Read from Business Airtable (appMBjlfYyVd8I7ML) Sale_record + Products tables
+   → Lanes auto-generated from Business ID table — new business = new lane, zero code change
+   → Current active businesses: BUS01 I-Flex Pilates · BUS02 Daje Queencatcher · BUS04 Flow Lifestyle (Board Sports)
+   → BUS03 Jade Coffee = project-level (not in Business Airtable sales yet)
+   → BUS00 Janis Hammer = root/holding company
+   → Each business has its own Operational Dashboard (separate repo, already built)
+   → Personal dashboard is READ-ONLY consumer of that data
+
+4. Borrow / Liability as Cashflow Bridge (M2.6)
+   → Owner deliberately creates liability to fund cashflow gaps
+   → Loan received = EARN transaction in cashflow
+   → Repayment = EXPENSE transaction in cashflow
+   → KNOWN LIMITATION: current system books full payment as expense; does not split interest vs principal
+   → Future fix: Liability_Payments table extended with interest_portion + principal_portion fields
+```
+
+**Cashflow formula:**
+```
+TOTAL IN:  Sales (M2.2 all streams) + Borrow (M2.6)
+TOTAL OUT: Expenses (M2.3) + Project funding (M2.4 + M3.4) + Debt repayment (M2.6)
+NET:       Monitored by M2.1 Cashflow — DEF CON 5 fires if 90-day window goes negative
+```
+
+**3 cashflow actions owner can take:**
+1. Expense control — tighten M2.3, DEF CON enforcement in M2.1
+2. Create liability — M2.6 borrow as bridge
+3. Accelerate project — push M3.4 faster to generate M2.4 income sooner
+
+---
+
+## IDEA-TO-REVENUE LIFECYCLE
+
+```
+Life (M5) ──► 10–20 year vision, personal history, relationships
+    ↓
+Mind Map (M4.2) ──► Obsidian-style node graph of entire personal system
+    ↓ (digest / AI suggest)
+Ideas (M3.1) ──► capture and refine
+    ↓ (push to project)
+Project Asset (M3.4) ──► pipeline through DS→PT→PD→PV→LA phases
+    ↓ (goes Active → needs funding)
+Finance Projects (M2.4) ──► investment tracking, pre-launch revenue home
+    ↓ (reaches Launch → matures → joins operational system)
+Active Business ──► own Operational Dashboard + Business Airtable
+    ↓ (data flows back)
+Sales (M2.2) ──► aggregated earn view feeding Cashflow
+    ↓
+Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
+```
 
 ---
 
@@ -47,11 +113,16 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 | Collection gallery+sync | FAB centering · Cloudinary sync button · gallery hover arrows + counter on asset cards | ✅ COMPLETE |
 | Fix collection-edit | Edit modal save/cancel/delete · image URL pre-fill · summary bar IDs · API cloudinary_gallery_urls | ✅ COMPLETE |
 | Fix collection-cache | Cache-first rendering · no reload on edit/add/delete · listAllRecords pagination · KV 5-min cache for assets GET · gallery thumbnails in modal | ✅ COMPLETE |
-| Fix 9B5 | Cashflow complete redesign: correct forecast engine (3 budget types, debt on due dates), DEF CON 5 firewall, simulation mode (on hold + intent + action plan), card view with DEBT/BUDGET/INCOME sections, drag-to-reorder, X-days due tool, Other month navigation, entry drawer DEF CON enforcement | ✅ COMPLETE |
-| Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) — SCHEDULED NEXT WEEK | ⬜ SCHEDULED |
-| Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ FUTURE |
-| Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ FUTURE |
-| Pillar 5 | Project Management Hub — design first, build later | ⬜ FUTURE |
+| Fix 9B5 | Cashflow complete redesign: correct forecast engine (3 budget types, debt on due dates), DEF CON 5 firewall, simulation mode, card view with DEBT/BUDGET/INCOME sections, drag-to-reorder, X-days due tool, Other month navigation, entry drawer DEF CON enforcement | ✅ COMPLETE |
+| Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) + M2.4 Finance Projects panel wiring | 🔄 IN PROGRESS (CC running) |
+| Fix 9D | M2.2 Sales module: dynamic lanes from Categories, Business Airtable read, AR tracking, cashflow injection | ⬜ NEXT |
+| Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
+| Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
+| Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
+| Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
+| Fix 9I | M4.1 AI Advisor upgrade — full system context, balance sheet awareness | ⬜ SCHEDULED |
+| M1.1 | Dashboard balance sheet — Net Worth = Assets − Liabilities | ⬜ FUTURE |
+| Pillar 3 | Collection full test + buyer tags + social share | ⬜ FUTURE |
 
 ---
 
@@ -61,20 +132,20 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 - PIN auth, sessions (KV)
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
-- M2 panels: Cashflow (range toggle, date window, list/card view) · Expenses (trend+pareto, period selector, responsive, list/card/bundle/details) · Liabilities (trend+bar, static cards with proportional sizing) · Budget (12-month matrix, analysis collapsible, GAP rows, edit mode, pending bar, card view, custom start month) ✅
+- M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
 - Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts + stat spans ✅
 - Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
 - Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
 - Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅
-- Collection panel: FAB centered, Sync button in filter bar, gallery hover with arrows + counter on cards ✅ (collection-gallery-sync)
-- AI panel: embedded in shell ✅ (not end-to-end tested)
-- Diary (diary.html): list + editor + preview + AI modal + AI bottom pane + Undo + Memo type ✅
+- Collection panel: FAB centered, Sync button, gallery hover arrows, edit modal, KV cache ✅
+- AI panel: embedded in shell ✅
+- Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
 
-**In progress / broken:**
-- None currently known (Fix 9B5 cashflow rewrite complete — awaiting QA)
+**In progress:**
+- Fix 9C: Projects module (CC executing now — await QA)
 
 **Pending phases:**
-- Fix 9C: Projects module (next week)
+- Fix 9D: M2.2 Sales (prompt ready after 9C QA)
 
 ---
 
@@ -90,6 +161,7 @@ Every CC session must preserve:
 - Blog push logic: publish_to_web=true + entry_type=Blog → business base Blogs table
 - One dedicated injector JS per page — no shared mega-bundle
 - No React, no Tailwind — pure CSS variables + vanilla JS only
+- DEF CON 5 cashflow firewall — never bypass or stub
 
 ---
 
@@ -97,17 +169,17 @@ Every CC session must preserve:
 
 ```
 /                                         ← repo root (keep clean)
-├── CLAUDE.md                             ✅ NEW — primary CC entry point (30 lines)
-├── RULES.md                              ✅ NEW — compact one-liner rules (L001–L067)
-├── PROJECT_STATE.md                      ✅ NEW — this file, phases + roadmap + inventory
+├── CLAUDE.md                             ✅ primary CC entry point (30 lines)
+├── RULES.md                              ✅ compact one-liner rules (L001–L060j)
+├── PROJECT_STATE.md                      ✅ this file — phases + roadmap + inventory
 ├── WORKFLOW_SKILL.md                     ✅ operating model reference
 ├── README.md                             ✅
 ├── wrangler.toml                         ✅
 ├── package.json                          ✅
 ├── docs/
 │   ├── archive/
-│   │   ├── masterseed_archived_2026-05-28.md     ✅ archived (was masterseed.md)
-│   │   └── lessons_learned_archived_2026-05-28.md ✅ archived (was lessons_learned.md)
+│   │   ├── masterseed_archived_2026-05-28.md     ✅ archived
+│   │   └── lessons_learned_archived_2026-05-28.md ✅ archived
 │   ├── LESSONS.md                        ✅ legacy, superseded
 │   ├── DECISIONS.md                      ✅
 │   ├── PROGRESS.md                       ✅
@@ -123,30 +195,30 @@ Every CC session must preserve:
         └── js/
             ├── auth.js                   ✅
             ├── dropzone.js               ✅
-            ├── cashflow.injector.js      ✅ 9B5 — forecast engine + DEF CON 5 + simulation mode
-            ├── expenses.injector.js      ✅ IIFE, lazy via panelactivated
-            ├── liabilities-panel.injector.js ✅ IIFE, lazy via panelactivated
+            ├── cashflow.injector.js      ✅ 9B5 — forecast engine + DEF CON 5 + simulation
+            ├── expenses.injector.js      ✅
+            ├── liabilities-panel.injector.js ✅
             ├── budget-panel.injector.js  ✅ 9E-R2 — 12-mo matrix, GAP rows, edit mode
             ├── ideas-panel.injector.js   ✅ 9E-R2 — KPI strip, resizable list, Write/AI toggle
-            ├── dash-overview.injector.js ✅ IIFE, lazy via panelactivated
+            ├── dash-overview.injector.js ✅
             ├── entry.injector.js         ✅ binds entry drawer form
             ├── diary.injector.js         ✅
-            ├── collection.injector.js    ✅ embedded in panel-collection
-            ├── ai.injector.js            ✅ embedded in panel-ai
+            ├── collection.injector.js    ✅
+            ├── ai.injector.js            ✅
+            ├── projects.injector.js      🔄 9C — in progress
             └── dashboard.injector.js     ✅ retired from shell, kept for reference
 functions/
-├── _middleware.js                        ✅ auth check for all /api/*
+├── _middleware.js                        ✅
 ├── _airtable.js                          ✅ ALL shared Airtable helpers
 └── api/
     ├── auth.js + auth/check.js           ✅
-    ├── transactions.js                   ✅ GET/POST (PATCH/DELETE check pending)
+    ├── transactions.js                   ✅
     ├── categories.js                     ✅
-    ├── liabilities.js                    ✅ loan received → Income tx
-    ├── liabilities/[id].js               ✅ payment → Expense tx
-    ├── cashflow-sync.js                  ✅ GET/POST KV sync point
-    ├── active-strategy.js               ✅ 9B5 — GET/POST KV active_strategy (DEF CON 5)
-    ├── budgets.js                        ✅ GET/POST with period duplicate check
-    ├── budgets/[id].js                   ✅ PATCH/DELETE
+    ├── liabilities.js                    ✅
+    ├── liabilities/[id].js               ✅
+    ├── cashflow-sync.js                  ✅
+    ├── active-strategy.js               ✅ 9B5 DEF CON 5
+    ├── budgets.js + budgets/[id].js      ✅
     ├── assets.js                         ✅
     ├── diary.js                          ✅
     ├── utilities.js                      ✅
@@ -155,19 +227,22 @@ functions/
     ├── dropzone.js                       ✅
     ├── upload-image.js                   ✅
     ├── ai-chat.js                        ✅
-    └── setup/schema.js                   ✅ two-phase: tables + seed
+    ├── projects.js                       🔄 9C — in progress
+    ├── project-tasks.js                  🔄 9C — in progress
+    ├── project-resources.js              🔄 9C — in progress
+    ├── sales.js                          ⬜ 9D — not yet built
+    └── setup/schema.js                   ✅
 ```
 
 ---
 
 ## AIRTABLE TABLES
 
-**Base ID:** `apphBGWfSPL45oSFd` (chaijohn-core)
-**Business Base:** `appMBjlfYyVd8I7ML` (blog push only — one-way)
+### chaijohn-core base (`apphBGWfSPL45oSFd`)
 
 | Table | Key Fields |
 |---|---|
-| Categories | name, group, type (Earn/Expense/Loan/Investment), expense_type, is_business, cash_flow, active |
+| Categories | name, group, type (Earn/Expense/Loan/Investment), fixed_variable (Bus-earn/Per-earn/etc), expense_type, is_business, cash_flow, active |
 | Transactions | date, type, amount, budget_id→Budgets, category_id→Categories (legacy), entity, description, note, source, fixed_variable, period |
 | Liabilities | name, creditor_type, loan_size, interest_rate, monthly_payment, current_balance, active |
 | Liability_Payments | liability_id→Liabilities, date, amount, note |
@@ -177,43 +252,81 @@ functions/
 | Utilities | month, electricity_units, electricity_charge, water_units, water_charge, notes |
 | Quotes | text, author, source, date_added, mood_tag, active, cloudinary_image_url |
 | Drop_Zone_Queue | cloudinary_url, filename, mime_type, status, ai_result, suggested_type |
-| Budgets | label, category_id→Categories, amount, period, start_date, end_date, active |
+| Budgets | label, category_id→Categories, amount, period, start_date, end_date, active, backlog_type (carry/forgive), period_due_day |
+| Projects | project_id, name, idea, type (Active/Draft/Pause), current_phase (DS/PT/PD/PV/LA), sales_forecast_sent, finance_opened, target_revenue_monthly, investment_total, sga_pct, notes |
+| ProjectPhases | phase_id, project_id→Projects, phase_code, status, exit_checklist_complete |
+| ProjectMilestones | milestone_id, project_id, phase_id, name, auto_date, status |
+| ProjectTasks | task_id, project_id, phase_id, title, finish_by, status, priority, depends_on_task_id, dependency_active |
+| ProjectResources | resource_id, project_id, item, cost, status |
 
-**Category groups (seeded):** Loan / Family / Basic Living / Car / Service / Personal / Basic IT / Bus IT / Business / Per-earn / Bus-earn / Investment
+**Category groups (seeded):**
+Loan / Family / Basic Living / Car / Service / Personal / Basic IT / Bus IT / Business / Per-earn / Bus-earn / Investment
+
+**Bus-earn category rules:**
+- Only active running businesses appear here (I-Flex, Daje, Flow)
+- Projects pushed to 2.4 (sales_forecast_sent=true) appear DYNAMICALLY — fetched from Projects table, NOT seeded as categories
+- Do NOT seed Ploikong, Satu, Old stocks sale, Stock earn — these were legacy errors
+
+### Business base (`appMBjlfYyVd8I7ML`) — Janis Business DB
+
+**THIS IS THE FULL BUSINESS OPERATIONS DATABASE — not just for blog.**
+Personal dashboard reads from this base but NEVER writes (read-only consumer).
+The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) owns all writes.
+
+| Table | Role in personal dashboard |
+|---|---|
+| Business ID | Registry of all businesses — CC reads this to generate Sales lanes dynamically |
+| Products | Product catalog per business — used for sale card display and pareto |
+| Sale_record | All invoices with payment stages — primary data for M2.2 Sales panel |
+| Product_cost | Cost data — not used in personal dashboard yet |
+| Blogs | Blog push target — Diary with publish_to_web=true writes here |
+| Posts | Marketing content — not used in personal dashboard |
+| Contact Messages | Customer inquiries — not used in personal dashboard |
+| Case study leads | Sales leads — not used in personal dashboard |
+| customer | Customer registry — used for AR display in M2.2 |
+| quote | Quotes/proposals — used for Open Quotes bubble in M2.2 |
+
+**Business IDs confirmed:**
+- BUS00 — Janis Hammer (Root/holding)
+- BUS01 — I-Flex Pilates (Pilates Machines)
+- BUS02 — Daje Queencatcher (Vending Machines / Claw)
+- BUS03 — Jade Coffee (Coffee Capsules) — Status: Active in registry but project-level revenue; no sale records yet
+- BUS04 — Flow Lifestyle (Board Sports — skateboards, surfskates)
 
 ---
 
 ## ROADMAP
 
-**Immediate next:**
-1. Fix 9B4 — Cashflow card restoration + X-days due window tool + cut cost simulation
-2. Expense pareto cut-off date input (deferred from 9B3)
+**Now:**
+1. Fix 9C — M3.4 Projects module (CC executing)
 
-**Next week:**
-3. Fix 9C — Full M3.4 Projects module (Airtable schema, API endpoints, projects.injector.js, panel)
+**After 9C QA passes:**
+2. Fix 9D — M2.2 Sales panel (prompt ready — see CC_PROMPT_fix9D_m22-sales.md)
 
-**After that:**
-4. Collection module full test + buyer tags + social share
-5. AI Advisor full test + verify financial context loads
-6. Diary → social push (FB/IG) with image capability
+**After 9D:**
+3. Fix 9E-hard — M3.3 Hard Assets (physical property, vehicles, valuables)
 
-**Medium term:**
-7. Project Management Hub — design session with Chat first, then build
-8. Ploikong.com sync from Collection (when Ploikong reaches 100%)
+**Medium term (in order):**
+4. Fix 9F — M4.3 Time Management (today view from project tasks)
+5. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
+6. Fix 9H — M5 Life (personal timeline, vision goals)
+7. Fix 9I — M4.1 AI Advisor upgrade (full system context)
 
 **Long term:**
-9. Business earnings inject (Janis i-flex → this diary)
-10. Stock earnings inject (Trade-simulation → this diary)
-11. AI agent global memory — diary as structured context for all AI tools
+8. M1.1 Dashboard — balance sheet (Net Worth = Assets − Liabilities), requires liability interest/principal split
+9. Collection full test + buyer tags + social share
+10. AI Advisor permanent memory + diary-as-context
 
 ---
 
 ## CRITICAL RULES
 
-(All in CLAUDE.md rules 1–5 + RULES.md L001–L067. No additional rules beyond those.)
+(All in CLAUDE.md rules 1–5 + RULES.md L001–L060j. No additional rules beyond those.)
 
 **Environment vars (Cloudflare Pages dashboard):**
 - AIRTABLE_API_KEY (secret) · CLOUDINARY_API_KEY/SECRET (secrets) · ANTHROPIC_API_KEY (secret)
+- AIRTABLE_BASE_ID = apphBGWfSPL45oSFd (chaijohn-core)
+- AIRTABLE_BUSINESS_BASE_ID = appMBjlfYyVd8I7ML (Janis Business DB — read-only from personal dashboard)
 - CHAIJOHN_KV binding id: 7e2dcb214e17435c9ec808cb6e3b7e74
 
 **Deployment reminder:** Cloudflare Pages auto-deploys from main. Never merge broken code to main.

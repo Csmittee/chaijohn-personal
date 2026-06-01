@@ -4,6 +4,28 @@
 
 ---
 
+## SALES PANEL (9D — M2.2)
+
+L060  Sales lanes are DYNAMIC: fetch all Categories WHERE type='Earn', group by fixed_variable field value — 'Bus-earn' → Active Business section, 'Per-earn' → Personal section. NEVER hardcode BUS01/BUS02/BUS04 or any lane name in code.
+L060b Business Airtable registry: read Business ID table (appMBjlfYyVd8I7ML) — all records with Status=Active define valid business lanes. New business added there = new lane appears automatically with zero code change.
+L060c Sales data sources — 3 streams, unified by API: (1) Business Airtable Sale_record table (multi-payment invoices, grouped by quote_id); (2) chaijohn-core Assets WHERE status='Sold' (personal asset sales); (3) chaijohn-core Transactions WHERE type='Earn' AND source='M2.2' (manual entries)
+L060d Project revenue in Sales: Projects WHERE sales_forecast_sent=true AND type='Active' appear under Projects section as expected recurring income. When project matures and gets a Business ID in Business Airtable, remove from Projects section — it now has its own Business lane.
+L060e AR definition: invoice is AR when sale_date <= today AND invoice_total > SUM(actual_sale payments for that quote_id). Overdue = AR AND due_date < today → card shows RED frame + heartbeat. Not yet overdue = AR AND due_date >= today → amber badge.
+L060f Sales cashflow injection: every confirmed payment (actual_sale with date) must auto-create or update a Transaction in chaijohn-core (type=Earn, source='M2.2', category from matching Bus-earn category). This is the bridge between M2.2 and M2.1 — no double entry by owner.
+L060g Entry button in Sales panel opens existing entry drawer pre-set to EARN tab — do NOT build a separate sale form. Income Source dropdown already provides the categorisation. Sales panel reads the result back via Transactions API.
+L060h Income Source dropdown is dynamic: fetch Categories WHERE type='Earn', group by fixed_variable. Bus-earn group shows active businesses + any Project WHERE sales_forecast_sent=true. Remove Ploikong, Satu, Old stocks sale, Stock earn — these are incorrect legacy seeds.
+L060i Sales UI scroll rule: summary bubbles + graph zone are STICKY (position:sticky, top:0) — only the body lanes section scrolls. Never overflow:hidden on graph containers. All Chart.js instances use responsive:true, maintainAspectRatio:false with explicit container height.
+L060j Pareto in Sales: shown as vertical bar on right of graph zone. When filter = All businesses → pareto shows revenue by business. When filter = single business → pareto shows top products/services for that business (from Sale_record Product Name field).
+
+---
+
+## LIABILITIES (debt structure — future balance sheet prep)
+
+L059  Liability payment split: every payment has interest_portion + principal_portion. Only principal_portion reduces current_balance. interest_portion is recorded as Expense transaction (category: loan interest). Current system books full payment amount — this is a known limitation to fix when Liability_Payments table is extended.
+L059b Balance sheet foundation (M1.1 — future): Net Worth = Total Assets (estimated_value from Assets table + Hard Assets) − Total Liabilities (current_balance from Liabilities). Do not build yet — document the formula so CC never designs anything that conflicts with it.
+
+---
+
 ## CASHFLOW PANEL (9B5)
 
 L053  Cashflow: all card amounts must prorate via prorateAmount() — never use raw budget.amount for display or forecast
@@ -116,4 +138,4 @@ L006  Diary save: ALL entries → chaijohn-core Diary table. ONLY Blog+publish_t
 L014  CC ends every session: merge branch to main, verify Cloudflare production URL updated
 L012  Prompt archive: move CC_PROMPT file to docs/prompts/, stamp ✅ COMPLETE + date + summary at top
 L011  Complete files only: never patches, never diffs — full replacement always
-L010  Read before write: read masterseed/CLAUDE.md + RULES.md + ALL relevant source files fresh before writing anything
+L010  Read before write: read CLAUDE.md + RULES.md + PROJECT_STATE.md + ALL relevant source files fresh before writing anything
