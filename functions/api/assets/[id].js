@@ -30,7 +30,7 @@ export async function onRequestPatch(context) {
 
     const fields = {};
     const allowed = ['name', 'category', 'cost_price', 'estimated_value', 'date_acquired',
-      'status', 'velocity', 'notes', 'cloudinary_image_url', 'sold_price', 'sold_date', 'sold_via'];
+      'status', 'velocity', 'notes', 'cloudinary_image_url', 'cloudinary_gallery_urls', 'sold_price', 'sold_date', 'sold_via'];
 
     for (const key of allowed) {
       if (body[key] !== undefined) {
@@ -63,7 +63,7 @@ export async function onRequestPatch(context) {
   // Regular update
   const fields = {};
   const allowed = ['name', 'category', 'cost_price', 'estimated_value', 'date_acquired',
-    'status', 'velocity', 'notes', 'cloudinary_image_url', 'sold_price', 'sold_date', 'sold_via'];
+    'status', 'velocity', 'notes', 'cloudinary_image_url', 'cloudinary_gallery_urls', 'sold_price', 'sold_date', 'sold_via'];
 
   for (const key of allowed) {
     if (body[key] !== undefined) {

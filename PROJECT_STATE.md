@@ -45,6 +45,7 @@ Replaces: paper diary, scattered project notes, Excel cashflow tracker, Obsidian
 | Fix budget | Fix budget save (removed window.confirm), entry category dropdown retry, duplicate period check, input font 0.62rem | ✅ COMPLETE |
 | Fix 9B4 | Cashflow card restoration + X-days due tool + cut cost simulation | ✅ COMPLETE |
 | Collection gallery+sync | FAB centering · Cloudinary sync button · gallery hover arrows + counter on asset cards | ✅ COMPLETE |
+| Fix collection-edit | Edit modal save/cancel/delete · image URL pre-fill · summary bar IDs (sum-holding etc.) · API cloudinary_gallery_urls | ✅ COMPLETE |
 | Fix 9C | Full M3.4 Projects module (schema, API, projects.injector.js, panel) — SCHEDULED NEXT WEEK | ⬜ SCHEDULED |
 | Pillar 3 | Collection module — full test + buyer tags + social share | ⬜ FUTURE |
 | Pillar 4 | AI Advisor — full test + permanent memory context | ⬜ FUTURE |

@@ -4,10 +4,18 @@
 
 ---
 
+## COLLECTION PANEL (edit-gallery)
+
+L051  Modal button IDs: HTML uses `save-asset-btn`, `asset-modal-cancel`, `confirm-sell`, `sell-cancel` — injector must bind these exact IDs; mismatches silently fail
+L051b Delete button injection: `#delete-asset-btn` does not exist in index.html — inject via JS into `#asset-modal .flex.justify-between`, show/hide per add vs edit mode
+L051c Summary bar IDs: collection strip uses `sum-holding`, `sum-forsale`, `sum-sold-ytd`, `sum-knife`, `sum-vice`, `sum-plant`, `sum-doll` — never guess IDs, always re-read HTML
+L051d Sync button container: append to `#collection-filters` (the outer `.filter-bar`), NOT to `statusBtns[0].parentElement` which is the inner `.period-toggle`
+L051e Edit modal pre-fill: `openEditAssetModal` must populate `asset-image-url` from `f.cloudinary_image_url`; `saveAsset` reads file upload first, falls back to URL text field
+
 ## COLLECTION PANEL (gallery-sync)
 
 L050  Gallery hover: inject FAB CSS via `<style>` tag in init (not index.html) — clear FAB inner nodes so ::before provides the + unambiguously; attach gallery arrows via addEventListener not inline onclick
-L050b Filter bar sync button: find parent via `statusBtns[0].parentElement`, set display:flex on parent, use margin-left:auto on sync button for far-right alignment
+L050b Filter bar sync button: append to `#collection-filters` outer bar — see L051d
 L050c Gallery multi-image: store allImages = [mainImage, ...galleryUrls]; parse cloudinary_gallery_urls as JSON; navigate with currentImageIndex closure per card
 
 ---

@@ -54,6 +54,7 @@ export async function onRequestPost(context) {
   if (body.velocity) fields.velocity = body.velocity;
   if (body.notes) fields.notes = body.notes;
   if (body.cloudinary_image_url) fields.cloudinary_image_url = body.cloudinary_image_url;
+  if (body.cloudinary_gallery_urls) fields.cloudinary_gallery_urls = body.cloudinary_gallery_urls;
   if (body.sold_price !== undefined) fields.sold_price = Number(body.sold_price);
   if (body.sold_date) fields.sold_date = body.sold_date;
   if (body.sold_via) fields.sold_via = body.sold_via;

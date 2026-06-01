@@ -1,7 +1,6 @@
 /**
  * collection.injector.js — Collection/Assets page logic.
- * Handles asset grid, filters, add/edit/sell/share modals.
- * fix/collection-gallery-sync: FAB centering, Sync button, gallery hover
+ * fix/collection-edit-gallery: modal save/cancel/delete, image URL pre-fill, summary bar fix
  */
 
 /* ─── Utility helpers ─── */
@@ -48,15 +47,6 @@ let activeCategoryFilter = '';
 let editingAssetId = null;
 
 /* ─── Badge helpers ─── */
-function statusBadgeClass(status) {
-  return {
-    'Holding': 'badge-primary',
-    'For Sale': 'badge-warning',
-    'Sold': 'badge-gray',
-    'Invested': 'badge-income'
-  }[status] || 'badge-gray';
-}
-
 function statusBadgeStyle(status) {
   const styles = {
     'Holding': 'background:rgba(59,130,246,0.2);color:#60a5fa',
@@ -74,7 +64,7 @@ function gainLossHtml(cost, value) {
   return '<div style="font-size:0.78rem;' + cls + ';font-weight:600">' + (pct >= 0 ? '+' : '') + pct + '% vs cost</div>';
 }
 
-/* ─── CHANGE 1: FAB CSS injection for centered plus icon ─── */
+/* ─── FAB CSS injection for centered plus icon ─── */
 function injectFabCss() {
   if (document.getElementById('collection-fab-style')) return;
   const style = document.createElement('style');
@@ -93,11 +83,9 @@ function injectFabCss() {
   ].join('');
   document.head.appendChild(style);
 
-  // Ensure FAB button has the class and no leftover icon children
   const fab = document.getElementById('add-asset-btn') || document.getElementById('open-add-asset');
   if (fab) {
     fab.classList.add('collection-fab');
-    // Remove child nodes so ::before provides the + icon unambiguously
     while (fab.firstChild) fab.removeChild(fab.firstChild);
   }
 }
@@ -132,12 +120,11 @@ async function loadAssets() {
   }
 }
 
-/* ─── CHANGE 3: Build asset card with gallery hover ─── */
+/* ─── Build asset card with gallery hover ─── */
 function buildAssetCard(asset) {
   const f = asset.fields || {};
   const mainImage = f.cloudinary_image_url || '';
 
-  // Parse gallery URLs from cloudinary_gallery_urls field
   let galleryUrls = [];
   if (f.cloudinary_gallery_urls) {
     try { galleryUrls = JSON.parse(f.cloudinary_gallery_urls); } catch (e) { galleryUrls = []; }
@@ -149,7 +136,6 @@ function buildAssetCard(asset) {
   card.className = 'card asset-card';
   card.style.cssText = 'border-radius:12px;overflow:hidden;display:flex;flex-direction:column';
 
-  // ── Image section ──────────────────────────────────────────────────────────
   const imgWrap = document.createElement('div');
   imgWrap.style.cssText = 'position:relative;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.03)';
 
@@ -165,18 +151,15 @@ function buildAssetCard(asset) {
     imgWrap.appendChild(img);
 
     if (allImages.length > 1) {
-      // Gallery counter badge
       const counter = document.createElement('div');
       counter.style.cssText = 'position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:3px;pointer-events:none';
       counter.textContent = '1 / ' + allImages.length;
       imgWrap.appendChild(counter);
 
-      // Left arrow
       const arrowLeft = document.createElement('button');
       arrowLeft.textContent = '‹';
       arrowLeft.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:14px;cursor:pointer;opacity:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center;line-height:1';
 
-      // Right arrow
       const arrowRight = document.createElement('button');
       arrowRight.textContent = '›';
       arrowRight.style.cssText = 'position:absolute;right:4px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:14px;cursor:pointer;opacity:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center;line-height:1';
@@ -184,7 +167,6 @@ function buildAssetCard(asset) {
       imgWrap.appendChild(arrowLeft);
       imgWrap.appendChild(arrowRight);
 
-      // Show/hide arrows on hover
       imgWrap.addEventListener('mouseenter', function () {
         arrowLeft.style.opacity = '1';
         arrowRight.style.opacity = '1';
@@ -211,7 +193,6 @@ function buildAssetCard(asset) {
       arrowRight.addEventListener('click', function (e) { e.stopPropagation(); navigate(1); });
     }
   } else {
-    // No image placeholder
     imgWrap.style.height = '100px';
     imgWrap.style.display = 'flex';
     imgWrap.style.alignItems = 'center';
@@ -223,7 +204,6 @@ function buildAssetCard(asset) {
 
   card.appendChild(imgWrap);
 
-  // ── Card body — matches existing structure ─────────────────────────────────
   const body = document.createElement('div');
   body.style.cssText = 'padding:0.85rem;flex:1;display:flex;flex-direction:column';
   body.innerHTML =
@@ -239,7 +219,6 @@ function buildAssetCard(asset) {
     (f.notes ? '<div style="font-size:0.73rem;opacity:0.45;margin-top:0.35rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(f.notes) + '">' + escHtml(f.notes.substring(0, 50)) + (f.notes.length > 50 ? '…' : '') + '</div>' : '');
   card.appendChild(body);
 
-  // ── Action buttons ─────────────────────────────────────────────────────────
   const actions = document.createElement('div');
   actions.style.cssText = 'padding:0.6rem 0.85rem;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:0.4rem;flex-wrap:wrap';
 
@@ -272,7 +251,7 @@ function buildAssetCard(asset) {
   return card;
 }
 
-/* ─── Render asset grid — uses buildAssetCard for gallery support ─── */
+/* ─── Render asset grid ─── */
 function renderAssetGrid(assets) {
   const grid = document.getElementById('asset-grid');
   if (!grid) return;
@@ -282,51 +261,57 @@ function renderAssetGrid(assets) {
   });
 }
 
-/* ─── Summary strip ─── */
+/* ─── Summary strip — IDs match index.html: sum-holding, sum-forsale, sum-sold-ytd, sum-knife, sum-vice, sum-plant, sum-doll ─── */
 function updateSummaryStrip(assets) {
-  const holdingTotal = assets.filter(function (a) { return a.fields.status === 'Holding'; })
+  const currentYear = new Date().getFullYear();
+
+  const holdingTotal = assets
+    .filter(function (a) { return a.fields.status === 'Holding'; })
     .reduce(function (s, a) { return s + (a.fields.estimated_value || 0); }, 0);
 
   const forSaleCount = assets.filter(function (a) { return a.fields.status === 'For Sale'; }).length;
-  const currentYear = new Date().getFullYear();
-  const soldYtd = assets.filter(function (a) {
-    const f = a.fields;
-    return f.status === 'Sold' && (f.sold_date || '').startsWith(String(currentYear));
-  }).reduce(function (s, a) { return s + (a.fields.sold_price || 0); }, 0);
 
-  const totalValue = assets.filter(function (a) { return a.fields.status !== 'Sold'; })
-    .reduce(function (s, a) { return s + (a.fields.estimated_value || a.fields.cost_price || 0); }, 0);
+  const soldYtd = assets
+    .filter(function (a) {
+      return a.fields.status === 'Sold' && (a.fields.sold_date || '').startsWith(String(currentYear));
+    })
+    .reduce(function (s, a) { return s + (a.fields.sold_price || 0); }, 0);
 
-  const els = {
-    'summary-holding': formatThb(holdingTotal),
-    'summary-for-sale': forSaleCount + ' items',
-    'summary-sold-ytd': formatThb(soldYtd),
-    'summary-total': formatThb(totalValue),
-    'summary-count': assets.length + ' assets'
+  function catVal(cat) {
+    return assets
+      .filter(function (a) { return a.fields.category === cat && a.fields.status !== 'Sold'; })
+      .reduce(function (s, a) { return s + (a.fields.estimated_value || a.fields.cost_price || 0); }, 0);
+  }
+
+  const map = {
+    'sum-holding': formatThb(holdingTotal),
+    'sum-forsale': forSaleCount + ' items',
+    'sum-sold-ytd': formatThb(soldYtd),
+    'sum-knife': formatThb(catVal('Collection-Knife')),
+    'sum-vice': formatThb(catVal('Collection-Vice')),
+    'sum-plant': formatThb(catVal('Collection-Plant')),
+    'sum-doll': formatThb(catVal('Collection-Doll'))
   };
-  Object.keys(els).forEach(function (id) {
+
+  Object.keys(map).forEach(function (id) {
     const el = document.getElementById(id);
-    if (el) el.textContent = els[id];
+    if (el) el.textContent = map[id];
   });
 }
 
 /* ─── Asset modal (add/edit) ─── */
-const ASSET_CATEGORIES = [
-  'Collection-Knife', 'Collection-Vice', 'Collection-Plant', 'Collection-Doll', 'Other'
-];
-const ASSET_STATUSES = ['Holding', 'For Sale', 'Sold', 'Invested'];
-const ASSET_VELOCITIES = ['Fast', 'Medium', 'Slow', 'No Movement'];
-
 function openAddAssetModal() {
   editingAssetId = null;
+
   const titleEl = document.getElementById('asset-modal-title');
   if (titleEl) titleEl.textContent = 'Add Asset';
 
-  const fields = ['asset-name', 'asset-cost', 'asset-value', 'asset-notes', 'asset-date'];
-  fields.forEach(function (id) {
+  ['asset-name', 'asset-cost', 'asset-value', 'asset-notes', 'asset-image-url'].forEach(function (id) {
     const el = document.getElementById(id);
-    if (el) el.value = id === 'asset-date' ? todayIso() : '';
+    if (el) el.value = '';
   });
+  const dateEl = document.getElementById('asset-date');
+  if (dateEl) dateEl.value = todayIso();
 
   const catSel = document.getElementById('asset-category');
   if (catSel) catSel.value = 'Collection-Knife';
@@ -337,6 +322,13 @@ function openAddAssetModal() {
 
   const hiddenId = document.getElementById('asset-edit-id');
   if (hiddenId) hiddenId.value = '';
+
+  const previewEl = document.getElementById('asset-image-preview');
+  if (previewEl) previewEl.innerHTML = '';
+
+  // Hide delete button in add mode
+  const deleteBtn = document.getElementById('delete-asset-btn');
+  if (deleteBtn) deleteBtn.style.display = 'none';
 
   const modal = document.getElementById('asset-modal');
   if (modal) modal.style.display = 'flex';
@@ -357,12 +349,21 @@ function openEditAssetModal(assetId) {
     'asset-cost': f.cost_price || '',
     'asset-value': f.estimated_value || '',
     'asset-notes': f.notes || '',
-    'asset-date': f.date_acquired || ''
+    'asset-date': f.date_acquired || '',
+    'asset-image-url': f.cloudinary_image_url || ''  // pre-fill URL field from Airtable
   };
   Object.keys(fieldMap).forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.value = fieldMap[id];
   });
+
+  // Show image preview if URL exists
+  const previewEl = document.getElementById('asset-image-preview');
+  if (previewEl) {
+    previewEl.innerHTML = f.cloudinary_image_url
+      ? '<img src="' + escHtml(f.cloudinary_image_url) + '" style="max-height:80px;border-radius:6px;margin-top:0.3rem" onerror="this.style.display=\'none\'">'
+      : '';
+  }
 
   const catSel = document.getElementById('asset-category');
   if (catSel) catSel.value = f.category || 'Other';
@@ -374,13 +375,17 @@ function openEditAssetModal(assetId) {
   const hiddenId = document.getElementById('asset-edit-id');
   if (hiddenId) hiddenId.value = assetId;
 
+  // Show delete button in edit mode
+  const deleteBtn = document.getElementById('delete-asset-btn');
+  if (deleteBtn) deleteBtn.style.display = '';
+
   const modal = document.getElementById('asset-modal');
   if (modal) modal.style.display = 'flex';
 }
 
 async function saveAsset() {
-  const saveBtn = document.getElementById('asset-save-btn');
-  const name = document.getElementById('asset-name')?.value;
+  const saveBtn = document.getElementById('save-asset-btn');
+  const name = document.getElementById('asset-name')?.value.trim();
   const category = document.getElementById('asset-category')?.value;
   const costPrice = parseFloat(document.getElementById('asset-cost')?.value) || null;
   const estimatedValue = parseFloat(document.getElementById('asset-value')?.value) || null;
@@ -389,6 +394,7 @@ async function saveAsset() {
   const notes = document.getElementById('asset-notes')?.value || null;
   const dateAcquired = document.getElementById('asset-date')?.value || null;
   const imageFileInput = document.getElementById('asset-image-file');
+  const imageUrlInput = document.getElementById('asset-image-url');
 
   if (!name) { showFlash('Name is required', 'error'); return; }
 
@@ -396,6 +402,8 @@ async function saveAsset() {
 
   try {
     let cloudinaryUrl = null;
+
+    // Priority 1: new file upload
     if (imageFileInput && imageFileInput.files && imageFileInput.files[0]) {
       const formData = new FormData();
       formData.append('file', imageFileInput.files[0]);
@@ -409,6 +417,11 @@ async function saveAsset() {
         const uploadData = await uploadRes.json();
         cloudinaryUrl = uploadData.url || uploadData.secure_url || null;
       }
+    }
+
+    // Priority 2: URL text field (existing or newly pasted)
+    if (!cloudinaryUrl && imageUrlInput && imageUrlInput.value.trim()) {
+      cloudinaryUrl = imageUrlInput.value.trim();
     }
 
     const body = {
@@ -478,7 +491,7 @@ async function confirmSell() {
   if (!soldPrice || isNaN(soldPrice)) { showFlash('Enter sale price', 'error'); return; }
   if (!soldDate) { showFlash('Enter sale date', 'error'); return; }
 
-  const confirmBtn = document.getElementById('sell-confirm-btn');
+  const confirmBtn = document.getElementById('confirm-sell');
   if (confirmBtn) confirmBtn.disabled = true;
 
   try {
@@ -615,20 +628,12 @@ function closeModal(modalId) {
   if (modal) modal.style.display = 'none';
 }
 
-function openModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) modal.style.display = 'flex';
-}
-
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
-  // CHANGE 1: Fix FAB plus icon centering
   injectFabCss();
-
-  // Load initial assets
   loadAssets();
 
-  // Filter: status buttons
+  // Status filter buttons
   const statusBtns = document.querySelectorAll('[data-status-filter]');
   statusBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -639,7 +644,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Filter: category dropdown
+  // Category filter dropdown
   const catFilter = document.getElementById('category-filter');
   if (catFilter) {
     catFilter.addEventListener('change', function () {
@@ -648,83 +653,42 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // CHANGE 2: Add Sync button to filter bar far right
-  const filterBar = statusBtns.length > 0 ? statusBtns[0].parentElement : null;
-  if (filterBar) {
-    filterBar.style.display = 'flex';
-    filterBar.style.alignItems = 'center';
-    filterBar.style.flexWrap = 'wrap';
-    if (!filterBar.style.gap) filterBar.style.gap = '0.4rem';
-
+  // Sync button — added to collection-filters bar (not to .period-toggle inner div)
+  const filterBar = document.getElementById('collection-filters');
+  if (filterBar && !document.getElementById('cloudinary-sync-btn')) {
     const syncBtn = document.createElement('button');
     syncBtn.id = 'cloudinary-sync-btn';
     syncBtn.textContent = '⬆ Sync from Cloudinary';
-    syncBtn.style.cssText = [
-      'margin-left:auto',
-      'background:transparent',
-      'border:.5px solid #2a2a4e',
-      'border-radius:6px',
-      'padding:4px 12px',
-      'font-size:10px',
-      'color:#85b7eb',
-      'cursor:pointer',
-      'white-space:nowrap'
-    ].join(';');
+    syncBtn.style.cssText = 'margin-left:auto;background:transparent;border:.5px solid #2a2a4e;border-radius:6px;padding:4px 12px;font-size:10px;color:#85b7eb;cursor:pointer;white-space:nowrap';
     syncBtn.addEventListener('click', function () {
-      if (window.openCloudinarySync) {
-        window.openCloudinarySync();
-      } else {
-        console.error('cloudinary-sync.js not loaded');
-      }
+      if (window.openCloudinarySync) window.openCloudinarySync();
+      else console.error('cloudinary-sync.js not loaded');
     });
     filterBar.appendChild(syncBtn);
   }
 
-  // FAB / Add Asset button
+  // FAB / Add Asset
   const addBtn = document.getElementById('add-asset-btn');
   if (addBtn) addBtn.addEventListener('click', openAddAssetModal);
 
   // Expose refresh for cloudinary-sync.js to call after import
   window._collectionRefresh = function () { loadAssets(); };
 
-  // Asset modal save
-  const assetSaveBtn = document.getElementById('asset-save-btn');
-  if (assetSaveBtn) assetSaveBtn.addEventListener('click', saveAsset);
+  // ── Asset modal ─────────────────────────────────────────────────────────────
 
-  // Asset modal close
-  const assetModalClose = document.getElementById('asset-modal-close');
-  if (assetModalClose) assetModalClose.addEventListener('click', function () { closeModal('asset-modal'); });
-  const assetBackdrop = document.getElementById('asset-modal-backdrop');
-  if (assetBackdrop) assetBackdrop.addEventListener('click', function () { closeModal('asset-modal'); });
+  // Inject Delete button into modal footer (between Cancel and Save) — only once
+  const modalFooter = document.querySelector('#asset-modal .flex.justify-between');
+  if (modalFooter && !document.getElementById('delete-asset-btn')) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.id = 'delete-asset-btn';
+    deleteBtn.className = 'btn btn-outline';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.style.cssText = 'display:none;color:#ef4444;border-color:#ef4444';
+    const saveBtn = document.getElementById('save-asset-btn');
+    if (saveBtn) modalFooter.insertBefore(deleteBtn, saveBtn);
+    else modalFooter.appendChild(deleteBtn);
 
-  // Sell modal confirm
-  const sellConfirmBtn = document.getElementById('sell-confirm-btn');
-  if (sellConfirmBtn) sellConfirmBtn.addEventListener('click', confirmSell);
-
-  // Sell modal close
-  const sellModalClose = document.getElementById('sell-modal-close');
-  if (sellModalClose) sellModalClose.addEventListener('click', function () { closeModal('sell-modal'); });
-  const sellBackdrop = document.getElementById('sell-modal-backdrop');
-  if (sellBackdrop) sellBackdrop.addEventListener('click', function () { closeModal('sell-modal'); });
-
-  // Share modal buttons
-  const fbBtn = document.getElementById('share-facebook-btn');
-  if (fbBtn) fbBtn.addEventListener('click', function () { shareFacebook(fbBtn.dataset.assetId); });
-  const igBtn = document.getElementById('share-instagram-btn');
-  if (igBtn) igBtn.addEventListener('click', function () { shareInstagram(igBtn.dataset.assetId); });
-  const ploikongBtn = document.getElementById('share-ploikong-btn');
-  if (ploikongBtn) ploikongBtn.addEventListener('click', function () { syncPloikong(ploikongBtn.dataset.assetId); });
-
-  // Share modal close
-  const shareModalClose = document.getElementById('share-modal-close');
-  if (shareModalClose) shareModalClose.addEventListener('click', function () { closeModal('share-modal'); });
-  const shareBackdrop = document.getElementById('share-modal-backdrop');
-  if (shareBackdrop) shareBackdrop.addEventListener('click', function () { closeModal('share-modal'); });
-
-  // Delete asset
-  const deleteAssetBtn = document.getElementById('delete-asset-btn');
-  if (deleteAssetBtn) {
-    deleteAssetBtn.addEventListener('click', async function () {
+    deleteBtn.addEventListener('click', async function () {
       const id = document.getElementById('asset-edit-id')?.value;
       if (!id) return;
       if (!confirm('Delete this asset? This cannot be undone.')) return;
@@ -736,7 +700,63 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Close modals on Escape key
+  // Save button — HTML ID is save-asset-btn
+  const assetSaveBtn = document.getElementById('save-asset-btn');
+  if (assetSaveBtn) assetSaveBtn.addEventListener('click', saveAsset);
+
+  // Cancel button — HTML ID is asset-modal-cancel
+  const assetCancelBtn = document.getElementById('asset-modal-cancel');
+  if (assetCancelBtn) assetCancelBtn.addEventListener('click', function () { closeModal('asset-modal'); });
+
+  // Close (×) button and backdrop
+  const assetModalClose = document.getElementById('asset-modal-close');
+  if (assetModalClose) assetModalClose.addEventListener('click', function () { closeModal('asset-modal'); });
+  const assetBackdrop = document.getElementById('asset-modal');
+  if (assetBackdrop) {
+    assetBackdrop.addEventListener('click', function (e) {
+      if (e.target === assetBackdrop) closeModal('asset-modal');
+    });
+  }
+
+  // ── Sell modal ──────────────────────────────────────────────────────────────
+
+  // Confirm Sale — HTML ID is confirm-sell
+  const sellConfirmBtn = document.getElementById('confirm-sell');
+  if (sellConfirmBtn) sellConfirmBtn.addEventListener('click', confirmSell);
+
+  // Cancel — HTML ID is sell-cancel
+  const sellCancelBtn = document.getElementById('sell-cancel');
+  if (sellCancelBtn) sellCancelBtn.addEventListener('click', function () { closeModal('sell-modal'); });
+
+  // Close (×) button and backdrop
+  const sellModalClose = document.getElementById('sell-modal-close');
+  if (sellModalClose) sellModalClose.addEventListener('click', function () { closeModal('sell-modal'); });
+  const sellBackdrop = document.getElementById('sell-modal');
+  if (sellBackdrop) {
+    sellBackdrop.addEventListener('click', function (e) {
+      if (e.target === sellBackdrop) closeModal('sell-modal');
+    });
+  }
+
+  // ── Share modal ─────────────────────────────────────────────────────────────
+
+  const fbBtn = document.getElementById('share-facebook-btn');
+  if (fbBtn) fbBtn.addEventListener('click', function () { shareFacebook(fbBtn.dataset.assetId); });
+  const igBtn = document.getElementById('share-instagram-btn');
+  if (igBtn) igBtn.addEventListener('click', function () { shareInstagram(igBtn.dataset.assetId); });
+  const ploikongBtn = document.getElementById('share-ploikong-btn');
+  if (ploikongBtn) ploikongBtn.addEventListener('click', function () { syncPloikong(ploikongBtn.dataset.assetId); });
+
+  const shareModalClose = document.getElementById('share-modal-close');
+  if (shareModalClose) shareModalClose.addEventListener('click', function () { closeModal('share-modal'); });
+  const shareBackdrop = document.getElementById('share-modal');
+  if (shareBackdrop) {
+    shareBackdrop.addEventListener('click', function (e) {
+      if (e.target === shareBackdrop) closeModal('share-modal');
+    });
+  }
+
+  // Escape closes any open modal
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       ['asset-modal', 'sell-modal', 'share-modal'].forEach(closeModal);
@@ -744,7 +764,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
-// Reload assets when collection panel activates (handles case where DOMContentLoaded fired before auth)
+// Reload assets when collection panel activates
 var collectionLoaded = false;
 window.addEventListener('panelactivated', function (e) {
   if (e.detail === 'collection') { loadAssets(); collectionLoaded = true; }
