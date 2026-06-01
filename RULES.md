@@ -4,6 +4,18 @@
 
 ---
 
+## M2.4 FINANCE PROJECTS + PRESALE BRIDGE (9C-rewire)
+
+L062  Panel ID mapping (PERMANENT): M3.4 Project Assets = #panel-proj-assets (route: proj-assets). M2.4 Finance Projects = #panel-projects (route: projects). These are fixed — never swap them again.
+L062b M3.4↔M2.4 propose/approve rule: M3.4 PROPOSES resources/costs → M2.4 APPROVES. Resources created in M3.4 appear as Planned budget cards in M2.4. Owner confirms in M2.4 (status→Purchased). M2.4 never receives surprise changes — they always come from M3.4 first.
+L062c M2.4 boundary card: collapsed shows name, phase badge, P&L, funding bar, presale total, days to revenue. Expanded shows budget cards (from ProjectResources), presale cards (Transactions WHERE source=presale AND project_id=X), and actions (Send to Sales, View Project).
+L062d Presale transaction pattern: source='presale' + project_id (singleLineText) in Transactions table. One record simultaneously feeds M2.1 (all Transactions), M2.2 presale_total on project lane, and M2.4 presale cards section. No new table needed.
+L062e Entry drawer conditional field: when Income Source = Pre-sale category, show #presale-project-row with project select dropdown. Fetch /api/projects?type=Active once, cache in module scope. On save: body.source='presale', body.project_id=selectedProjectId. Hide row when switching to Expense.
+L062f Pre-sale category (OWNER ACTION required): must exist in Airtable Categories table — name='Pre-sale', group='Bus-earn', type='Earn', active=true. Also requires project_id field (Single line text) added to Transactions table. CC cannot create these automatically — owner must do it once in Airtable UI or via /api/setup call.
+L062g project-finance.injector.js filters: shows projects WHERE type='Active' OR finance_opened=true. Draft projects without finance_opened do NOT appear in M2.4 — they live in M3.4 only until owner clicks Push → Open Finance.
+
+---
+
 ## SALES PANEL (9D — M2.2) — IMPLEMENTATION LESSONS
 
 L061  Business Airtable env var: AIRTABLE_BUSINESS_BASE_ID must be set in Cloudflare Pages env — if missing, panel loads with biz_unavailable=true and shows per-lane warning. NEVER crash on missing biz data.

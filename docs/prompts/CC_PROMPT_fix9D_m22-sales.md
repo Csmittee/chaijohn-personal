@@ -1,6 +1,5 @@
-> ✅ COMPLETE 2026-06-01 — M2.2 Sales: dynamic lanes + AR + cashflow injection
-
 # CC_PROMPT_fix9D_m22-sales.md
+> ✅ COMPLETE — 2026-06-01 — M2.2 Sales module: dynamic lanes, AR tracking, cashflow injection
 > Phase 9D — Build M2.2 Sales module from scratch
 > Dynamic multi-stream sales aggregator + AR tracking + cashflow injection
 

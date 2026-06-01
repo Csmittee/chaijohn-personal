@@ -116,6 +116,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix 9B5 | Cashflow complete redesign: correct forecast engine (3 budget types, debt on due dates), DEF CON 5 firewall, simulation mode (on hold + intent + action plan), card view with DEBT/BUDGET/INCOME sections, X-days due tool, Other month navigation, entry drawer DEF CON enforcement | ✅ COMPLETE |
 | Fix 9C | Full M3.4 Projects module (schema, 6 API endpoints, projects.injector.js, card/lane/focus views, drawers, AI inquiry, sales_forecast_sent bridge) | ✅ COMPLETE |
 | Fix 9D | M2.2 Sales module: dynamic lanes from Business ID table, Business Airtable read, AR tracking, cashflow injection, project forecast lanes, personal asset sales | ✅ COMPLETE |
+| Fix 9C-rewire | Rewire M3.4 → #panel-proj-assets, build M2.4 Finance Projects, presale bridge (Entry→Transactions→M2.4+M2.2+M2.1) | ✅ COMPLETE |
 | Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
@@ -154,11 +155,16 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - AI panel: embedded in shell ✅
 - Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
 - Sales panel (M2.2): dynamic lanes, AR tracking, cashflow injection, stacked bar chart + pareto, project forecast lanes, asset sales ✅
+- Finance Projects (M2.4): boundary cards, budget cards (Planned/Purchased/In use), presale cards, Send to Sales action ✅
+- Project Assets (M3.4): now correctly at #panel-proj-assets (route: proj-assets) ✅
+- Presale bridge: Entry → EARN → Pre-sale → project dropdown → source='presale' + project_id in Transactions ✅
 
 **In progress / broken:**
-- None known — 9C + 9D complete, awaiting QA
+- None known — 9C + 9D + 9C-rewire complete, awaiting QA
 - OWNER ACTION: set AIRTABLE_BUSINESS_BASE_ID env var in Cloudflare Pages for Sales panel business lanes
 - OWNER ACTION: call POST /api/setup/schema-projects once to provision 5 project tables
+- OWNER ACTION: add project_id (Single line text) field to Transactions table in Airtable (for presale bridge)
+- OWNER ACTION: create Pre-sale category in Airtable: name=Pre-sale, group=Bus-earn, type=Earn, active=true
 
 **Pending phases:**
 - Fix 9E-hard: M3.3 Hard Assets (physical property, vehicles, valuables)
@@ -216,14 +222,14 @@ Every CC session must preserve:
             ├── liabilities-panel.injector.js ✅
             ├── budget-panel.injector.js  ✅ 9E-R2 — 12-mo matrix, GAP rows, edit mode
             ├── ideas-panel.injector.js   ✅ 9E-R2 — KPI strip, resizable list, Write/AI toggle
-            ├── projects.injector.js      ✅ 9C — card/lane/focus views, drawers, AI inquiry, DEF CON red clearance
+            ├── projects.injector.js      ✅ 9C — M3.4 Project Assets (#panel-proj-assets, route: proj-assets)
+            ├── project-finance.injector.js ✅ 9C-rewire — M2.4 Finance Projects (#panel-projects, route: projects)
             ├── sales.injector.js         ✅ 9D — dynamic lanes, AR tracking, cashflow injection, stacked chart + pareto
             ├── dash-overview.injector.js ✅
-            ├── entry.injector.js         ✅ binds entry drawer form
+            ├── entry.injector.js         ✅ binds entry drawer form (+ presale project dropdown)
             ├── diary.injector.js         ✅
             ├── collection.injector.js    ✅
             ├── ai.injector.js            ✅
-            ├── projects.injector.js      🔄 9C — in progress
             └── dashboard.injector.js     ✅ retired from shell, kept for reference
 functions/
 ├── _middleware.js                        ✅
@@ -265,7 +271,7 @@ functions/
 | Table | Key Fields |
 |---|---|
 | Categories | name, group, type (Earn/Expense/Loan/Investment), fixed_variable (Bus-earn/Per-earn/etc), expense_type, is_business, cash_flow, active |
-| Transactions | date, type, amount, budget_id→Budgets, category_id→Categories (legacy), entity, description, note, source, fixed_variable, period |
+| Transactions | date, type, amount, budget_id→Budgets, category_id→Categories (legacy), entity, description, note, source (Manual/LiabilityPayment/M2.2/presale), project_id (singleLineText, for presale), fixed_variable, period |
 | Liabilities | name, creditor_type, loan_size, interest_rate, monthly_payment, current_balance, active |
 | Liability_Payments | liability_id→Liabilities, date, amount, note |
 | Assets | name, category, cost_price, estimated_value, status, velocity, date_acquired, sold_price, sold_date, cloudinary_image_url, notes |
