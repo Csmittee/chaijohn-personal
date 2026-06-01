@@ -79,6 +79,7 @@ export async function onRequestPost(context) {
   const r2 = await createTable(key, {
     name: 'ProjectPhases',
     fields: [
+      { name: 'name',                    type: 'singleLineText' },
       { name: 'phase_code',              type: 'singleSelect',  options: { choices: [{ name:'DS' },{ name:'PT' },{ name:'PD' },{ name:'PV' },{ name:'LA' }] } },
       { name: 'phase_name',              type: 'singleLineText' },
       { name: 'status',                  type: 'singleSelect',  options: { choices: [{ name:'Not started' },{ name:'In progress' },{ name:'Complete' }] } },

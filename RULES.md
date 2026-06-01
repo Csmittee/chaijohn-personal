@@ -4,6 +4,12 @@
 
 ---
 
+## AIRTABLE TABLE CREATION
+
+L071  Airtable primary field rule: the FIRST field in any new table definition MUST be type singleLineText. singleSelect, number, date, and checkbox are all rejected as primary field types. Always start every table definition with { name: 'name', type: 'singleLineText' }.
+
+---
+
 ## QA BLOCKER FIXES (bugfix session)
 
 L063  403 from Airtable on table create/read = table does not exist, NOT a permissions error. Token is full access. Check table existence first. Call POST /api/setup/schema-projects to provision missing tables.

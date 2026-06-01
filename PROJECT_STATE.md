@@ -167,7 +167,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 **In progress / broken:**
 - None known — 9C + 9D + 9C-rewire complete, awaiting QA
 - OWNER ACTION: set AIRTABLE_BUSINESS_BASE_ID env var in Cloudflare Pages for Sales panel business lanes
-- OWNER ACTION: call POST /api/setup/schema-projects once to provision 5 project tables
+- OWNER ACTION: call POST /api/setup/schema-projects — ProjectPhases primary field fix deployed, re-run to create the table
 - OWNER ACTION: add project_id (Single line text) field to Transactions table in Airtable (for presale bridge)
 - OWNER ACTION: create Pre-sale category in Airtable: name=Pre-sale, group=Bus-earn, type=Earn, active=true
 
