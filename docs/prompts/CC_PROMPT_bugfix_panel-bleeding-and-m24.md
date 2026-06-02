@@ -1,3 +1,4 @@
+✅ COMPLETE — 2026-06-02 — fix panel bleeding (panel.style.cssText removed), sales filter CSS (var(--yellow)+#0a0a10), pareto height 220px
 # CC_PROMPT_bugfix_panel-bleeding-and-m24.md
 > Fix panel content bleeding across M2.2 / M2.4 / M3.4.
 > Collect and fix CSS issues in M2.2 Sales.
