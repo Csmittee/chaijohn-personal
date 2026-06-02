@@ -128,7 +128,7 @@ export async function onRequestGet(context) {
       filterByFormula: `{Status}='Active'`,
       sort: [{ field: 'Business Name', direction: 'asc' }]
     }),
-    listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Sale_record', {
+    listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Sale record', {
       filterByFormula: busFilter !== 'all'
         ? `AND(NOT(IS_BEFORE({Sale date},'${startDate}')),{business_id}='${busFilter}')`
         : `NOT(IS_BEFORE({Sale date},'${startDate}'))`,
@@ -172,7 +172,7 @@ export async function onRequestGet(context) {
     if (f.name) productMap[String(f.name).toLowerCase()] = f;
   });
 
-  // ── Group Sale_record rows by quote_id → invoices ────────────────────────
+  // ── Group Sale record rows by quote_id → invoices ────────────────────────
   const invoiceMap = {};
   (saleRecordsRes.records || []).forEach(r => {
     const f = r.fields;
