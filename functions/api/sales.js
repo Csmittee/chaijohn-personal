@@ -228,7 +228,7 @@ export async function onRequestGet(context) {
 
   // ── Group invoices by business ────────────────────────────────────────────
   const bizRegistry = (bizIdsRes.records || []).map(r => ({
-    bus_id:        r.fields.bus_id || r.fields['Business ID (text)'] || '',
+   bus_id:        r.fields['Business ID'] || r.fields.bus_id || r.fields['Business ID (text)'] || '',
     business_name: r.fields['Business Name'] || '',
     brand_name:    r.fields['Brand name'] || r.fields['Tag line'] || '',
     tag_line:      r.fields['Tag line'] || '',
