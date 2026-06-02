@@ -1,5 +1,4 @@
 # CC_PROMPT_qa-batch3-m34-m24-m22.md
-> ✅ COMPLETE — 2026-06-02 — M3.4 tasks/buttons, M2.4 resources/presales, M2.2 personal earn + projects lane, M3.2 collection sale source
 > QA batch 3 — 9 confirmed bugs across M3.4, M2.4, M2.2, M3.2 + 1 architectural correction
 > Branch: fix/qa-batch3
 > Commit directly to main after owner QA confirms checklist

@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-02 — QA batch 3 complete — M3.4 buttons fixed, M2.4 resources/presales, M2.2 personal earn + projects lane, M3.2 collection sell source
+> Last updated: 2026-06-02 — Hotfix M3.4 complete — focus view tasks/resources render (filter formula fix), phase names on auto-create, repair-phase-names endpoint, M2.4 budget cards unblocked
 
 ---
 
@@ -119,6 +119,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix 9C-rewire | Rewire M3.4 → #panel-proj-assets, build M2.4 Finance Projects, presale bridge (Entry→Transactions→M2.4+M2.2+M2.1) | ✅ COMPLETE |
 | Fix QA-blockers | ProjectPhases 403 guard, duplicate save isSubmitting, harvest-before-add rows, sales panel event listener, AI inquiry payload | ✅ COMPLETE |
 | QA batch 3 | M3.4 buttons redesign (Edit/Open Finance/Send to Sales), Open Finance hash fix + PATCH finance_opened, sendToSales bug fix, defensive field creation via Meta API, M2.4 Confirm button color fix + hash fix, M2.2 Projects lane removes forecast (shows presale only), M2.2 Personal manual earn source fix (M2.2→Manual), M3.2 Collection sell creates source=collection transaction | ✅ COMPLETE |
+| Hotfix M3.4 focus view | Fix /api/projects/:id ARRAYJOIN filter formula (returns names not IDs) — fetch project first then filter by name. Fix phase auto-create missing `name` field. Add POST /api/setup/repair-phase-names. Fix renderFocusView phaseId→phase_code lookup. Resources empty state. M2.4 budget cards unblocked as side-effect. | ✅ COMPLETE |
 | Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |

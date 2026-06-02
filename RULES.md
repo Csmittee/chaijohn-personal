@@ -4,6 +4,24 @@
 
 ---
 
+## HOTFIX M3.4 — Focus view / Phase names / Filter formula
+
+L090  Edit drawer pre-fetches /api/projects/:id before opening — pre-fills drawerResources and
+      drawerTasks from res.resources and res.tasks. Never open edit drawer with empty state arrays.
+      Field mapping: resource {id,item,time_needed,cost,status}, task {id,title,finish_by,assigned_to,measure,phase_code}.
+
+L089  Phase auto-create: name field MUST be set to "{projectName} — {phaseName}" (e.g. "Ploikong — Design").
+      Blank name leaves the primary field empty — Airtable shows "Unnamed record" everywhere the
+      phase appears as a linked record. Always populate `name` in the createRecord call.
+
+L088  Airtable linked record filter formula: ARRAYJOIN({linkedField}) returns PRIMARY FIELD VALUES
+      (e.g. project names), NOT record IDs. FIND('recXXX', ARRAYJOIN({project_id})) always returns 0.
+      Correct pattern: fetch the parent record first to get its name, then filter child tables with
+      ARRAYJOIN({project_id})='${projectName}'. The REST API (list/filter by record) still returns
+      linked fields as ["recXXX"] arrays — linkedId() handles that correctly.
+
+---
+
 ## QA BATCH 3 — M3.4 / M2.4 / M2.2 / M3.2
 
 L087  Collection Sell must always set source='collection' + category_id on the Transaction POST.
