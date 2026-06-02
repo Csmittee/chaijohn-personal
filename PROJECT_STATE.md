@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-01 — Added M2.2 Sales design, corrected Business Base role, full phase roadmap
+> Last updated: 2026-06-02 — QA batch 3 complete — M3.4 buttons fixed, M2.4 resources/presales, M2.2 personal earn + projects lane, M3.2 collection sell source
 
 ---
 
@@ -118,6 +118,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix 9D | M2.2 Sales module: dynamic lanes from Business ID table, Business Airtable read, AR tracking, cashflow injection, project forecast lanes, personal asset sales | ✅ COMPLETE |
 | Fix 9C-rewire | Rewire M3.4 → #panel-proj-assets, build M2.4 Finance Projects, presale bridge (Entry→Transactions→M2.4+M2.2+M2.1) | ✅ COMPLETE |
 | Fix QA-blockers | ProjectPhases 403 guard, duplicate save isSubmitting, harvest-before-add rows, sales panel event listener, AI inquiry payload | ✅ COMPLETE |
+| QA batch 3 | M3.4 buttons redesign (Edit/Open Finance/Send to Sales), Open Finance hash fix + PATCH finance_opened, sendToSales bug fix, defensive field creation via Meta API, M2.4 Confirm button color fix + hash fix, M2.2 Projects lane removes forecast (shows presale only), M2.2 Personal manual earn source fix (M2.2→Manual), M3.2 Collection sell creates source=collection transaction | ✅ COMPLETE |
 | Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
@@ -142,9 +143,12 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Collection panel: FAB centered, Sync button, gallery hover arrows, edit modal, KV cache ✅
 - AI panel: embedded in shell ✅
 - Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
+- M3.4 Projects: card/lane/focus views, tasks/resources in focus view, button set (Edit + Open Finance + Send to Sales/✓ In Sales), Open Finance PATCHes finance_opened + navigates to M2.4, Send to Sales works with defensive field creation ✅
+- M2.4 Finance Projects: project cards with CAPEX bar + presale total, expanded Budget Cards (resources) + Presale Records, Confirm button visible, View Project hash correct ✅
+- M2.2 Sales: Projects lane shows pipeline tracker only (presale total + launch date, no forecast revenue), Personal manual earn entries from Entry drawer (source=Manual), Personal Asset Sales includes collection transactions ✅
+- M3.2 Collection: Sell creates Transaction with source=collection + category_id for M2.2 routing ✅
 
-**Working (confirmed):**
-- PIN auth, sessions (KV)
+**Next: CC_PROMPT_feat-sale-origins-and-hard-assets (P2 — new builds)**
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
 - M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
