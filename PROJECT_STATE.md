@@ -165,15 +165,17 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Presale bridge: Entry → EARN → Pre-sale → project dropdown → source='presale' + project_id in Transactions ✅
 
 **Working after today's QA fixes:**
-- M3.4 Project Assets: panel renders, save guard working, row harvest working
-- M2.2 Sales: panel renders, Business Airtable connecting (biz_unavailable=false)
-- M2.4 Finance Projects: panel renders
+- M3.4 Project Assets: panel renders, save guard working, row harvest working ✅
+- M2.2 Sales: panel renders, Business Airtable connecting, bus_id mapping fixed ✅
+- M2.4 Finance Projects: panel renders, correct empty state ✅
+- M3.4 Project Assets: panel unblocked (panel bleeding fixed) ✅
+- Sales filter buttons: text visible on active state (var(--yellow) + #0a0a10) ✅
+- Sales trend + pareto charts: both 220px, balanced layout (3fr 2fr) ✅
 - ProjectPhases: table created in Airtable ✅
 - AI inquiry: messages array fixed ✅
 
 **Still being fixed:**
-- M2.2 Sales businesses array: bus_id field mapping fix in progress
-  (this session fixes it)
+- None known
 
 **Owner actions completed:**
 - AIRTABLE_BUSINESS_BASE_ID set in Cloudflare ✅

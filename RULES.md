@@ -4,6 +4,29 @@
 
 ---
 
+## PANEL INIT & DOM SCOPE
+
+L078  panelactivated route guard: ALWAYS guard the panelactivated handler with
+`if (e.detail !== 'route-name') return;` as the FIRST line. Never init or render
+without this guard — causes content to bleed into every panel on navigation.
+Guard already exists in all injectors — preserve it on every edit.
+
+L079  Panel DOM scope: ALL innerHTML and style manipulation must use the specific
+panel element from `getElementById('panel-xxx')`. Never set `panel.style.cssText`
+with `display:flex/block` — this overrides the `.route-panel { display:none }` CSS
+and makes the panel permanently visible. Instead, add `#panel-xxx.active { display:flex; }`
+via ensureStyles() so visibility stays under class control.
+
+L080  Active button text color: always set explicit `color:#0a0a10` when button
+background is var(--yellow), white, or any light color. Never use `color:#000` or
+`color:var(--text)` — the text variable is light on dark theme. Always use #0a0a10.
+
+L081  var(--accent) is NOT defined in chaijohn-core theme — it resolves to nothing.
+Use `var(--yellow)` (#f5c518) for all interactive highlights, active states, and
+primary buttons. Never use var(--accent) in injector files.
+
+---
+
 ## BUSINESS AIRTABLE (external base — appMBjlfYyVd8I7ML)
 
 L072  403 from Airtable = table or field not found (not just permissions):
