@@ -153,8 +153,9 @@ export async function onRequestGet(context) {
 
   try {
     [bizIdsRes, saleRecordsRes, productsRes] = await Promise.all(bizPromises);
-  } catch {
+  } catch(err) {
     bizUnavailable = true;
+    bizError = err.message;
     bizIdsRes = { records: [] };
     saleRecordsRes = { records: [] };
     productsRes = { records: [] };
