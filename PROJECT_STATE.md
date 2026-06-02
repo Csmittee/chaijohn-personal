@@ -164,12 +164,26 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Project Assets (M3.4): now correctly at #panel-proj-assets (route: proj-assets) ✅
 - Presale bridge: Entry → EARN → Pre-sale → project dropdown → source='presale' + project_id in Transactions ✅
 
-**In progress / broken:**
-- None known — 9C + 9D + 9C-rewire complete, awaiting QA
-- OWNER ACTION: set AIRTABLE_BUSINESS_BASE_ID env var in Cloudflare Pages for Sales panel business lanes
-- OWNER ACTION: call POST /api/setup/schema-projects — ProjectPhases primary field fix deployed, re-run to create the table
-- OWNER ACTION: add project_id (Single line text) field to Transactions table in Airtable (for presale bridge)
-- OWNER ACTION: create Pre-sale category in Airtable: name=Pre-sale, group=Bus-earn, type=Earn, active=true
+**Working after today's QA fixes:**
+- M3.4 Project Assets: panel renders, save guard working, row harvest working
+- M2.2 Sales: panel renders, Business Airtable connecting (biz_unavailable=false)
+- M2.4 Finance Projects: panel renders
+- ProjectPhases: table created in Airtable ✅
+- AI inquiry: messages array fixed ✅
+
+**Still being fixed:**
+- M2.2 Sales businesses array: bus_id field mapping fix in progress
+  (this session fixes it)
+
+**Owner actions completed:**
+- AIRTABLE_BUSINESS_BASE_ID set in Cloudflare ✅
+- Business ID Status fields set to Active ✅
+- ProjectPhases table created via schema endpoint ✅
+- Duplicate Ploikong records deleted ✅
+
+**Remaining owner actions:**
+- Add project_id (Single line text) field to Transactions table in Airtable
+- Create Pre-sale category: name=Pre-sale, group=Bus-earn, type=Earn, active=true
 
 **Pending phases:**
 - Fix 9E-hard: M3.3 Hard Assets (physical property, vehicles, valuables)
@@ -318,6 +332,11 @@ The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) 
 | Case study leads | Sales leads — not used in personal dashboard |
 | customer | Customer registry — used for AR display in M2.2 |
 | quote | Quotes/proposals — used for Open Quotes bubble in M2.2 |
+
+**Confirmed field names verified 2026-06-02:**
+- Business ID table: primary='Business ID', Status='Active'/'Inactive'
+- Sale record table: date='Sale date', table name has space not underscore
+- See RULES.md L075-L076 for full verified field lists
 
 **Business IDs confirmed:**
 - BUS00 — Janis Hammer (Root/holding)
