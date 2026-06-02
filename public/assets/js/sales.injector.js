@@ -19,6 +19,7 @@
 
   /* ── State ───────────────────────────────────────────────────────────────── */
   let salesData       = null;
+  let presalesByProject = {}; // project_id → [{date, entity, amount, description}]
   let currentPeriod   = '6m';
   let currentBusFilter = 'all';
   let currentView     = 'card';
@@ -69,6 +70,20 @@
       const params = new URLSearchParams({ period: currentPeriod });
       if (currentBusFilter !== 'all') params.set('bus_id', currentBusFilter);
       salesData = await api('/api/sales?' + params);
+      // Fetch presale transactions for Projects lane
+      try {
+        const txRes = await api('/api/transactions?source=presale&limit=500');
+        presalesByProject = {};
+        (txRes.records || []).forEach(r => {
+          const f   = r.fields || r;
+          const pid = f.project_id;
+          if (!pid) return;
+          if (!presalesByProject[pid]) presalesByProject[pid] = [];
+          presalesByProject[pid].push(f);
+        });
+      } catch (e) {
+        presalesByProject = {};
+      }
     } catch (err) {
       if (lanesEl) lanesEl.innerHTML = `<div style="padding:2rem;color:#ef4444;font-size:0.8rem">Failed to load sales: ${esc(err.message)}</div>`;
       return;
@@ -304,13 +319,14 @@
     }
     html += '</div>';
 
-    // Projects section — always visible
-    html += sectionHeader('PROJECTS (forecast)', 'sales-sec-proj');
+    // Projects section — always visible, shows presale transactions per project
+    html += sectionHeader('PROJECTS (presales)', 'sales-sec-proj');
     html += `<div id="sales-sec-proj-body" style="padding:0.5rem 0">`;
-    if (projects.length === 0) {
-      html += `<div style="padding:0.5rem 0;font-size:0.78rem;color:var(--text-dim)">No projects sent to Sales yet.<br><span style="font-size:0.72rem">To add: Finance → Projects → Send to Sales</span></div>`;
+    const projectsWithPresales = projects.filter(p => (presalesByProject[p.id] || []).length > 0);
+    if (projectsWithPresales.length === 0) {
+      html += `<div style="padding:0.5rem 0;font-size:0.78rem;color:var(--text-dim)">No presale bookings yet.<br><span style="font-size:0.72rem">Add from M2.4 Finance Projects → expanded project → + Add presale</span></div>`;
     } else {
-      projects.forEach(p => { html += projectLaneCard(p); });
+      projectsWithPresales.forEach(p => { html += projectLaneCard(p); });
     }
     html += '</div>';
 
@@ -321,9 +337,20 @@
     html += `<div id="sales-sec-personal-body">`;
     html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">ASSET SALES</div>`;
     if (hasSold) {
-      html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">`;
-      (personal.asset_sales || []).forEach(a => { html += assetSaleCard(a); });
-      html += '</div>';
+      if (currentView === 'list') {
+        html += `<table style="width:100%;border-collapse:collapse;font-size:0.72rem;margin-bottom:0.5rem">
+          <tbody>${(personal.asset_sales || []).map(a => `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:0.25rem 0.4rem;white-space:nowrap">${fmtDate(a.sold_date)}</td>
+            <td style="padding:0.25rem 0.4rem">${esc(a.name)}${a.sold_via?` · via ${esc(a.sold_via)}`:''}</td>
+            <td style="padding:0.25rem 0.4rem"><span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:rgba(212,175,55,0.2);color:#d4af37">${esc(a.source||'collection')}</span></td>
+            <td style="padding:0.25rem 0.4rem;text-align:right;font-weight:700">${fmt(a.sold_price)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } else {
+        html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">`;
+        (personal.asset_sales || []).forEach(a => { html += assetSaleCard(a); });
+        html += '</div>';
+      }
     } else {
       html += `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0 0.5rem">— No sold assets yet</div>`;
     }
@@ -470,16 +497,43 @@
   function projectLaneCard(p) {
     const PHASE_C = { DS:'#3b82f6', PT:'#8b5cf6', PD:'#06b6d4', PV:'#f59e0b', LA:'#22c55e' };
     const phColor = PHASE_C[p.current_phase] || '#666';
-    return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;margin-bottom:0.4rem">
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
-        <span style="font-weight:700;font-size:0.78rem">${esc(p.name)}</span>
-        <span style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>
+    const presales = presalesByProject[p.id] || [];
+    const presaleTotal = presales.reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    const rows = presales.length
+      ? presales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t =>
+          currentView === 'list'
+            ? `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:0.2rem 0.4rem;white-space:nowrap">${fmtDate(t.date)}</td>
+                <td style="padding:0.2rem 0.4rem">${esc(t.entity||t.description||'')}</td>
+                <td style="padding:0.2rem 0.4rem"><span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:#22c55e22;color:#22c55e">presale</span></td>
+                <td style="padding:0.2rem 0.4rem;text-align:right;font-weight:700">${fmt(t.amount)}</td>
+              </tr>`
+            : `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.25rem 0;border-bottom:1px solid var(--border);font-size:0.75rem">
+                <span style="color:var(--text-dim)">${fmtDate(t.date)}</span>
+                <span>${esc(t.entity||t.description||'')}</span>
+                <span style="font-weight:700;color:#22c55e">${fmt(t.amount)}</span>
+              </div>`
+        ).join('')
+      : '';
+
+    const emptyHtml = presales.length === 0
+      ? `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.3rem 0">No presale bookings yet</div>`
+      : '';
+
+    const bodyHtml = currentView === 'list' && presales.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:0.72rem">
+          <tbody>${rows}</tbody>
+        </table>`
+      : rows + emptyHtml;
+
+    return `<div style="margin-bottom:0.65rem;border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;background:var(--bg-card)">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem">
+        <span style="font-weight:700;font-size:0.82rem">${esc(p.name)}</span>
+        ${p.current_phase ? `<span style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>` : ''}
+        ${presaleTotal > 0 ? `<span style="font-size:0.72rem;font-weight:700;color:#22c55e;margin-left:auto">${fmt(presaleTotal)}</span>` : ''}
       </div>
-      ${Number(p.presale_total) > 0 ? `<div style="font-size:0.68rem;color:#22c55e;margin-bottom:0.25rem;font-weight:600">Presale confirmed: ${fmt(p.presale_total)}</div>` : ''}
-      <div style="font-size:0.65rem;color:var(--text-dim);margin-bottom:0.35rem">
-        ${p.days_to_launch != null ? `Launch in ${p.days_to_launch} days` : 'Launch date not set'}
-      </div>
-      <a class="sales-proj-link" href="#" style="font-size:0.68rem;color:var(--yellow);text-decoration:none">Go to Project ↗</a>
+      ${bodyHtml}
     </div>`;
   }
 
