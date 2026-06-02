@@ -174,6 +174,11 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - ProjectPhases: table created in Airtable ✅
 - AI inquiry: messages array fixed ✅
 
+**Working after batch2 QA fixes:**
+- M2.4 Finance Projects: boundary cards showing (records shape fix — was spreading r.fields on pre-flattened data) ✅
+- M3.4 Project Assets: phase bands + milestone diamond already implemented; var(--accent) → var(--yellow) on all buttons ✅
+- M2.2 Sales: Personal section always visible, Projects section always visible with empty state ✅
+
 **Still being fixed:**
 - None known
 

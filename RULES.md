@@ -4,6 +4,19 @@
 
 ---
 
+## API RESPONSE SHAPES
+
+L082  /api/projects returns { records: [] } where each record is ALREADY FLATTENED
+({ id, name, type, ... }) — not raw Airtable { id, fields: {} } shape. Do NOT
+re-spread r.fields on consumer side. Use `data.records || []` directly.
+Any paginated Airtable endpoint wrapped in jsonResponse follows this shape.
+
+L083  Always render section empty states — never hide entire sections when data
+is empty. Owner needs to see the section exists even with no data. Use a clear
+instructional empty state: "No X yet. To add: go to Y → do Z."
+
+---
+
 ## PANEL INIT & DOM SCOPE
 
 L078  panelactivated route guard: ALWAYS guard the panelactivated handler with
