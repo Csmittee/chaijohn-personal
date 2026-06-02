@@ -497,16 +497,14 @@
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
             <button id="proj-focus-edit" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer">Edit</button>
-            ${p.type === 'Draft' ? `<button id="proj-focus-push" data-projid="${p.id}"
-              style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
             ${!p.finance_opened ? `<button id="proj-focus-finance" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #22c55e;border-radius:var(--radius);background:transparent;color:#22c55e;cursor:pointer">Open Finance</button>` : ''}
             ${p.sales_forecast_sent
               ? `<button disabled style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #14b8a6;border-radius:var(--radius);background:rgba(20,184,166,0.1);color:#14b8a6;cursor:default;opacity:0.7">✓ In Sales</button>`
-              : (revMo > 0
+              : (p.type === 'Active' && revMo > 0
                 ? `<button id="proj-focus-sales" data-projid="${p.id}"
                     style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #14b8a6;border-radius:var(--radius);background:transparent;color:#14b8a6;cursor:pointer">→ Send to Sales</button>`
-                : `<button disabled title="Set target_revenue_monthly first" style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text-dim);cursor:not-allowed;opacity:0.5">→ Send to Sales</button>`
+                : (p.type === 'Active' ? `<button disabled title="Set target_revenue_monthly first" style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text-dim);cursor:not-allowed;opacity:0.5">→ Send to Sales</button>` : '')
               )}
             ${hb === 'red' ? `<button id="proj-focus-clear" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #ef4444;border-radius:var(--radius);background:rgba(239,68,68,0.1);color:#ef4444;cursor:pointer">⚡ Clear red</button>` : ''}
@@ -516,9 +514,15 @@
 
       document.getElementById('proj-back-btn')?.addEventListener('click', () => { selectedId = null; renderAll(); });
       document.getElementById('proj-focus-edit')?.addEventListener('click', () => openDrawer('edit', projectId));
-      document.getElementById('proj-focus-push')?.addEventListener('click', () => pushProject(projectId));
-      document.getElementById('proj-focus-finance')?.addEventListener('click', () => {
-        window.location.hash = `finance-projects?project=${projectId}`;
+      document.getElementById('proj-focus-finance')?.addEventListener('click', async () => {
+        try {
+          await api('/api/projects/' + projectId, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ finance_opened: true })
+          });
+          await loadAll();
+        } catch (_) {}
+        window.location.hash = 'projects';
       });
       document.getElementById('proj-focus-sales')?.addEventListener('click', () => sendToSales(projectId));
       document.getElementById('proj-focus-clear')?.addEventListener('click', () => openRedClearance(projectId));
@@ -973,7 +977,7 @@
       if (push && res.record) {
         const projId = res.record.id;
         const doOpen = window.confirm('Open M2.4 Finance for this project?');
-        if (doOpen) window.location.hash = `finance-projects?project=${projId}`;
+        if (doOpen) window.location.hash = 'projects';
       }
     } catch (err) {
       showMsg('pd-msg', err.message, false);
@@ -994,7 +998,7 @@
         body: JSON.stringify({ sales_forecast_sent: true })
       });
       await loadAll();
-      renderFocusView(document.getElementById('proj-content'));
+      renderFocusView(projectId);
       if (msg) { msg.textContent = '✓ Now live in M2.2 Sales'; msg.style.color = '#14b8a6'; msg.style.display = 'block'; }
     } catch (err) {
       if (msg) { msg.textContent = err.message; msg.style.color = '#ef4444'; msg.style.display = 'block'; }

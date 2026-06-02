@@ -470,19 +470,14 @@
   function projectLaneCard(p) {
     const PHASE_C = { DS:'#3b82f6', PT:'#8b5cf6', PD:'#06b6d4', PV:'#f59e0b', LA:'#22c55e' };
     const phColor = PHASE_C[p.current_phase] || '#666';
-    const phases  = ['DS','PT','PD','PV','LA'];
-    const phIdx   = phases.indexOf(p.current_phase);
     return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;margin-bottom:0.4rem">
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
         <span style="font-weight:700;font-size:0.78rem">${esc(p.name)}</span>
         <span style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>
-        <span style="font-size:0.68rem;color:#14b8a6;margin-left:auto">Expected ${fmt(p.target_revenue_monthly)}/mo</span>
       </div>
+      ${Number(p.presale_total) > 0 ? `<div style="font-size:0.68rem;color:#22c55e;margin-bottom:0.25rem;font-weight:600">Presale confirmed: ${fmt(p.presale_total)}</div>` : ''}
       <div style="font-size:0.65rem;color:var(--text-dim);margin-bottom:0.35rem">
         ${p.days_to_launch != null ? `Launch in ${p.days_to_launch} days` : 'Launch date not set'}
-      </div>
-      <div style="display:flex;gap:2px;margin-bottom:0.35rem">
-        ${phases.map((ph, i) => `<div style="flex:1;height:5px;border-radius:999px;background:${i<=phIdx?PHASE_C[ph]:'var(--border)'}"></div>`).join('')}
       </div>
       <a class="sales-proj-link" href="#" style="font-size:0.68rem;color:var(--yellow);text-decoration:none">Go to Project ↗</a>
     </div>`;

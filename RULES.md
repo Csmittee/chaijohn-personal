@@ -4,6 +4,26 @@
 
 ---
 
+## QA BATCH 3 — M3.4 / M2.4 / M2.2 / M3.2
+
+L087  Collection Sell must always set source='collection' + category_id on the Transaction POST.
+      Never post a sale transaction with source='Manual' — it becomes unroutable in M2.2 and M2.1.
+      The 'Collection sale' category_id must be fetched at init and cached in module scope.
+
+L086  Transactions GET must explicitly include source and project_id in the fields array, OR omit
+      fields[] entirely so Airtable returns all fields. If fields[] is passed, ensure source and
+      project_id are listed or Airtable omits them from the response.
+
+L085  M2.2 Projects lane = pipeline tracker only. Never show forecast revenue numbers (target_revenue_monthly).
+      presale_total = real money confirmed (show it). Monthly target = planning only (never show in Sales).
+      Revenue forecasts live in M2.4 Finance only.
+
+L084  sales_forecast_sent and finance_opened are checkbox fields — must exist in Airtable before PATCH.
+      The [id].js PATCH handler must call ensureCheckboxFields() via Meta API on first use.
+      If fields are missing, Airtable returns NOT_FOUND / UNKNOWN_FIELD_NAME — create then retry.
+
+---
+
 ## API RESPONSE SHAPES
 
 L082  /api/projects returns { records: [] } where each record is ALREADY FLATTENED

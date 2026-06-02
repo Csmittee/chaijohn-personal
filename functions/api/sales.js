@@ -114,12 +114,17 @@ export async function onRequestGet(context) {
       sort: [{ field: 'sold_date', direction: 'desc' }]
     }),
     listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
-      filterByFormula: `AND({type}='Earn',{source}='M2.2',NOT(IS_BEFORE({date},'${startDate}')))`,
+      filterByFormula: `AND({type}='Earn',{source}='Manual',NOT(IS_BEFORE({date},'${startDate}')))`,
       sort: [{ field: 'date', direction: 'desc' }],
       maxRecords: 500
     }),
     listAllRecords(env.AIRTABLE_API_KEY, CORE_BASE, PROJECTS_T, {
       filterByFormula: `AND({sales_forecast_sent}=TRUE(),{type}='Active')`
+    }),
+    listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
+      filterByFormula: `AND({source}='collection',NOT(IS_BEFORE({date},'${startDate}')))`,
+      sort: [{ field: 'date', direction: 'desc' }],
+      maxRecords: 500
     })
   ];
 
@@ -141,13 +146,13 @@ export async function onRequestGet(context) {
     Promise.resolve({ records: [] })
   ];
 
-  let assetsRes, manualTxRes, projectsRes;
+  let assetsRes, manualTxRes, projectsRes, collectionTxRes;
   let bizIdsRes, saleRecordsRes, productsRes;
   let bizUnavailable = false;
-  
+
   let bizError = null;
   try {
-    [assetsRes, manualTxRes, projectsRes] = await Promise.all(corePromises);
+    [assetsRes, manualTxRes, projectsRes, collectionTxRes] = await Promise.all(corePromises);
   } catch (err) {
     return errorResponse(err.message, 500);
   }
@@ -309,6 +314,25 @@ export async function onRequestGet(context) {
       gain:       Number(f.sold_price || 0) - Number(f.cost_price || 0)
     };
   });
+
+  // Merge collection-source transactions into asset_sales
+  const collectionSales = (collectionTxRes?.records || []).map(r => {
+    const f = r.fields;
+    const amount = Number(f.amount || 0);
+    return {
+      asset_id:   r.id,
+      name:       f.description || 'Collection sale',
+      category:   'Collection sale',
+      sold_price: amount,
+      sold_date:  f.date || '',
+      sold_via:   f.entity || '',
+      cost_price: 0,
+      image_url:  null,
+      gain:       amount
+    };
+  });
+  asset_sales.push(...collectionSales);
+  asset_sales.sort((a, b) => (b.sold_date || '').localeCompare(a.sold_date || ''));
 
   const manual_entries = (manualTxRes.records || []).map(r => ({ id: r.id, ...r.fields }));
 
