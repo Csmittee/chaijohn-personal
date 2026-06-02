@@ -36,7 +36,7 @@
         <!-- Summary strip -->
         <div id="sales-strip" style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.75rem 1rem 0;"></div>
         <!-- Graph + pareto zone -->
-        <div style="display:grid;grid-template-columns:1fr 180px;gap:0.5rem;padding:0.5rem 1rem;min-height:0">
+        <div style="display:grid;grid-template-columns:3fr 2fr;gap:0.5rem;padding:0.5rem 1rem;min-height:0">
           <div style="min-width:0">
             <div id="sales-filter-row" style="display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;margin-bottom:0.4rem"></div>
             <div style="height:200px;position:relative"><canvas id="sales-chart-main"></canvas></div>
