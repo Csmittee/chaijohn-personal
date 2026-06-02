@@ -144,7 +144,8 @@ export async function onRequestGet(context) {
   let assetsRes, manualTxRes, projectsRes;
   let bizIdsRes, saleRecordsRes, productsRes;
   let bizUnavailable = false;
-
+  
+  let bizError = null;
   try {
     [assetsRes, manualTxRes, projectsRes] = await Promise.all(corePromises);
   } catch (err) {
@@ -366,6 +367,7 @@ export async function onRequestGet(context) {
       by_business, by_month
     },
     biz_unavailable: bizUnavailable,
+    biz_error: bizError,
     injected: injectionLog.length,
     period,
     bus_filter: busFilter
