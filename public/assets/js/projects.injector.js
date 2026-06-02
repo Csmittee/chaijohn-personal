@@ -343,8 +343,28 @@
         <!-- Timeline bar -->
         <div style="position:relative;display:flex;align-items:center;height:36px;flex:1">
           ${Array.from({length:WEEKS}).map((_,i)=>`<div style="width:${COL_W}px;height:100%;border-left:1px solid var(--border);opacity:0.3;flex-shrink:0"></div>`).join('')}
-          <!-- Phase band: simple full-width band for active projects -->
-          ${p.type !== 'Draft' ? `<div style="position:absolute;left:0;right:0;top:30%;height:40%;background:${PHASE_COLORS[p.current_phase]||'#6b7280'}22;border-radius:2px"></div>` : ''}
+          <!-- Phase segments: 5 equal bands, current phase highlighted -->
+          ${p.type !== 'Draft' ? (() => {
+            const phaseOrder = ['DS','PT','PD','PV','LA'];
+            const curIdx = phaseOrder.indexOf(p.current_phase);
+            const segW = 100 / phaseOrder.length;
+            return phaseOrder.map((ph, i) => {
+              const clr = PHASE_COLORS[ph] || '#6b7280';
+              const isCur  = i === curIdx;
+              const isDone = i < curIdx;
+              const bg = isDone ? clr + '44' : isCur ? clr + 'bb' : clr + '11';
+              const left = (i * segW).toFixed(1);
+              return `<div title="${ph}" style="position:absolute;left:${left}%;width:${segW.toFixed(1)}%;top:28%;height:44%;background:${bg};border-radius:2px;${isCur?'border:1px solid '+clr+'88':''}"></div>`;
+            }).join('');
+          })() : ''}
+          <!-- Today dot -->
+          ${(() => {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const todayOff = (today - baseStart) / (7 * 86400000);
+            if (todayOff < 0 || todayOff > WEEKS) return '';
+            const xPx = todayOff * COL_W;
+            return `<div style="position:absolute;left:${xPx}px;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:rgba(239,68,68,0.7);z-index:2"></div>`;
+          })()}
           <!-- Days to launch marker -->
           ${p.days_to_launch !== null && p.days_to_launch !== undefined ? (() => {
             const launchDate = new Date(); launchDate.setDate(launchDate.getDate() + p.days_to_launch);
@@ -448,16 +468,19 @@
                 <div style="font-size:0.7rem;font-weight:700;color:${PHASE_COLORS[pc]};margin-bottom:0.25rem">${pc} — ${PHASE_NAMES[pc]}</div>
                 ${ts.map(t=>{
                   const overdue = t.finish_by && t.finish_by < todayStr() && t.status !== 'Done';
+                  const borderClr = t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':PHASE_COLORS[pc];
                   return `<div class="proj-task-row" data-taskid="${t.id}" data-projid="${projectId}"
-                    style="display:flex;align-items:center;justify-content:space-between;padding:0.3rem 0.5rem;
-                    border-left:3px solid ${t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':PHASE_COLORS[pc]};
-                    border-bottom:1px solid var(--border);${overdue?'background:rgba(239,68,68,0.04)':''}">
-                    <div style="flex:1;min-width:0">
-                      <div style="font-size:0.78rem;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''}">${esc(t.title)}</div>
-                      <div style="font-size:0.65rem;color:var(--text-dim)">${t.assigned_to||'Me'} · ${fmtDate(t.finish_by)} ${t.measure?'· '+esc(t.measure):''}</div>
+                    style="display:flex;align-items:center;gap:0.35rem;padding:0.3rem 0.5rem 0.3rem 0;
+                    border-left:4px solid ${borderClr};
+                    border-bottom:1px solid var(--border);padding-left:0.4rem;
+                    ${overdue?'background:rgba(239,68,68,0.04)':''}">
+                    <div style="flex:1;min-width:0" title="${t.measure?esc(t.measure):''}">
+                      <div style="font-size:0.78rem;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</div>
                     </div>
+                    <div style="width:90px;flex-shrink:0;font-size:0.7rem;color:var(--text-dim);text-align:right;white-space:nowrap">${fmtDate(t.finish_by)}</div>
+                    <div style="width:70px;flex-shrink:0;font-size:0.7rem;color:var(--text-dim);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.assigned_to||'Me'}</div>
                     <select class="proj-status-sel" data-taskid="${t.id}" data-projid="${projectId}"
-                      style="font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:3px;color:var(--text);margin-left:0.5rem">
+                      style="width:90px;flex-shrink:0;font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:3px;color:var(--text)">
                       ${['Open','In progress','Done','Delayed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
                     </select>
                   </div>`;

@@ -6,7 +6,6 @@
 
   let categories         = [];
   let allBudgets         = [];   // expense budgets with category enrichment
-  let cachedActiveProjects = []; // for presale project dropdown
   let budgetsData        = [];   // loaded budgets for inline edit
   let activeBudgetEditId = null;
   let activeLiabDetailId = null;
@@ -103,15 +102,10 @@
 
   /* ── G6: populate dropdowns correctly ── */
   function populateCategoryDropdowns() {
-    const earns    = categories.filter(c => c.type === 'Earn');
     const expenses = categories.filter(c => c.type === 'Expense');
 
-    // G3: expense tx uses budget list; earn tx uses earn categories
-    if (txType === 'Expense') {
-      renderBudgetSelect('tx-category', allBudgets);
-    } else {
-      renderCatSelect('tx-category', earns);
-    }
+    // G3: expense tx always uses budget list
+    renderBudgetSelect('tx-category', allBudgets);
 
     // G6: budget-category only shows Expense categories
     renderCatSelect('budget-category', expenses);
@@ -184,36 +178,11 @@
       ).join('');
   }
 
-  /* ── Presale project dropdown ── */
-  async function fetchActiveProjects() {
-    try {
-      const res = await api('/api/projects?type=Active');
-      cachedActiveProjects = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
-    } catch { cachedActiveProjects = []; }
-    populatePresaleProjectSelect();
-  }
-
-  function populatePresaleProjectSelect() {
-    const sel = document.getElementById('presale-project-select');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">— Select project —</option>' +
-      cachedActiveProjects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  }
-
-  function updatePresaleRow(catValue) {
-    const row = document.getElementById('presale-project-row');
-    if (!row) return;
-    const selectedCat = categories.find(c => c.id === catValue);
-    const isPresale = selectedCat && selectedCat.name === 'Pre-sale';
-    row.style.display = isPresale ? 'block' : 'none';
-    if (isPresale && cachedActiveProjects.length === 0) fetchActiveProjects();
-  }
-
   /* ── G3: Budget bar — now keyed by budget ID ── */
   async function updateBudgetBar(selectedId) {
     const bar = document.getElementById('tx-budget-bar');
     if (!bar) return;
-    if (!selectedId || txType !== 'Expense') { bar.style.display = 'none'; return; }
+    if (!selectedId) { bar.style.display = 'none'; return; }
 
     const budget = allBudgets.find(b => b.id === selectedId);
     if (!budget) { bar.style.display = 'none'; return; }
@@ -250,54 +219,14 @@
     const dateEl = document.getElementById('tx-date');
     if (dateEl) dateEl.value = today;
 
-    const btnIncome  = document.getElementById('type-income');
-    const btnExpense = document.getElementById('type-expense');
+    // Always expense mode — render budget dropdown
+    renderBudgetSelect('tx-category', allBudgets);
 
-    function setType(type) {
-      txType = type;
-      if (btnIncome)  btnIncome.className  = 'btn btn-lg ' + (type === 'Income'  ? 'btn-success' : 'btn-outline');
-      if (btnExpense) btnExpense.className = 'btn btn-lg ' + (type === 'Expense' ? 'btn-danger'  : 'btn-outline');
-
-      // G3/G6: update label and dropdown based on type
-      const catLabel = document.querySelector('label[for="tx-category"]');
-      if (catLabel) catLabel.textContent = type === 'Expense' ? 'Budget' : 'Income Source';
-
-      if (type === 'Expense') {
-        renderBudgetSelect('tx-category', allBudgets);
-      } else {
-        renderCatSelect('tx-category', categories.filter(c => c.type === 'Earn'));
-      }
-
-      const bar = document.getElementById('tx-budget-bar');
-      if (bar) bar.style.display = 'none';
-      const presaleRow = document.getElementById('presale-project-row');
-      if (presaleRow && type === 'Expense') presaleRow.style.display = 'none';
-    }
-
-    btnIncome?.addEventListener('click',  () => setType('Income'));
-    btnExpense?.addEventListener('click', () => setType('Expense'));
-    setType('Expense');
-
-    // G3: budget bar on selection change + presale project row
+    // G3: budget bar on selection change
     document.getElementById('tx-category')?.addEventListener('change', () => {
       const selectedId = document.getElementById('tx-category')?.value;
       updateBudgetBar(selectedId || '');
-      if (txType === 'Income') updatePresaleRow(selectedId || '');
     });
-
-    // Ensure presale project row exists in DOM after tx-category
-    const catSel = document.getElementById('tx-category');
-    if (catSel && !document.getElementById('presale-project-row')) {
-      const row = document.createElement('div');
-      row.id = 'presale-project-row';
-      row.style.display = 'none';
-      row.innerHTML = `
-        <label style="font-size:0.85rem;color:var(--text-secondary);display:block;margin-top:0.5rem">Link to project</label>
-        <select id="presale-project-select" style="width:100%;margin-top:0.25rem;font-size:0.85rem;padding:0.35rem 0.5rem">
-          <option value="">— Select project —</option>
-        </select>`;
-      catSel.parentNode.insertBefore(row, catSel.nextSibling);
-    }
 
     ensureMsgEl('tx-msg', 'save-tx');
 
@@ -312,25 +241,15 @@
       if (!amount || Number(amount) <= 0) return alert('Amount is required');
 
       // G3: require budget for expense
-      if (txType === 'Expense' && !selectedId) return alert('Please select a budget for this expense');
-
-      const selectedCat = txType === 'Income' ? categories.find(c => c.id === selectedId) : null;
-      const isPresale   = selectedCat?.name === 'Pre-sale';
-      const projectSel  = document.getElementById('presale-project-select');
-      const projectId   = isPresale && projectSel ? projectSel.value : '';
+      if (!selectedId) return alert('Please select a budget for this expense');
 
       const body = {
-        date, amount: Number(amount), type: txType, description, entity, note,
-        source: isPresale ? 'presale' : 'Manual'
+        date, amount: Number(amount), type: 'Expense', description, entity, note,
+        source: 'Manual'
       };
 
-      // G3: send budget_id for expense, category_id for earn
-      if (txType === 'Expense') {
-        if (selectedId) body.budget_id = [selectedId];
-      } else {
-        if (selectedId) body.category_id = [selectedId];
-      }
-      if (projectId) body.project_id = projectId;
+      // G3: send budget_id for expense
+      body.budget_id = [selectedId];
 
       try {
         await api('/api/transactions', {
@@ -343,11 +262,117 @@
         document.getElementById('tx-note').value = '';
         loadTransactions();
         loadEntitySuggestions();
-        if (txType === 'Expense' && selectedId) updateBudgetBar(selectedId);
+        updateBudgetBar(selectedId);
       } catch (err) {
         showMsg('tx-msg', err.message, false);
       }
     });
+  }
+
+  /* ── Cash In tab ── */
+  function initCashInTab() {
+    // Inject tab button
+    const tabsEl = document.getElementById('entry-tabs');
+    if (tabsEl && !document.querySelector('#entry-tabs [data-tab="cash-in"]')) {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn';
+      btn.dataset.tab = 'cash-in';
+      btn.textContent = 'Cash In';
+      tabsEl.appendChild(btn);
+    }
+
+    // Inject tab panel
+    const drawerBody = document.querySelector('.drawer-body.page-content') ||
+                       document.querySelector('.page-content') ||
+                       tabsEl?.parentNode;
+    if (drawerBody && !document.getElementById('cash-in-tab')) {
+      const panel = document.createElement('div');
+      panel.className = 'tab-panel';
+      panel.id = 'cash-in-tab';
+      panel.innerHTML = `
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Cash Injection</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cashin-amount">Amount (฿)</label>
+              <input type="number" id="cashin-amount" placeholder="0" step="1" inputmode="numeric">
+            </div>
+            <div class="form-group">
+              <label for="cashin-date">Date</label>
+              <input type="date" id="cashin-date">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="cashin-source">Source / From</label>
+            <input type="text" id="cashin-source" placeholder="e.g. Personal savings">
+          </div>
+          <div class="form-group">
+            <label for="cashin-note">Note</label>
+            <input type="text" id="cashin-note" placeholder="Optional">
+          </div>
+          <button id="save-cashin" class="btn btn-primary btn-lg" style="width:100%;margin-top:0.5rem">Save Cash In</button>
+          <div id="cashin-msg" style="display:none;font-size:0.82rem;margin-top:0.5rem"></div>
+        </div>`;
+      drawerBody.appendChild(panel);
+    }
+
+    // Wire the tab button manually (initTabs may have already run)
+    const cashinBtn = document.querySelector('#entry-tabs [data-tab="cash-in"]');
+    if (cashinBtn && !cashinBtn._wired) {
+      cashinBtn._wired = true;
+      cashinBtn.addEventListener('click', () => {
+        document.querySelectorAll('#entry-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        cashinBtn.classList.add('active');
+        const panel = document.getElementById('cash-in-tab');
+        if (panel) panel.classList.add('active');
+        // Set default date
+        const dateEl = document.getElementById('cashin-date');
+        if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+      });
+    }
+
+    // Wire save
+    const saveBtn = document.getElementById('save-cashin');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', async () => {
+        const amount = document.getElementById('cashin-amount')?.value;
+        const date   = document.getElementById('cashin-date')?.value;
+        const source = document.getElementById('cashin-source')?.value?.trim() || '';
+        const note   = document.getElementById('cashin-note')?.value?.trim() || '';
+        const msgEl  = document.getElementById('cashin-msg');
+
+        if (!amount || Number(amount) <= 0) { showMsg('cashin-msg', 'Amount is required', false); return; }
+        if (!date) { showMsg('cashin-msg', 'Date is required', false); return; }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        try {
+          await api('/api/transactions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'Income',
+              source: 'cash_in',
+              amount: Number(amount),
+              date,
+              entity: source,
+              note,
+              description: 'Cash injection'
+            })
+          });
+          showMsg('cashin-msg', 'Saved!');
+          document.getElementById('cashin-amount').value = '';
+          document.getElementById('cashin-source').value = '';
+          document.getElementById('cashin-note').value   = '';
+        } catch (err) {
+          showMsg('cashin-msg', err.message, false);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Cash In';
+        }
+      });
+    }
   }
 
   /* ── G4: Transaction list with budget-aware display ── */
@@ -421,6 +446,10 @@
                   subLabel = (budget.category_group ? budget.category_group + ' — ' : '') + (budget.label || '');
                 } else if (cat) {
                   subLabel = (cat.group ? cat.group + ' — ' : '') + cat.name;
+                } else if (t.source === 'cash_in') {
+                  subLabel = 'Cash In' + (t.entity ? ' — ' + t.entity : '');
+                } else if (t.source === 'hard_asset_sale') {
+                  subLabel = 'Hard Asset Sale';
                 }
               }
 
@@ -1757,6 +1786,7 @@
 
   /* ── Boot ── */
   document.addEventListener('DOMContentLoaded', async () => {
+    initCashInTab();
     initTabs();
     try {
       await Promise.all([loadCategories(), loadBudgets(), loadActiveStrategy()]);
