@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-02 — P2 complete — M3.3 Hard Assets panel, sale origins (Cash In tab, hard_asset_sale, inline presale), entry expense-only, focus view full-width task rows, lane phase segments
+> Last updated: 2026-06-02 — Batch 4 fixes complete — source singleSelect patch, project_funding routing, M2.2 presale transactions, M3.3 delete button + ghost card handling
 
 ---
 
