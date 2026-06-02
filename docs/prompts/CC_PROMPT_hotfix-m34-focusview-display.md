@@ -1,4 +1,5 @@
 # CC_PROMPT_hotfix-m34-focusview-display.md
+✅ COMPLETE — 2026-06-02 — M3.4 focus view tasks/resources render (ARRAYJOIN filter formula fix), phase names on auto-create, repair-phase-names endpoint, M2.4 budget cards unblocked
 > Hotfix — M3.4 focus view not rendering tasks/resources despite data in Airtable
 > Data confirmed present in Airtable. Pure display/render bug.
 > Branch: fix/hotfix-m34-focusview
