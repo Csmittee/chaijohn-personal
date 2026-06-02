@@ -1,5 +1,5 @@
 # CC_PROMPT_qa-batch3-m34-m24-m22.md
-> QA batch 3 — 7 confirmed bugs across M3.4, M2.4, M2.2 + 1 architectural correction
+> QA batch 3 — 9 confirmed bugs across M3.4, M2.4, M2.2, M3.2 + 1 architectural correction
 > Branch: fix/qa-batch3
 > Commit directly to main after owner QA confirms checklist
 
@@ -35,8 +35,9 @@ Read these files fresh from repo in this order:
 6. `functions/api/projects/[id].js` — single project GET + PATCH handler
 7. `functions/api/transactions.js` — GET handler, field list returned
 8. `functions/api/sales.js` — projects section + presale totals logic
+9. `public/assets/js/collection.injector.js` — Sell button + confirm sale handler
 
-Read all 8 before writing a single line.
+Read all 9 before writing a single line.
 
 ---
 
@@ -264,6 +265,38 @@ They do NOT need to appear in M2.2 Personal — they belong in the Projects pres
 
 ---
 
+## BUG 9 — M3.2 Collection Sell → Transaction saved with wrong source + no category
+
+**File:** `public/assets/js/collection.injector.js`
+
+**Confirmed from Airtable:** Transactions table row 146 — "Collection sale - Jen carabiner"
+฿9,000 — Transaction IS created ✅ but `source = 'Manual'` and `category_id` is empty.
+
+**Result:**
+- M2.2 Personal → Asset Sales: cannot find it (no `source='collection'` to filter on)
+- M2.1 Cashflow Pareto: label lookup fails → uncategorized (hidden under DEF CON 5 currently)
+- M2.3 Expenses: irrelevant but label = blank looks broken
+
+**Fix in `collection.injector.js` Confirm Sale handler:**
+
+When the sale is confirmed and Transaction is POSTed to `/api/transactions`:
+1. Set `source: 'collection'` in the POST body
+2. Look up the "Collection sale" category from the categories list:
+   - Fetch `/api/categories` once at injector init, cache in module scope
+   - Find category WHERE `name === 'Collection sale'` (Per-earn group)
+   - If found: include `category_id: [cat.id]` in POST body
+   - If not found: log warning to console, post without category (do not block sale)
+3. Keep all existing fields: `date`, `amount`, `description` (= "Collection sale - [item name]"),
+   `entity` (= sold_via field from modal), `type: 'Income'`
+
+**Also fix in `functions/api/sales.js`:**
+The Personal → Asset Sales section must query Transactions WHERE `source = 'collection'`.
+Check if this filter already exists. If not, add it alongside the existing personal earn query.
+
+**Do NOT change** the Assets table update logic (sold_price, sold_date, status) — that is working.
+
+---
+
 ## DO NOT TOUCH
 
 - `public/assets/js/cashflow.injector.js` — cashflow is working correctly
@@ -278,7 +311,7 @@ They do NOT need to appear in M2.2 Personal — they belong in the Projects pres
 ## AFTER ALL FIXES — MANDATORY
 
 1. Archive this prompt → `docs/prompts/CC_PROMPT_qa-batch3-m34-m24-m22.md`
-   Stamp: `✅ COMPLETE — [date] — M3.4 tasks/buttons, M2.4 resources/presales, M2.2 personal earn`
+   Stamp: `✅ COMPLETE — [date] — M3.4 tasks/buttons, M2.4 resources/presales, M2.2 personal earn, M3.2 collection sale source`
 
 2. Append to RULES.md (next L-number after L083):
    - `sales_forecast_sent` and `finance_opened` are checkbox fields — must exist in Airtable
@@ -287,10 +320,12 @@ They do NOT need to appear in M2.2 Personal — they belong in the Projects pres
      Presale total = real money (show). Monthly target = planning only (never show in Sales).
    - Transactions GET must explicitly include `source` and `project_id` in the fields array
      or Airtable omits them from the response.
+   - Collection Sell must always set `source='collection'` + `category_id` on the Transaction.
+     Never post a sale transaction with source='Manual' — it becomes unroutable.
 
 3. Update PROJECT_STATE.md:
    - Current state: list what each module does correctly after this fix
-   - Next: Fix 9E-hard (M3.3 Hard Assets)
+   - Next: CC_PROMPT_feat-sale-origins-and-hard-assets (P2 — new builds)
 
 4. Commit docs: `docs: update RULES and PROJECT_STATE after qa-batch3`
 
@@ -308,6 +343,8 @@ fix(m24): project-finance.injector.js — presale transactions show in expanded 
 fix(m24): project-finance.injector.js — resources render correctly (field name match)
 fix(m22): sales.injector.js — Projects lane removes forecast revenue, shows presale only
 fix(m22): sales.injector.js — Personal earn transactions render from sales.js data
+fix(m32): collection.injector.js — Sell sets source='collection' + category_id on Transaction
+fix(api): sales.js — Personal Asset Sales section queries source='collection' transactions
 docs: update RULES and PROJECT_STATE after qa-batch3
 ```
 
@@ -320,5 +357,6 @@ Merge to main after owner confirms:
 - [ ] M3.4 buttons: only Edit + Open Finance (if not opened) + Send to Sales (if not sent)
 - [ ] M2.4 expanded view shows Budget Cards (resources from Airtable)
 - [ ] M2.4 expanded view shows Presale Records (presale transactions)
-- [ ] M2.2 Projects lane: no forecast revenue shown, presale total shown
-- [ ] M2.2 Personal → Manual Entries: Collection sale ฿1,000 appears
+- [ ] M2.2 Projects lane: no forecast revenue shown, presale total shown if any
+- [ ] M2.2 Personal → Manual Entries: manual earn entries appear
+- [ ] M2.2 Personal → Asset Sales: Collection sale ฿9,000 (Jen carabiner) appears
