@@ -130,8 +130,8 @@ export async function onRequestGet(context) {
     }),
     listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Sale_record', {
       filterByFormula: busFilter !== 'all'
-        ? `AND(NOT(IS_BEFORE({sale_date},'${startDate}')),{business_id}='${busFilter}')`
-        : `NOT(IS_BEFORE({sale_date},'${startDate}'))`,
+        ? `AND(NOT(IS_BEFORE({Sale date},'${startDate}')),{business_id}='${busFilter}')`
+        : `NOT(IS_BEFORE({Sale date},'${startDate}'))`,
       sort: [{ field: 'sale_date', direction: 'desc' }]
     }),
     listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Products', { maxRecords: 500 })
