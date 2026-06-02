@@ -1,5 +1,26 @@
 import { listRecords, listAllRecords, getRecord, updateRecord, jsonResponse, errorResponse } from '../../_airtable.js';
 
+async function ensureCheckboxFields(apiKey, baseId, tableNameToFind, fieldNames) {
+  try {
+    const metaRes = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (!metaRes.ok) return;
+    const meta = await metaRes.json();
+    const table = (meta.tables || []).find(t => t.name === tableNameToFind);
+    if (!table) return;
+    const existingFields = new Set((table.fields || []).map(f => f.name));
+    for (const fieldName of fieldNames) {
+      if (existingFields.has(fieldName)) continue;
+      await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables/${table.id}/fields`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fieldName, type: 'checkbox', options: { icon: 'check', color: 'greenBright' } })
+      });
+    }
+  } catch (_) {}
+}
+
 const BASE_ID    = 'apphBGWfSPL45oSFd';
 const PROJECTS   = 'Projects';
 const PHASES     = 'ProjectPhases';
@@ -76,6 +97,10 @@ export async function onRequestPatch(context) {
     const rev = body.target_revenue_monthly ?? existing.fields.target_revenue_monthly;
     if (!rev || Number(rev) <= 0)
       return errorResponse('target_revenue_monthly must be set before sending to Sales', 422);
+  }
+
+  if (fields.sales_forecast_sent !== undefined || fields.finance_opened !== undefined) {
+    await ensureCheckboxFields(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, ['sales_forecast_sent', 'finance_opened']);
   }
 
   try {
