@@ -4,6 +4,24 @@
 
 ---
 
+## BATCH 4 FIXES — Source routing, presale transactions, M3.3 delete
+
+L098  M3.3 Hard Assets: each card must have a Delete button. Ghost records (blank name) show
+      Delete-only (no Edit/Sell). Delete calls DELETE /api/hard-assets/:id (soft delete → status=Disposed).
+      Client-side: confirm dialog, then filter allAssets in memory, call renderPanel().
+
+L097  M2.2 Projects lane = presale transactions grouped by project_id. Fetch
+      /api/transactions?source=presale&limit=500 separately; build presalesByProject map keyed by
+      project_id. Do NOT show forecast cards. Only render projects that have at least one presale tx.
+
+L096  Transactions source field is singleSelect in Airtable. New values (presale, cash_in, etc.)
+      must be patched in via Meta API PATCH before first POST. Use patchSourceOptions() called once
+      per cold start (module flag sourceFieldPatched). Budget_id is NOT required when
+      source='LiabilityPayment' or source='project_funding'. Source='project_funding' is excluded
+      from M2.3 Expense view via NOT({source}='project_funding') filter at GET time.
+
+---
+
 ## P2 — Sale Origins, Hard Assets, Inline Presale
 
 L091  Entry drawer is expense-only from P2 onwards. The EARN/EXPENSE toggle buttons are removed.

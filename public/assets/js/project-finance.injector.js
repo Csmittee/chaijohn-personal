@@ -323,7 +323,7 @@
           ${r.time_needed ? `<div style="font-size:0.75rem;color:var(--text-secondary)">Time: ${esc(r.time_needed)}</div>` : ''}
           <div style="font-size:0.82rem;font-weight:600;margin-top:0.1rem">${fmt(r.cost)}</div>
         </div>
-        ${showConfirm ? `<button class="pf-confirm-res" data-res-id="${r.id}"
+        ${showConfirm ? `<button class="pf-confirm-res" data-res-id="${r.id}" data-item="${esc(r.item)}" data-cost="${r.cost||0}"
           style="flex-shrink:0;font-size:0.78rem;padding:0.25rem 0.6rem;
           background:var(--color-primary);color:white;border:none;
           border-radius:var(--radius);cursor:pointer">Confirm →</button>` : ''}
@@ -333,7 +333,9 @@
   function wireConfirmButtons(container, projId) {
     container.querySelectorAll('.pf-confirm-res').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const resId = btn.dataset.resId;
+        const resId    = btn.dataset.resId;
+        const resItem  = btn.dataset.item || 'Resource';
+        const resCost  = Number(btn.dataset.cost || 0);
         btn.disabled = true;
         btn.textContent = '…';
         try {
@@ -342,6 +344,20 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'Purchased' })
           });
+          // Post project_funding expense to Cashflow (excluded from M2.3 Expenses)
+          const proj = allProjects.find(p => p.id === projId);
+          if (resCost > 0) {
+            const today = new Date().toISOString().split('T')[0];
+            await api('/api/transactions', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'Expense', source: 'project_funding',
+                amount: resCost, date: today,
+                entity: proj ? proj.name : '',
+                description: `Project funding — ${resItem}`
+              })
+            }).catch(e => console.warn('project_funding tx not saved:', e.message));
+          }
           await loadProjectResources(projId);
         } catch (err) {
           btn.disabled = false;
