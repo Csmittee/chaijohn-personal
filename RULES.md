@@ -4,6 +4,53 @@
 
 ---
 
+## BUSINESS AIRTABLE (external base — appMBjlfYyVd8I7ML)
+
+L072  403 from Airtable = table or field not found (not just permissions):
+INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND fires when: (a) token lacks access,
+OR (b) table name does not exist, OR (c) field name in formula does not exist.
+Always check table and field names before concluding it is a permissions issue.
+Token permissions for this project are confirmed full-scope — never re-investigate.
+
+L073  Never swallow errors in biz data catch blocks: Always capture the
+error message and include it in the API response:
+  catch(err) { bizError = err.message; ... }
+  return jsonResponse({ ..., biz_error: bizError });
+Silent catch blocks make diagnosis impossible without code changes.
+
+L074  Cloudflare Pages env var deployment: Retry-deployment reuses cached
+build and does NOT pick up new env vars. New env vars require a fresh build
+triggered by a new commit to main. Tell owner this explicitly when adding
+new env vars.
+
+L075  Business ID table — confirmed field names (appMBjlfYyVd8I7ML):
+- Table: 'Business ID' (primary field also named 'Business ID')
+- bus_id field: map as r.fields['Business ID'] first, then r.fields.bus_id
+- Status: 'Status', values: 'Active' / 'Inactive'
+- Business Name: 'Business Name'
+- Brand name: 'Brand name'
+- Tag line: 'Tag line'
+- Business Type: 'Business Type'
+
+L076  Sale record table — confirmed field names (appMBjlfYyVd8I7ML):
+- Table name: 'Sale record' (space, NOT underscore 'Sale_record')
+- Date field: 'Sale date' (space, capital S — NOT 'sale_date')
+- Use in formula: {Sale date} — NOT {sale_date}
+- Use in sort: { field: 'Sale date' } — NOT { field: 'sale_date' }
+- Other confirmed fields: quote_id, invoice_no, business_id,
+  customer_name, payment_stage, invoice_total, 'Formatted Sale Order',
+  'Actual sale', 'Invoice no.', 'Product Name', 'Status'
+
+L077  Schema-first rule for external Airtable bases: Before writing ANY
+code that touches an external Airtable base (not chaijohn-core), call
+the Meta API to read actual field names:
+GET https://api.airtable.com/v0/meta/bases/{baseId}/tables
+Verify EVERY field name used in filterByFormula, sort, and field mapping.
+Never trust field names from CC prompt specs — they may be wrong.
+One verification pass prevents 5 debug cycles.
+
+---
+
 ## AIRTABLE TABLE CREATION
 
 L071  Airtable primary field rule: the FIRST field in any new table definition MUST be type singleLineText. singleSelect, number, date, and checkbox are all rejected as primary field types. Always start every table definition with { name: 'name', type: 'singleLineText' }.
