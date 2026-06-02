@@ -80,7 +80,7 @@
       </div>
       <div class="stat-chip">
         <span class="chip-label">nearest launch</span>
-        <span class="chip-value" style="color:var(--accent)">${s.nearest !== null ? s.nearest + 'd' : '—'}</span>
+        <span class="chip-value" style="color:var(--yellow)">${s.nearest !== null ? s.nearest + 'd' : '—'}</span>
       </div>`;
   }
 
@@ -90,7 +90,7 @@
     if (!zone) return;
     zone.innerHTML = `
       <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-        <button id="proj-create-btn" style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Create project</button>
+        <button id="proj-create-btn" style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Create project</button>
         <div class="range-toggle">
           ${['card','lane'].map(v=>`<button class="range-btn${currentView===v?' active':''}" data-projview="${v}" style="font-size:0.75rem">${v==='card'?'Card':'Lane'}</button>`).join('')}
         </div>
@@ -398,7 +398,7 @@
         <div style="padding:0 0.25rem">
           <!-- Breadcrumb -->
           <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.75rem">
-            <span id="proj-back-btn" style="cursor:pointer;text-decoration:underline;color:var(--accent)">Projects</span>
+            <span id="proj-back-btn" style="cursor:pointer;text-decoration:underline;color:var(--yellow)">Projects</span>
             <span> / ${esc(p.name)}</span>
           </div>
           <!-- Header -->
@@ -498,7 +498,7 @@
             <button id="proj-focus-edit" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer">Edit</button>
             ${p.type === 'Draft' ? `<button id="proj-focus-push" data-projid="${p.id}"
-              style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
+              style="font-size:0.78rem;padding:0.3rem 0.75rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Push Active</button>` : ''}
             ${!p.finance_opened ? `<button id="proj-focus-finance" data-projid="${p.id}"
               style="font-size:0.78rem;padding:0.3rem 0.75rem;border:1px solid #22c55e;border-radius:var(--radius);background:transparent;color:#22c55e;cursor:pointer">Open Finance</button>` : ''}
             ${p.sales_forecast_sent
@@ -712,7 +712,7 @@
           <button id="pd-save-draft" style="flex:1;min-width:0;padding:0.45rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-size:0.82rem">
             ${isEdit?'Save changes':'Save draft'}
           </button>
-          <button id="pd-push" style="flex:1;min-width:0;padding:0.45rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-size:0.82rem;font-weight:700">
+          <button id="pd-push" style="flex:1;min-width:0;padding:0.45rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-size:0.82rem;font-weight:700">
             ${isEdit?'Update + Active':'⚡ Push Active'}
           </button>
         </div>
@@ -795,7 +795,7 @@
             <option value="Low">Low</option>
           </select></div>
       </div>
-      <button id="at-save" style="width:100%;margin-top:0.75rem;padding:0.45rem;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700;font-size:0.85rem">Save task</button>
+      <button id="at-save" style="width:100%;margin-top:0.75rem;padding:0.45rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700;font-size:0.85rem">Save task</button>
       <div id="at-msg" style="display:none;font-size:0.78rem;margin-top:0.4rem"></div>
     </div>`;
   }
