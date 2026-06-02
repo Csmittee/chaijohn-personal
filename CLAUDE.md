@@ -23,6 +23,8 @@ Check `panel-xxx.classList.contains('active')` at IIFE parse time for direct has
 3. One injector per panel — never put logic in a shared file loaded everywhere
 4. No React, no Tailwind — pure CSS variables + vanilla JS only
 5. Read all relevant source files fresh from repo before writing anything
+6. For ANY external Airtable base (not chaijohn-core): call Meta API to verify
+   field names BEFORE writing code. Never assume from prompt specs. See L077.
 
 ## Read next
 - `RULES.md` — compact lessons (required before every task)
