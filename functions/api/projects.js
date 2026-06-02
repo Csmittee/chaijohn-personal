@@ -132,6 +132,7 @@ export async function onRequestPost(context) {
   try {
     for (const ph of PHASE_DEFS) {
       const phRec = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, PHASES, {
+        name:        `${name} — ${ph.name}`,
         project_id:  [pid],
         phase_code:  ph.code,
         phase_name:  ph.name,

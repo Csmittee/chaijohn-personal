@@ -36,17 +36,23 @@ export async function onRequestGet(context) {
   const { env, params } = context;
   const id = params.id;
   try {
-    const [proj, phasesRes, milestonesRes, tasksRes, resourcesRes] = await Promise.allSettled([
-      getRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id),
-      listRecords(env.AIRTABLE_API_KEY, BASE_ID, PHASES,     { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` }),
-      listRecords(env.AIRTABLE_API_KEY, BASE_ID, MILESTONES, { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` }),
-      listAllRecords(env.AIRTABLE_API_KEY, BASE_ID, TASKS,    { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))`, sort: [{ field: 'finish_by', direction: 'asc' }] }),
-      listRecords(env.AIRTABLE_API_KEY, BASE_ID, RESOURCES,  { filterByFormula: `FIND('${id}', ARRAYJOIN(project_id))` })
+    // Fetch project first — its name is required for the linked record filter.
+    // ARRAYJOIN({project_id}) in Airtable formulas returns primary field values
+    // (project names), NOT record IDs, so FIND(recordId, ARRAYJOIN) always fails.
+    const projResult = await getRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id);
+    if (!projResult) throw new Error('Project not found');
+    const project = flat(projResult);
+
+    const pName = (project.name || '').replace(/'/g, "\\'");
+    const nameFilter = `ARRAYJOIN({project_id})='${pName}'`;
+
+    const [phasesRes, milestonesRes, tasksRes, resourcesRes] = await Promise.allSettled([
+      listRecords(env.AIRTABLE_API_KEY, BASE_ID, PHASES,     { filterByFormula: nameFilter }),
+      listRecords(env.AIRTABLE_API_KEY, BASE_ID, MILESTONES, { filterByFormula: nameFilter }),
+      listAllRecords(env.AIRTABLE_API_KEY, BASE_ID, TASKS,    { filterByFormula: nameFilter, sort: [{ field: 'finish_by', direction: 'asc' }] }),
+      listRecords(env.AIRTABLE_API_KEY, BASE_ID, RESOURCES,  { filterByFormula: nameFilter })
     ]);
 
-    if (proj.status === 'rejected') throw new Error(proj.reason?.message || 'Project not found');
-
-    const project    = flat(proj.value);
     const phases     = phasesRes.status === 'fulfilled'     ? (phasesRes.value.records || []).map(flat)     : [];
     const milestones = milestonesRes.status === 'fulfilled' ? (milestonesRes.value.records || []).map(flat) : [];
     const tasks      = tasksRes.status === 'fulfilled'     ? (tasksRes.value.records || []).map(flat)     : [];
