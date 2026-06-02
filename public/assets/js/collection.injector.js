@@ -52,6 +52,7 @@ let assetsLoaded = false;   // true once first API fetch completes
 let activeStatusFilter = '';
 let activeCategoryFilter = '';
 let editingAssetId = null;
+let collectionSaleCategoryId = null; // cached category id for 'Collection sale'
 
 /* ─── Badge helpers ─── */
 function statusBadgeStyle(status) {
@@ -117,6 +118,20 @@ function renderFilteredGrid() {
 }
 
 /* ─── Load ALL assets from API (paginated via server), cache in allAssets ─── */
+async function loadCollectionSaleCategory() {
+  if (collectionSaleCategoryId !== null) return;
+  try {
+    const res = await fetch('/api/categories', { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const cats = data.records || [];
+    const cat = cats.find(function (c) { return (c.fields && c.fields.name === 'Collection sale') || c.name === 'Collection sale'; });
+    if (cat) collectionSaleCategoryId = cat.id;
+  } catch (e) {
+    console.warn('Could not load categories for collection sale:', e.message);
+  }
+}
+
 async function loadAssets(force) {
   if (assetsLoaded && !force) {
     renderFilteredGrid();
@@ -568,6 +583,23 @@ async function confirmSell() {
       const idx = allAssets.findIndex(function (a) { return a.id === assetId; });
       if (idx !== -1) allAssets[idx] = savedRecord;
 
+      // Record transaction for routing to M2.2 Asset Sales and M2.1 Cashflow
+      const assetName = document.getElementById('sell-asset-name')?.textContent || savedRecord?.fields?.name || 'Asset';
+      const txBody = {
+        type: 'Income',
+        source: 'collection',
+        date: soldDate,
+        amount: soldPrice,
+        description: 'Collection sale - ' + assetName,
+        entity: soldVia || undefined
+      };
+      if (collectionSaleCategoryId) txBody.category_id = [collectionSaleCategoryId];
+      try {
+        await api('/api/transactions', { method: 'POST', body: JSON.stringify(txBody) });
+      } catch (txErr) {
+        console.warn('Sell transaction not saved:', txErr.message);
+      }
+
       showFlash('Sold! 🎉');
       closeModal('sell-modal');
       renderFilteredGrid();
@@ -678,6 +710,7 @@ function closeModal(modalId) {
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
   injectFabCss();
+  loadCollectionSaleCategory();
   loadAssets();
 
   // Status filter — client-side only after initial load
