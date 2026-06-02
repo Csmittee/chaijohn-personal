@@ -30,7 +30,6 @@
   function buildShell() {
     const panel = el('panel-sales');
     if (!panel) return;
-    panel.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;';
     panel.innerHTML = `
       <div class="sales-sticky" style="flex-shrink:0">
         <!-- Summary strip -->
@@ -39,11 +38,11 @@
         <div style="display:grid;grid-template-columns:3fr 2fr;gap:0.5rem;padding:0.5rem 1rem;min-height:0">
           <div style="min-width:0">
             <div id="sales-filter-row" style="display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;margin-bottom:0.4rem"></div>
-            <div style="height:200px;position:relative"><canvas id="sales-chart-main"></canvas></div>
+            <div style="height:220px;position:relative"><canvas id="sales-chart-main"></canvas></div>
           </div>
           <div style="min-width:0;display:flex;flex-direction:column">
             <div style="font-size:0.65rem;color:var(--text-dim);margin-bottom:0.25rem;font-weight:700;letter-spacing:0.04em">PARETO</div>
-            <div style="height:200px;position:relative"><canvas id="sales-chart-pareto"></canvas></div>
+            <div style="height:220px;position:relative"><canvas id="sales-chart-pareto"></canvas></div>
           </div>
         </div>
       </div>
@@ -51,7 +50,7 @@
       <div class="sales-body" style="flex:1;overflow-y:auto;min-height:0;padding:0 1rem 1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border);margin-bottom:0.5rem">
           <div id="sales-view-btns" style="display:flex;gap:0.25rem"></div>
-          <button id="sales-entry-btn" style="font-size:0.75rem;padding:0.3rem 0.75rem;background:var(--accent);color:#000;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Entry</button>
+          <button id="sales-entry-btn" style="font-size:0.75rem;padding:0.3rem 0.75rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">+ Entry</button>
         </div>
         <div id="sales-overdue-section"></div>
         <div id="sales-lanes"></div>
@@ -117,12 +116,12 @@
     if (!row) return;
     const businesses = salesData.businesses || [];
     const periodBtns = ['6m','12m','all'].map(p =>
-      `<button class="sales-period-btn" data-p="${p}" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentPeriod===p?'var(--accent)':'transparent'};color:${currentPeriod===p?'#000':'var(--text)'};cursor:pointer">${p}</button>`
+      `<button class="sales-period-btn" data-p="${p}" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentPeriod===p?'var(--yellow)':'transparent'};color:${currentPeriod===p?'#0a0a10':'var(--text)'};cursor:pointer">${p}</button>`
     ).join('');
     const bizBtns = [
-      `<button class="sales-biz-btn" data-bid="all" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentBusFilter==='all'?'var(--accent)':'transparent'};color:${currentBusFilter==='all'?'#000':'var(--text)'};cursor:pointer">All</button>`,
+      `<button class="sales-biz-btn" data-bid="all" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentBusFilter==='all'?'var(--yellow)':'transparent'};color:${currentBusFilter==='all'?'#0a0a10':'var(--text)'};cursor:pointer">All</button>`,
       ...businesses.map(b =>
-        `<button class="sales-biz-btn" data-bid="${esc(b.bus_id)}" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentBusFilter===b.bus_id?'var(--accent)':'transparent'};color:${currentBusFilter===b.bus_id?'#000':'var(--text)'};cursor:pointer">${esc(b.brand_name||b.bus_id)}</button>`
+        `<button class="sales-biz-btn" data-bid="${esc(b.bus_id)}" style="font-size:0.7rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentBusFilter===b.bus_id?'var(--yellow)':'transparent'};color:${currentBusFilter===b.bus_id?'#0a0a10':'var(--text)'};cursor:pointer">${esc(b.brand_name||b.bus_id)}</button>`
       )
     ].join('');
     row.innerHTML = periodBtns + `<span style="color:var(--border);margin:0 0.2rem">|</span>` + bizBtns
@@ -141,7 +140,7 @@
     const vb = el('sales-view-btns');
     if (!vb) return;
     vb.innerHTML = ['card','list'].map(v =>
-      `<button class="sales-view-btn" data-v="${v}" style="font-size:0.72rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentView===v?'var(--accent)':'transparent'};color:${currentView===v?'#000':'var(--text)'};cursor:pointer">${v}</button>`
+      `<button class="sales-view-btn" data-v="${v}" style="font-size:0.72rem;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:var(--radius);background:${currentView===v?'var(--yellow)':'transparent'};color:${currentView===v?'#0a0a10':'var(--text)'};cursor:pointer">${v}</button>`
     ).join('');
     vb.querySelectorAll('.sales-view-btn').forEach(btn => {
       btn.onclick = () => { currentView = btn.dataset.v; renderViewBtns(); renderLanes(); };
@@ -481,7 +480,7 @@
       <div style="display:flex;gap:2px;margin-bottom:0.35rem">
         ${phases.map((ph, i) => `<div style="flex:1;height:5px;border-radius:999px;background:${i<=phIdx?PHASE_C[ph]:'var(--border)'}"></div>`).join('')}
       </div>
-      <a class="sales-proj-link" href="#" style="font-size:0.68rem;color:var(--accent);text-decoration:none">Go to Project ↗</a>
+      <a class="sales-proj-link" href="#" style="font-size:0.68rem;color:var(--yellow);text-decoration:none">Go to Project ↗</a>
     </div>`;
   }
 
@@ -560,7 +559,10 @@
     if (el('sales-styles')) return;
     const s = document.createElement('style');
     s.id = 'sales-styles';
-    s.textContent = `@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }`;
+    s.textContent = `
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+      #panel-sales.active { display:flex !important; flex-direction:column; height:100%; overflow:hidden; }
+    `;
     document.head.appendChild(s);
   }
 
