@@ -385,7 +385,14 @@
       // Tasks by phase
       const tasksByPhase = {};
       phaseOrder.forEach(pc => { tasksByPhase[pc] = []; });
-      tasks.forEach(t => { const pc = t.phase_code || 'DS'; if (tasksByPhase[pc]) tasksByPhase[pc].push(t); });
+      const phaseCodeByPhaseId = {};
+      phases.forEach(ph => { if (ph.id && ph.phase_code) phaseCodeByPhaseId[ph.id] = ph.phase_code; });
+      tasks.forEach(t => {
+        const phIdRef = Array.isArray(t.phase_id) ? t.phase_id[0] : (t.phase_id || null);
+        const pc = t.phase_code || (phIdRef ? phaseCodeByPhaseId[phIdRef] : null) || 'DS';
+        if (tasksByPhase[pc]) tasksByPhase[pc].push(t);
+        else tasksByPhase['DS'].push(t);
+      });
 
       const inv  = resources.reduce((s,r)=>s+Number(r.cost||0),0);
       const revMo= Number(p.target_revenue_monthly||0);
@@ -461,9 +468,9 @@
               style="font-size:0.72rem;padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);cursor:pointer;margin-top:0.35rem">+ Add task</button>
           </div>
           <!-- Resources -->
-          ${resources.length ? `
           <div style="margin-bottom:0.75rem">
             <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);margin-bottom:0.4rem;letter-spacing:0.04em">RESOURCES</div>
+            ${resources.length ? `
             <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
               <thead><tr style="border-bottom:1px solid var(--border)">
                 <th style="text-align:left;padding:0.2rem">Item</th>
@@ -479,8 +486,8 @@
               </tr>`).join('')}</tbody>
               <tfoot><tr><td colspan="2" style="padding:0.3rem;font-weight:700">Total</td>
                 <td style="text-align:right;padding:0.3rem;font-weight:700">${fmt(inv)}</td><td></td></tr></tfoot>
-            </table>
-          </div>` : ''}
+            </table>` : `<div style="font-size:0.75rem;color:var(--text-dim)">No resources added yet.</div>`}
+          </div>
           <!-- P&L summary -->
           <div style="margin-bottom:0.75rem;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:0.75rem">
             <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);margin-bottom:0.4rem;letter-spacing:0.04em">P&L SUMMARY</div>
