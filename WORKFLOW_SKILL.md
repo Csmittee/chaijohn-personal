@@ -1,261 +1,225 @@
-# 🎯 PROJECT WORKFLOW SKILL
-> Copy this file to every project root as `WORKFLOW_SKILL.md`
-> This defines the operating model for ALL projects from this point forward.
-> Every Chat session, CC session, and Owner action follows this discipline.
+# 🎯 WORKFLOW SKILL — Chaijohn OS
+> Version 2.0 — 2026-06-02
+> Universal operating model for Chat + CC sessions.
+> Copy this file to every project root as `WORKFLOW_SKILL.md`.
+
+---
+
+## ⚠️ BEFORE EVERY NEW CHAT — OWNER CHECKLIST
+
+Do these TWO things before typing anything else. Without them, Chat is blind.
+
+```
+1. Project → Files → GitHub sync checkbox → CONFIRM IT IS CHECKED
+   (it resets to OFF every new chat — always re-check)
+
+2. Paste the CHAT_HANDOFF doc from last session into your first message
+```
+
+If Chat says it can't find files or asks you to upload source code — STOP.
+Re-check the sync box. Do not proceed without it.
+This saves 5–7 wasted messages per session.
 
 ---
 
 ## THE THREE ROLES
 
-### 👤 OWNER (You)
-- Describes what you want in plain language
-- Makes all final decisions
-- QAs the live result after every CC commit
-- Reports back to Chat with screenshots or description
-- Never writes code, never patches files manually
+### 👤 OWNER
+- Describes goals and QAs live results
+- Reports back to Chat with screenshots or description — never pastes code
+- Never edits source files manually
 - Never acts as messenger between Chat and CC
 
-### 🧠 CHAT (Claude Chat — this session)
-- Reads the repo directly to understand current state
-- Diagnoses problems before touching anything
-- Prepares precise CC prompts with full context
-- Reviews CC output and checks for regressions
-- Updates project docs when needed
-- Never writes directly to the repo
-- Wakes up fresh each session by reading `masterseed.md` + `lessons_learned.md`
+### 🧠 CHAT (this session)
+- Reads repo files directly via project knowledge — never asks owner to upload source files
+- Diagnoses before acting — never guesses
+- Writes CC prompts, updates handoff docs
+- Does NOT write to the repo
 
 ### 🤖 CC (Claude Code)
-- Reads all relevant files fresh from repo before writing anything (L033)
-- Writes complete replacement files — never patches (L074)
-- Commits to GitHub with descriptive messages
-- Moves completed prompt files to `docs/prompts/` and stamps ✅ COMPLETE
-- Updates `masterseed.md` and `lessons_learned.md` after every fix
-- Self-documents — never leaves the repo in an undocumented state
+- Reads all files fresh from repo before writing anything
+- Writes complete replacement files — never patches or diffs
+- Commits with descriptive messages, merges to main before ending session
+- Archives prompt + updates RULES.md + PROJECT_STATE.md after every fix
 
 ---
 
-## THE LOOP (repeat forever)
+## THE LOOP
 
 ```
-Owner describes goal
-       ↓
-Chat reads repo → diagnoses → writes CC prompt → saves to docs/prompts/
-       ↓
-Owner pushes prompt file to repo (or Chat uploads it)
-       ↓
-Owner tells CC: "Read and execute: docs/prompts/CC_PROMPT_[name].md"
-       ↓
-CC reads masterseed + lessons_learned + all relevant source files
-CC executes the task
-CC commits files
-CC moves prompt to docs/prompts/ stamped ✅ COMPLETE
-CC updates masterseed.md + lessons_learned.md
-       ↓
-Owner QAs live result → reports back to Chat
-       ↓
-Chat checks repo if anything looks wrong → next prompt or done
+Owner describes goal or QA result
+        ↓
+Chat reads repo → diagnoses → writes CC_PROMPT → owner pushes to repo root
+        ↓
+Owner runs CC: "Read CLAUDE.md, RULES.md, PROJECT_STATE.md. Then execute: [prompt filename]"
+        ↓
+CC reads fresh → fixes → commits → archives prompt → updates docs → merges to main
+        ↓
+Owner QAs live site → reports back to Chat (screenshot or pass/fail list)
+        ↓
+Chat reviews → next prompt or done
 ```
 
 ---
 
-## REPO FOLDER STRUCTURE (required for all projects)
+## CHAT RULES — NON-NEGOTIABLE
 
-```
-/                          ← repo root (keep clean)
-├── masterseed.md          ← project identity, current state, roadmap
-├── lessons_learned.md     ← all lessons, rules, conventions
-├── WORKFLOW_SKILL.md      ← this file
-├── docs/
-│   └── prompts/           ← all CC prompt files, stamped COMPLETE when done
-├── src/                   ← frontend source (or equivalent)
-└── [other project files]
-```
-
-**Root must stay clean** — only essential config files + the 3 doc files above.
-No loose prompt files in root. No uploaded patches. No temp files.
+1. **Never guess** — if a file is needed to diagnose, request it via project knowledge search. Do not theorize from partial information.
+2. **Never use project folder files as source of truth for live code** — always treat repo (GitHub sync) as the actual state. Project knowledge may lag.
+3. **Read before diagnosing** — check CLAUDE.md + RULES.md + the specific injector/API file before forming any opinion on a bug.
+4. **One CC prompt per session goal** — batch all related fixes into one prompt. Never write one-fix-per-prompt for related issues.
+5. **Never re-explain project history in CC prompts** — CC reads CLAUDE.md + RULES.md. Prompts contain only: objective, files to read, exact fixes, commit order.
+6. **Do not trust your own memory for field names, table names, or API shapes** — always read RULES.md first. All confirmed facts live there.
 
 ---
 
-## CC PROMPT FILE RULES
+## HOW CHAT HANDLES QA REPORTS
 
-### Naming convention
-`CC_PROMPT_[phase]_[description].md`
+When owner reports QA results (screenshots or pass/fail):
+
+1. Map each failure to a file + root cause — do not guess, read the file if needed
+2. Group all fixes by file — one CC prompt covers all related files
+3. State the root cause clearly before writing the fix spec
+4. Include a confirmation checklist in the prompt matching exactly what owner reported
+
+**QA report format to ask for if not provided:**
+```
+Module → Feature: ✅ pass / ❌ fail / ⚠️ partial
+Notes: [what was seen]
+```
+
+---
+
+## HOW TO WRITE A CC PROMPT
+
+### Naming
+```
+CC_PROMPT_[phaseCode]-[objective].md
+```
 Examples:
-- `CC_PROMPT_phase7a_grouped_positions.md`
-- `CC_PROMPT_bugfix_portfolio_blackscreen.md`
-- `CC_PROMPT_feature_bitcoin_tab.md`
+- `CC_PROMPT_bugfix-m24-empty-panel.md`
+- `CC_PROMPT_feat9E-hard-assets.md`
+- `CC_PROMPT_qa-batch3-sales-projects.md`
 
-### Where they live
-- **Before execution:** repo root (so CC can find them easily)
-- **After execution:** `docs/prompts/` stamped with `✅ COMPLETE` at the top
+Phase codes: `bugfix` · `feat[phase]` · `qa` · `chore` · `hotfix`
 
-### CC must always do this after completing a prompt:
-1. Move the prompt file from root → `docs/prompts/`
-2. Add `✅ COMPLETE — [date] — [one line summary]` at the top of the file
-3. Update `masterseed.md` — mark phase done, update broken state, update file inventory
-4. Append new lessons to `lessons_learned.md` using next available L-number
-5. Commit docs update separately: `docs: update masterseed and lessons_learned after [phase]`
+### File location
+- **Before CC runs:** repo root
+- **After CC runs:** `docs/prompts/` stamped `✅ COMPLETE — [date] — [summary]`
 
----
-
-## MASTERSEED.md STRUCTURE (required sections)
-
-Every project's `masterseed.md` must have these sections:
+### Required prompt structure
 
 ```markdown
-# 🌱 MASTERSEED — [Project Name]
-> Last Updated: [date] — [one line summary of current state]
+# CC_PROMPT_[name].md
+> [one line objective]
 
-## PROJECT IDENTITY
-[What it is, who it's for, the goal]
+## CC INTRO
+[paste the standard CC intro block — see below]
 
-## OPERATING MODEL
-[CC era model — same as this skill]
+## READ FIRST (before touching any file)
+[list every file CC must read fresh — be specific]
 
-## STACK
-[Tech stack table]
+## CONFIRMED FACTS
+[data confirmed from RULES.md or owner QA — no assumptions]
 
-## DEPLOYMENT
-[How to deploy each layer — critical rules]
+## BUG / TASK [N] — [short name]
+**Root cause:** [confirmed, not guessed]
+**File:** [exact path]
+**Fix:** [exact change — code block if needed]
 
-## BUILD PHASES
-[Table: phase, scope, status ✅/🔴/⬜]
+## DO NOT TOUCH
+[list files CC must not modify]
 
-## CURRENT STATE
-[What is broken right now, what was just fixed]
+## AFTER ALL FIXES — MANDATORY
+1. Archive this prompt → docs/prompts/ stamped ✅ COMPLETE
+2. Append new lessons to RULES.md (next L-number)
+3. Update PROJECT_STATE.md current state
+4. Commit docs: `docs: update after [prompt name]`
 
-## CONFIRMED WORKING (DO NOT BREAK)
-[List of features that must survive every CC session]
-
-## FILE INVENTORY
-[Current folder structure with status per file]
-
-## ROADMAP
-[Prioritized next steps]
-
-## CRITICAL RULES
-[Project-specific rules CC must always follow]
+## COMMIT ORDER
+[list commits in order — one per file group]
+Branch: [branch name]
+Merge to main after owner confirms: [checklist]
 ```
 
----
-
-## LESSONS_LEARNED.md STRUCTURE (required)
-
-```markdown
-# 📚 LESSONS LEARNED — [Project Name]
-> CC reads this at the start of every session.
-
-## HOW TO USE
-[Brief instructions]
-
-## PHASE [N] — [Name]
-
-### L[NNN] — [Short title]
-**Problem:** [What went wrong]
-**Rule:** [What to do instead]
-**Tag:** #category #phase
-```
-
-Rules for lessons:
-- Sequential L-numbers across the entire project (L001, L002... L077...)
-- Never delete old lessons — only add
-- CC appends new lessons after every session
-- Chat references lesson IDs in prompts (e.g. "follow L033, L075")
-
----
-
-## CHAT SESSION STARTUP (every new chat)
-
-When starting a new Chat session on any project:
-
-**Owner says:**
-> "Read masterseed.md and lessons_learned.md from [repo URL]. Then [describe what you want]."
-
-**Chat does:**
-1. Reads `masterseed.md` from repo via GitHub API
-2. Reads `lessons_learned.md` from repo via GitHub API
-3. Checks `docs/prompts/` for any recent completed prompts
-4. Responds with current understanding + diagnosis + plan
-5. Never asks owner to upload files — reads repo directly
-
----
-
-## CC SESSION STARTUP (every CC session)
-
-**Owner pastes this intro:**
+### Standard CC intro block (paste into every prompt)
 ```
 New session. Ignore all previous context from other projects.
 
-You are working on [Project Name] at [GitHub repo URL].
+You are working on CHAIJOHN OS at:
+https://github.com/Csmittee/chaijohn-personal
 
 Before doing anything else, read:
-- masterseed.md
-- lessons_learned.md
+1. CLAUDE.md        — project brief, stack, 6 rules (required always)
+2. RULES.md         — compact lessons L001–L083+ (required always)
+3. PROJECT_STATE.md — phases, roadmap, file inventory (required for build sessions)
 
+Do NOT read masterseed.md or lessons_learned.md — they are archived.
 Then read and execute: [prompt filename]
 ```
 
-**CC does:**
-1. Reads masterseed.md
-2. Reads lessons_learned.md
-3. Reads the prompt file
-4. Reads all source files mentioned in the prompt — FRESH from repo
-5. Executes the task
-6. Commits, archives prompt, updates docs
-
 ---
 
-## END OF CHAT SESSION DELIVERABLES
+## CC GOLDEN RULES (what CC follows — Chat enforces these in prompts)
 
-Every Chat session that involves a coding task must end with:
-
-1. **Revised `masterseed.md`** — updated current state, phase status, roadmap
-2. **Revised `lessons_learned.md`** — any new lessons from this session
-3. **`CC_PROMPT_[name].md`** — next task ready for CC to execute
-
-Owner uploads all 3 to repo root. CC picks up the prompt, executes, archives it, updates the docs. Next Chat session reads the updated docs and is instantly aligned.
-
----
-
-## WHAT NEVER HAPPENS
-
-| ❌ Never | ✅ Instead |
+| Rule | What it means |
 |---|---|
-| Owner uploads source files to Chat | Chat reads from repo directly |
-| Owner pastes error code into Chat | Owner sends screenshot, Chat diagnoses |
-| Chat sends patches to Owner | CC writes complete replacement files |
-| Owner manually edits source files | CC writes, commits, deploys |
-| Chat guesses at file contents | Chat reads from repo before answering |
-| CC writes based on stale context | CC reads fresh from repo every session |
-| Prompt files pile up in repo root | CC archives to docs/prompts/ after execution |
-| Lessons lost between sessions | CC appends to lessons_learned.md after every fix |
-| Owner re-explains project history | masterseed.md + lessons_learned.md carry all context |
+| Read fresh | Read every source file from repo before writing. Never rely on prompt description of file contents. |
+| Complete files only | Full replacement. No diffs, no patches, no "add this function". |
+| No shared bundles | One injector per panel. Never put panel logic in a shared file. |
+| No React / No Tailwind | Pure CSS vars + vanilla JS only. |
+| Explicit color on light buttons | `color:#0a0a10` always when background is var(--yellow) or white. |
+| Panel display via CSS class | Never `panel.style.cssText = 'display:flex'`. Use `#panel-xxx.active { display:flex }` via ensureStyles(). |
+| Route guard first | `if (e.detail !== 'route-name') return;` as FIRST line of panelactivated handler. |
+| External Airtable = Meta API first | Any base other than chaijohn-core: call Meta API to verify field names before writing code. (L077) |
+| API shape | `/api/projects` returns `{ records: [] }` pre-flattened. Use `data.records \|\| []`. Never re-spread `r.fields`. (L082) |
+| Archive + document | After every fix: move prompt → docs/prompts/, append RULES.md, update PROJECT_STATE.md, commit docs separately. |
 
 ---
 
-## TOKEN EFFICIENCY RULES
+## REPO DOC STRUCTURE (what lives where)
 
-- Chat never asks for files the owner must upload — reads repo directly
-- Chat references lesson IDs (L033) instead of re-explaining rules
-- CC prompts include only what CC needs — no backstory padding
-- masterseed.md is the single source of truth — never duplicate info in prompts
-- One CC session handles all related changes — never one-fix-per-session for batches
-- Chat keeps diagnosis concise — describe the problem + the fix, not the history
-
----
-
-## QUICK REFERENCE — CC GOLDEN RULES
-
-From `lessons_learned.md` — CC must follow these in every session:
-
-| Rule | Lesson | Description |
+| File | Purpose | Who reads it |
 |---|---|---|
-| Read before write | L033, L075 | Always read fresh from repo before writing any file |
-| Complete files only | L074 | Never patches, never diffs — full replacement files |
-| Atomic conditionals | L076 | Any if/else chain edit: show entire chain in one block |
-| Three-point prop chain | L054 | New prop: add in parent state + pass + child destructure simultaneously |
-| File push order | L017 | New files first, files that import them last |
-| Self-document | L077 | Update masterseed + lessons_learned after every fix commit |
-| Archive prompts | — | Move completed prompts to docs/prompts/ stamped ✅ COMPLETE |
+| `CLAUDE.md` | Project brief, stack, 6 rules, key files | CC — every session |
+| `RULES.md` | All lessons L001–L083+, newest at top | CC — every session |
+| `PROJECT_STATE.md` | Phase status, roadmap, file inventory | CC — build sessions |
+| `WORKFLOW_SKILL.md` | This file — operating model | Chat + Owner |
+| `docs/prompts/` | Archived CC prompts stamped ✅ COMPLETE | Reference only |
+| `docs/archive/` | Old masterseed + lessons_learned | Do not read |
 
-*(L-numbers are project-specific — reference your own lessons_learned.md)*
+**masterseed.md and lessons_learned.md are ARCHIVED** — do not update them.
+All new lessons go to RULES.md. All new state goes to PROJECT_STATE.md.
+
+---
+
+## END OF CHAT SESSION — OWNER ACTIONS
+
+Before closing any Chat session that involved fixes:
+
+1. **Confirm CC merged to main** — check GitHub, last commit should be on main
+2. **Save updated handoff** — Chat will provide `CHAT_HANDOFF_[date].md`
+3. **Keep this file in Claude project folder** — WORKFLOW_SKILL.md must stay synced
+
+Handoff doc format (Chat generates this at session end):
+```markdown
+# CHAT HANDOFF — [date]
+
+## WHAT WAS DONE
+[bullets of fixes merged]
+
+## CURRENT STATE ✅
+[confirmed working modules]
+
+## CURRENT BUGS 🔴/🟡
+[table: bug | file | fix | status]
+
+## CC PROMPT READY
+[filename if prompt written, or NONE]
+
+## NEXT SESSION CHECKLIST
+[owner actions + QA items outstanding]
+
+## KEY RULES TO CARRY
+[any L-numbers or facts critical for next session]
+```
