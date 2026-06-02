@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-02 — Hotfix M3.4 complete — focus view tasks/resources render (filter formula fix), phase names on auto-create, repair-phase-names endpoint, M2.4 budget cards unblocked
+> Last updated: 2026-06-02 — P2 complete — M3.3 Hard Assets panel, sale origins (Cash In tab, hard_asset_sale, inline presale), entry expense-only, focus view full-width task rows, lane phase segments
 
 ---
 
@@ -120,7 +120,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix QA-blockers | ProjectPhases 403 guard, duplicate save isSubmitting, harvest-before-add rows, sales panel event listener, AI inquiry payload | ✅ COMPLETE |
 | QA batch 3 | M3.4 buttons redesign (Edit/Open Finance/Send to Sales), Open Finance hash fix + PATCH finance_opened, sendToSales bug fix, defensive field creation via Meta API, M2.4 Confirm button color fix + hash fix, M2.2 Projects lane removes forecast (shows presale only), M2.2 Personal manual earn source fix (M2.2→Manual), M3.2 Collection sell creates source=collection transaction | ✅ COMPLETE |
 | Hotfix M3.4 focus view | Fix /api/projects/:id ARRAYJOIN filter formula (returns names not IDs) — fetch project first then filter by name. Fix phase auto-create missing `name` field. Add POST /api/setup/repair-phase-names. Fix renderFocusView phaseId→phase_code lookup. Resources empty state. M2.4 budget cards unblocked as side-effect. | ✅ COMPLETE |
-| Fix 9E-hard | M3.3 Hard Assets — physical property, vehicles, valuables | ⬜ SCHEDULED |
+| P2 sale-origins + hard assets | M3.3 Hard Assets panel (cards/add/edit/sell modal), entry expense-only + Cash In tab, inline presale in M2.4, focus view full-width task rows, lane phase segments | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
@@ -198,8 +198,6 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Create Pre-sale category: name=Pre-sale, group=Bus-earn, type=Earn, active=true
 
 **Pending phases:**
-- Fix 9E-hard: M3.3 Hard Assets (physical property, vehicles, valuables)
-
 ---
 
 ## CONFIRMED WORKING — DO NOT BREAK
@@ -257,7 +255,8 @@ Every CC session must preserve:
             ├── project-finance.injector.js ✅ 9C-rewire — M2.4 Finance Projects (#panel-projects, route: projects)
             ├── sales.injector.js         ✅ 9D — dynamic lanes, AR tracking, cashflow injection, stacked chart + pareto
             ├── dash-overview.injector.js ✅
-            ├── entry.injector.js         ✅ binds entry drawer form (+ presale project dropdown)
+            ├── hard-assets.injector.js   ✅ P2 — M3.3 Hard Assets (#panel-hard-assets, route: hard-assets)
+            ├── entry.injector.js         ✅ P2 — expense-only mode, Cash In tab (source=cash_in)
             ├── diary.injector.js         ✅
             ├── collection.injector.js    ✅
             ├── ai.injector.js            ✅
@@ -290,7 +289,9 @@ functions/
     ├── project-tasks/[id].js             ✅ 9C — PATCH (auto-complete phase + milestone) + DELETE
     ├── project-resources.js              ✅ 9C — GET + POST
     ├── project-resources/[id].js        ✅ 9C — PATCH + DELETE
-    └── sales.js                          ✅ 9D — GET unified aggregator (biz+projects+personal) + POST manual entry
+    ├── sales.js                          ✅ 9D — GET unified aggregator (biz+projects+personal) + POST manual entry
+    ├── hard-assets.js                    ✅ P2 — GET list + POST create (HardAssets table)
+    └── hard-assets/[id].js               ✅ P2 — GET detail + PATCH + DELETE (soft → status=Disposed)
 ```
 
 ---
@@ -317,6 +318,7 @@ functions/
 | ProjectMilestones | name, project_id→Projects, phase_id→ProjectPhases, target_date, status, auto_date |
 | ProjectTasks | title, project_id→Projects, phase_id→ProjectPhases, phase_code, assigned_to, finish_by, measure, status, priority, notes, depends_on_project_id→Projects, dependency_active |
 | ProjectResources | item, project_id→Projects, time_needed, cost, status |
+| HardAssets | name, category (Property/Vehicle/Equipment/Other), purchase_date, purchase_price, current_value, location, notes, status (Active/Sold/Disposed), sold_price, sold_date, image_url |
 
 **Category groups (seeded):**
 Loan / Family / Basic Living / Car / Service / Personal / Basic IT / Bus IT / Business / Per-earn / Bus-earn / Investment
@@ -362,22 +364,17 @@ The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) 
 ## ROADMAP
 
 **Now (QA):**
-- Fix 9C + 9D both complete — owner QA in progress
+- P2 complete — M3.3 Hard Assets, sale origins (Cash In, hard_asset_sale, inline presale), entry expense-only, focus view task row improvements, lane phase segments
+
+**Owner actions needed after P2:**
+- Create HardAssets table in Airtable (apphBGWfSPL45oSFd) with fields: name, category, purchase_date, purchase_price, current_value, location, notes, status, sold_price, sold_date, image_url
+- The 'Hard asset sale' category (Per-earn, Earn) and 'Pre-sale' category (Bus-earn, Earn) will be auto-created by the injectors at first panel activation
 
 **Next:**
-1. Fix 9E-hard — M3.3 Hard Assets (physical property, vehicles, valuables)
-Note: The immediate next task is CC_PROMPT_fix9C-rewire_m24-finance-projects.md
-— this comes BEFORE Fix 9E-hard. M2.4 Finance Projects and presale bridge
-are not yet built. PROJECT_STATE.md roadmap will be updated by CC after this session.
-
-
-**Medium term (in order):**
-4. Fix 9F — M4.3 Time Management (today view from project tasks)
-5. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
-6. Fix 9H — M5 Life (personal timeline, vision goals)
-7. Fix 9I — M4.1 AI Advisor upgrade (full system context)
-
-
+1. Fix 9F — M4.3 Time Management (today view from project tasks)
+2. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
+3. Fix 9H — M5 Life (personal timeline, vision goals)
+4. Fix 9I — M4.1 AI Advisor upgrade (full system context)
 
 **Long term:**
 8. M1.1 Dashboard — balance sheet (Net Worth = Assets − Liabilities), requires liability interest/principal split

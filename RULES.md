@@ -4,6 +4,35 @@
 
 ---
 
+## P2 — Sale Origins, Hard Assets, Inline Presale
+
+L091  Entry drawer is expense-only from P2 onwards. The EARN/EXPENSE toggle buttons are removed.
+      Cash injections (savings top-ups, transfers in) use the separate Cash In tab (source='cash_in').
+      Hard asset sales use the M3.3 Sell modal (source='hard_asset_sale'). Pre-sale transactions
+      are created directly in the M2.4 Finance Projects inline form (source='presale').
+
+L092  Hard asset sale transaction pattern: source='hard_asset_sale' + category_id from
+      'Hard asset sale' category (Per-earn group, type=Earn). The category is fetched/created
+      at M3.3 panel init and cached. Transaction also carries entity=soldTo and
+      description='Hard asset sale — <name>'.
+
+L093  Inline presale form in M2.4: The expanded project card now has a "+ Add presale" button
+      that reveals an inline form. On save: POST /api/transactions with source='presale',
+      project_id, category_id from cached 'Pre-sale' category. After save, reload only the
+      presale list for that project — do NOT full re-render unless presale total changes.
+      Both loadPresaleCategory() and loadAll() must be called at init.
+
+L094  Lane view phase segments: renderLane() renders 5 equal-width phase segments (DS/PT/PD/PV/LA)
+      across the timeline band. Done phases show 44% opacity fill, current phase shows 87% fill,
+      future phases show ~7% fill. A today dot (6px red circle) is overlaid at current position.
+      This requires NO extra API calls — uses p.current_phase from list data.
+
+L095  Focus view task rows (F1): Each task row uses 4 columns — title (flex:1), date (90px right),
+      assigned_to (70px center), status select (90px). The second line (assigned · date · measure)
+      is removed. Measure is shown as a tooltip (title attribute) on the title div.
+
+---
+
 ## HOTFIX M3.4 — Focus view / Phase names / Filter formula
 
 L090  Edit drawer pre-fetches /api/projects/:id before opening — pre-fills drawerResources and
