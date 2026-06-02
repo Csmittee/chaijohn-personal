@@ -129,6 +129,9 @@
     panel.querySelectorAll('.ha-sell-btn').forEach(btn => {
       btn.addEventListener('click', () => openSellModal(btn.dataset.id));
     });
+    panel.querySelectorAll('.ha-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteAsset(btn.dataset.id, btn.dataset.name));
+    });
   }
 
   function strip(label, value, unit) {
@@ -154,31 +157,46 @@
   }
 
   function cardHtml(a) {
-    const isSold = a.status === 'Sold';
-    const gain   = (a.purchase_price && a.current_value)
+    const isSold  = a.status === 'Sold';
+    const isGhost = !a.name || !String(a.name).trim();
+    const gain    = (a.purchase_price && a.current_value)
       ? Math.round(((a.current_value - a.purchase_price) / a.purchase_price) * 100) : null;
     const gainHtml = gain !== null
       ? `<span style="font-size:0.75rem;font-weight:600;color:${gain>=0?'#22c55e':'#ef4444'}">${gain>=0?'+':''}${gain}% vs cost</span>` : '';
+    const safeDisplayName = isGhost ? '(unnamed record)' : esc(a.name);
     return `
       <div class="ha-card">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem">
           <div style="flex:1;min-width:0">
-            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.35rem">
+            ${!isGhost ? `<div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.35rem">
               ${a.category?`<span style="font-size:0.68rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:4px;background:${catColor(a.category)}22;color:${catColor(a.category)}">${esc(a.category)}</span>`:''}
               <span style="font-size:0.68rem;padding:0.1rem 0.4rem;border-radius:4px;background:${isSold?'rgba(148,163,184,0.2)':'rgba(34,197,94,0.15)'};color:${isSold?'#94a3b8':'#22c55e'}">${esc(a.status||'Active')}</span>
-            </div>
-            <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.25rem">${esc(a.name||'Unnamed')}</div>
-            <div style="font-size:0.78rem;color:var(--text-secondary)">Purchase: ${fmt(a.purchase_price)} · Value: <strong>${fmt(a.current_value)}</strong></div>
+            </div>` : ''}
+            <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.25rem;${isGhost?'color:#94a3b8;font-style:italic':''}">${safeDisplayName}</div>
+            ${!isGhost ? `<div style="font-size:0.78rem;color:var(--text-secondary)">Purchase: ${fmt(a.purchase_price)} · Value: <strong>${fmt(a.current_value)}</strong></div>
             ${gainHtml ? `<div style="margin-top:0.15rem">${gainHtml}</div>` : ''}
-            ${a.location?`<div style="font-size:0.73rem;color:var(--text-secondary);margin-top:0.15rem">📍 ${esc(a.location)}</div>`:''}
+            ${a.location?`<div style="font-size:0.73rem;color:var(--text-secondary);margin-top:0.15rem">📍 ${esc(a.location)}</div>`:''}` : ''}
           </div>
-          ${a.image_url?`<img src="${esc(a.image_url)}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display='none'">`:''}
+          ${!isGhost && a.image_url?`<img src="${esc(a.image_url)}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.style.display='none'">`:''}
         </div>
         <div style="display:flex;gap:0.4rem;margin-top:0.65rem">
-          <button class="ha-edit-btn" data-id="${a.id}" style="flex:1;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-size:0.75rem">Edit</button>
-          ${!isSold?`<button class="ha-sell-btn" data-id="${a.id}" style="padding:0.25rem 0.75rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-size:0.75rem;font-weight:600">Mark Sold</button>`:''}
+          ${!isGhost ? `<button class="ha-edit-btn" data-id="${a.id}" style="flex:1;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-size:0.75rem">Edit</button>` : ''}
+          ${!isGhost && !isSold?`<button class="ha-sell-btn" data-id="${a.id}" style="padding:0.25rem 0.75rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-size:0.75rem;font-weight:600">Mark Sold</button>`:''}
+          <button class="ha-delete-btn" data-id="${a.id}" data-name="${esc(a.name||'this record')}" style="padding:0.25rem 0.6rem;border:1px solid #ef4444;border-radius:var(--radius);background:transparent;color:#ef4444;cursor:pointer;font-size:0.75rem">Delete</button>
         </div>
       </div>`;
+  }
+
+  async function deleteAsset(assetId, assetName) {
+    if (!confirm(`Delete "${assetName}"? This cannot be undone.`)) return;
+    try {
+      await api('/api/hard-assets/' + assetId, { method: 'DELETE' });
+      allAssets = allAssets.filter(a => a.id !== assetId);
+      renderPanel();
+      showFlash('Deleted');
+    } catch (e) {
+      showFlash('Delete failed: ' + e.message, 'error');
+    }
   }
 
   // ── Add / Edit modal ──────────────────────────────────────────────────────
