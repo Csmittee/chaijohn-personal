@@ -206,8 +206,8 @@
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
           <button class="pf-send-sales btn" data-proj-id="${p.id}"
             style="font-size:0.82rem;padding:0.35rem 0.75rem;
-            background:${salesSent ? '#22c55e' : (hasRevenue ? 'var(--color-primary)' : '#94a3b8')};
-            color:white;border:none;border-radius:var(--radius);cursor:${salesSent || !hasRevenue ? 'default' : 'pointer'}"
+            background:${salesSent ? '#22c55e' : (hasRevenue ? 'var(--yellow)' : '#94a3b8')};
+            color:${hasRevenue && !salesSent ? '#0a0a10' : 'white'};border:none;border-radius:var(--radius);cursor:${salesSent || !hasRevenue ? 'default' : 'pointer'}"
             ${salesSent || !hasRevenue ? 'disabled title="' + (salesSent ? 'Already live in Sales' : 'Set target revenue first') + '"' : ''}>
             ${salesSent ? '✓ Sales Active' : 'Send to Sales ↑'}
           </button>
@@ -341,7 +341,7 @@
     panel.querySelectorAll('.pf-view-project').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        window.location.hash = '#proj-assets';
+        window.location.hash = 'proj-assets';
       });
     });
   }
