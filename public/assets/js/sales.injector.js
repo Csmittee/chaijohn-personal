@@ -304,37 +304,41 @@
     }
     html += '</div>';
 
-    // Projects section
-    if (projects.length > 0) {
-      html += sectionHeader('PROJECTS (forecast)', 'sales-sec-proj');
-      html += `<div id="sales-sec-proj-body" style="padding:0.5rem 0">`;
+    // Projects section — always visible
+    html += sectionHeader('PROJECTS (forecast)', 'sales-sec-proj');
+    html += `<div id="sales-sec-proj-body" style="padding:0.5rem 0">`;
+    if (projects.length === 0) {
+      html += `<div style="padding:0.5rem 0;font-size:0.78rem;color:var(--text-dim)">No projects sent to Sales yet.<br><span style="font-size:0.72rem">To add: Finance → Projects → Send to Sales</span></div>`;
+    } else {
       projects.forEach(p => { html += projectLaneCard(p); });
-      html += '</div>';
     }
+    html += '</div>';
 
-    // Personal section
+    // Personal section — always visible
     const hasSold = (personal.asset_sales || []).length > 0;
     const hasManual = (personal.manual_entries || []).length > 0;
-    if (hasSold || hasManual) {
-      html += sectionHeader('PERSONAL', 'sales-sec-personal');
-      html += `<div id="sales-sec-personal-body">`;
-      if (hasSold) {
-        html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">ASSET SALES</div>`;
-        html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">`;
-        (personal.asset_sales || []).forEach(a => { html += assetSaleCard(a); });
-        html += '</div>';
-      }
-      if (hasManual) {
-        html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">MANUAL ENTRIES</div>`;
-        html += `<div style="font-size:0.75rem;color:var(--text-dim)">`;
-        (personal.manual_entries || []).forEach(t => {
-          const f = t.fields || t;
-          html += `<div style="padding:0.2rem 0;border-bottom:1px solid var(--border)">${fmtDate(f.date)} · ${esc(f.entity||'')} · ${fmt(f.amount)}</div>`;
-        });
-        html += '</div>';
-      }
+    html += sectionHeader('PERSONAL', 'sales-sec-personal');
+    html += `<div id="sales-sec-personal-body">`;
+    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">ASSET SALES</div>`;
+    if (hasSold) {
+      html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem">`;
+      (personal.asset_sales || []).forEach(a => { html += assetSaleCard(a); });
       html += '</div>';
+    } else {
+      html += `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0 0.5rem">— No sold assets yet</div>`;
     }
+    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">MANUAL ENTRIES</div>`;
+    if (hasManual) {
+      html += `<div style="font-size:0.75rem;color:var(--text-dim)">`;
+      (personal.manual_entries || []).forEach(t => {
+        const f = t.fields || t;
+        html += `<div style="padding:0.2rem 0;border-bottom:1px solid var(--border)">${fmtDate(f.date)} · ${esc(f.entity||'')} · ${fmt(f.amount)}</div>`;
+      });
+      html += '</div>';
+    } else {
+      html += `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0">— No manual earn entries yet</div>`;
+    }
+    html += '</div>';
 
     zone.innerHTML = html;
 
