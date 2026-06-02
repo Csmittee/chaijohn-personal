@@ -35,7 +35,7 @@
     ]);
 
     const projects = projRes.status === 'fulfilled'
-      ? (projRes.value.records || []).map(r => ({ id: r.id, ...r.fields }))
+      ? (projRes.value.records || [])
       : [];
 
     // Build presale map by project_id
