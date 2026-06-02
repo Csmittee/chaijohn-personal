@@ -5,6 +5,7 @@
   const fmt     = n => '฿' + Number(n || 0).toLocaleString('en', { maximumFractionDigits: 0 });
   const esc     = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const el      = id => document.getElementById(id);
+  const todayIso = () => new Date().toISOString().split('T')[0];
 
   function fmtDate(d) {
     if (!d) return '—';
@@ -24,11 +25,36 @@
   let presaleByProject = {}; // project_id → [transactions]
   let expandedId       = null;
   let initialized      = false;
+  let presaleCategoryId = null;
 
   function panelEl() { return el('panel-projects'); }
 
   // ── Data ──────────────────────────────────────────────────────────────────
+  async function loadPresaleCategory() {
+    if (presaleCategoryId !== null) return;
+    try {
+      const data = await api('/api/categories');
+      const cats = data.records || [];
+      let cat = cats.find(c => (c.fields ? c.fields.name : c.name) === 'Pre-sale');
+      if (cat) {
+        presaleCategoryId = cat.id;
+        return;
+      }
+      // Create if missing
+      const res = await api('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Pre-sale', group: 'Bus-earn', type: 'Earn', active: true })
+      });
+      presaleCategoryId = (res.record || {}).id || null;
+    } catch (e) {
+      console.warn('Could not load Pre-sale category:', e.message);
+    }
+  }
+
   async function loadAll() {
+    await loadPresaleCategory();
+
     const [projRes, txRes] = await Promise.allSettled([
       api('/api/projects'),
       api('/api/transactions?source=presale')
@@ -163,9 +189,6 @@
 
   function fundingBarHtml(p) {
     const inv    = Number(p.investment_total || 0);
-    // investment_total from API is sum of all resources; we approximate spent from resources
-    // The detail API returns resources; here we use investment_total as total required
-    // We don't have per-status breakdown in list API, so just show total
     return `
       <div style="margin-top:0.35rem">
         <div style="display:flex;justify-content:space-between;font-size:0.72rem;
@@ -182,6 +205,7 @@
     const presales = presaleByProject[p.id] || [];
     const salesSent = p.sales_forecast_sent;
     const hasRevenue = Number(p.target_revenue_monthly || 0) > 0;
+    const inputStyle = 'width:100%;box-sizing:border-box;font-size:0.78rem;padding:0.3rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)';
 
     return `
       <div class="pf-expanded" data-proj-id="${p.id}"
@@ -194,13 +218,42 @@
           </div>
         </div>
 
-        <div style="margin-bottom:1rem">
+        <div style="margin-bottom:1rem" id="pf-presale-section-${p.id}">
           <div style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);
             text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Presale Records</div>
-          ${presales.length === 0
-            ? `<div style="font-size:0.82rem;color:var(--text-secondary)">
-                No presales yet — use Entry → EARN → Pre-sale to record one</div>`
-            : presales.map(t => presaleCardHtml(t)).join('')}
+          <div id="pf-presale-list-${p.id}">
+            ${presales.map(t => presaleCardHtml(t)).join('')}
+          </div>
+          <div id="pf-presale-form-${p.id}" style="display:none;margin-top:0.5rem;border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;background:var(--bg-raised)">
+            <div style="font-size:0.75rem;font-weight:600;margin-bottom:0.5rem;color:var(--yellow)">Add Presale</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.4rem">
+              <div>
+                <label style="font-size:0.72rem;display:block;margin-bottom:0.15rem">Amount (฿)</label>
+                <input class="pf-presale-amount" style="${inputStyle}" type="number" placeholder="0">
+              </div>
+              <div>
+                <label style="font-size:0.72rem;display:block;margin-bottom:0.15rem">Date</label>
+                <input class="pf-presale-date" style="${inputStyle}" type="date" value="${todayIso()}">
+              </div>
+              <div>
+                <label style="font-size:0.72rem;display:block;margin-bottom:0.15rem">Customer / Entity</label>
+                <input class="pf-presale-entity" style="${inputStyle}" type="text" placeholder="Customer name">
+              </div>
+              <div>
+                <label style="font-size:0.72rem;display:block;margin-bottom:0.15rem">Note (optional)</label>
+                <input class="pf-presale-note" style="${inputStyle}" type="text" placeholder="Note">
+              </div>
+            </div>
+            <div style="display:flex;gap:0.4rem">
+              <button class="pf-presale-save" data-proj-id="${p.id}" data-proj-name="${esc(p.name)}"
+                style="padding:0.3rem 0.7rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;font-weight:600;cursor:pointer;font-size:0.78rem">Save presale</button>
+              <button class="pf-presale-cancel" data-proj-id="${p.id}"
+                style="padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-size:0.78rem">Cancel</button>
+            </div>
+            <div class="pf-presale-msg" data-proj-id="${p.id}" style="display:none;font-size:0.75rem;margin-top:0.3rem"></div>
+          </div>
+          <button class="pf-add-presale-btn" data-proj-id="${p.id}"
+            style="margin-top:0.4rem;font-size:0.75rem;padding:0.25rem 0.65rem;border:1px dashed var(--border);border-radius:var(--radius);background:transparent;color:var(--text-secondary);cursor:pointer">+ Add presale</button>
         </div>
 
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
@@ -342,6 +395,101 @@
       btn.addEventListener('click', e => {
         e.stopPropagation();
         window.location.hash = 'proj-assets';
+      });
+    });
+
+    // Presale form wiring
+    panel.querySelectorAll('.pf-add-presale-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const pid = btn.dataset.projId;
+        const form = document.getElementById(`pf-presale-form-${pid}`);
+        if (form) { form.style.display = 'block'; btn.style.display = 'none'; }
+      });
+    });
+
+    panel.querySelectorAll('.pf-presale-cancel').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const pid = btn.dataset.projId;
+        const form = document.getElementById(`pf-presale-form-${pid}`);
+        const addBtn = panel.querySelector(`.pf-add-presale-btn[data-proj-id="${pid}"]`);
+        if (form) form.style.display = 'none';
+        if (addBtn) addBtn.style.display = '';
+      });
+    });
+
+    panel.querySelectorAll('.pf-presale-save').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const pid       = btn.dataset.projId;
+        const projName  = btn.dataset.projName || '';
+        const formEl    = document.getElementById(`pf-presale-form-${pid}`);
+        const msgEl     = formEl?.querySelector('.pf-presale-msg');
+        const amount    = parseFloat(formEl?.querySelector('.pf-presale-amount')?.value);
+        const date      = formEl?.querySelector('.pf-presale-date')?.value;
+        const entity    = formEl?.querySelector('.pf-presale-entity')?.value?.trim() || undefined;
+        const note      = formEl?.querySelector('.pf-presale-note')?.value?.trim() || undefined;
+
+        if (!amount || isNaN(amount)) {
+          if (msgEl) { msgEl.textContent = 'Amount is required'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+          return;
+        }
+        if (!date) {
+          if (msgEl) { msgEl.textContent = 'Date is required'; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+          return;
+        }
+
+        btn.disabled = true; btn.textContent = 'Saving…';
+
+        try {
+          const txBody = {
+            type: 'Income', source: 'presale',
+            project_id: pid,
+            amount, date, entity, note,
+            description: 'Pre-sale — ' + projName
+          };
+          if (presaleCategoryId) txBody.category_id = [presaleCategoryId];
+          Object.keys(txBody).forEach(k => { if (txBody[k] === undefined) delete txBody[k]; });
+
+          await api('/api/transactions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(txBody)
+          });
+
+          // Reload presales for this project
+          const txRes = await api(`/api/transactions?source=presale&project_id=${pid}`).catch(() => ({ records: [] }));
+          presaleByProject[pid] = (txRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+
+          // Re-render just the presale list
+          const listEl = document.getElementById(`pf-presale-list-${pid}`);
+          if (listEl) listEl.innerHTML = (presaleByProject[pid] || []).map(t => presaleCardHtml(t)).join('');
+
+          // Hide form, show add button
+          if (formEl) formEl.style.display = 'none';
+          const addBtn = panel.querySelector(`.pf-add-presale-btn[data-proj-id="${pid}"]`);
+          if (addBtn) addBtn.style.display = '';
+
+          // Reset form
+          if (formEl) {
+            formEl.querySelector('.pf-presale-amount').value = '';
+            formEl.querySelector('.pf-presale-entity').value = '';
+            formEl.querySelector('.pf-presale-note').value   = '';
+            formEl.querySelector('.pf-presale-date').value   = todayIso();
+          }
+
+          // Update card header presale total
+          const proj = allProjects.find(p => p.id === pid);
+          if (!proj) return;
+          // Re-render full card header to update presale total
+          render();
+          if (expandedId) loadProjectResources(expandedId);
+
+        } catch (err) {
+          if (msgEl) { msgEl.textContent = err.message; msgEl.style.color = '#ef4444'; msgEl.style.display = 'block'; }
+        } finally {
+          btn.disabled = false; btn.textContent = 'Save presale';
+        }
       });
     });
   }
