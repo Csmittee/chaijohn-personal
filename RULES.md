@@ -4,6 +4,22 @@
 
 ---
 
+## BATCH 6 FIXES — Cashflow reload + Sales Projects lane key
+
+L109  Sales Projects lane presalesByProject map key = p.project_id (Airtable record ID from /api/sales response).
+      The /api/sales projects array uses { project_id: r.id } not { id: r.id }. Never use p.id for project matching
+      in the sales injector — it is always undefined.
+
+L108  transactions GET must return project_id field in response. No fields[] whitelist is passed to listRecords —
+      Airtable returns all fields including project_id. Do not add a fields filter that would exclude project_id.
+
+L107  Cashflow M2.1 display must never filter by source or budget_id — show ALL transactions.
+      The cashflow init() must call loadAndRender() on EVERY panelactivated event, not just on first init.
+      One-time DOM setup (CSS injection, toggle bindings) stays inside the initialized guard;
+      loadAndRender() is called unconditionally after the guard so fresh data is fetched every navigation.
+
+---
+
 ## TRANSACTION MODEL (canonical — confirmed 2026-06-03)
 
 L099  Transaction model is the single source of truth for all money flow. Never add complexity beyond this table.

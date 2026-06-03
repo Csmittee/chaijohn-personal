@@ -1428,23 +1428,25 @@
   /* ── Init ────────────────────────────────────────────────────────────────── */
 
   function init() {
-    if (initialized) return; initialized = true;
+    if (!initialized) {
+      initialized = true;
 
-    // Inject blink CSS
-    if (!document.getElementById('cf-blink-style')) {
-      const style = document.createElement('style');
-      style.id = 'cf-blink-style';
-      style.textContent = `.blink-slow{animation:cf-blink 2s step-start infinite}.blink-med{animation:cf-blink 1s step-start infinite}.blink-fast{animation:cf-blink 0.5s step-start infinite}@keyframes cf-blink{50%{opacity:0}}`;
-      document.head.appendChild(style);
+      // Inject blink CSS
+      if (!document.getElementById('cf-blink-style')) {
+        const style = document.createElement('style');
+        style.id = 'cf-blink-style';
+        style.textContent = `.blink-slow{animation:cf-blink 2s step-start infinite}.blink-med{animation:cf-blink 1s step-start infinite}.blink-fast{animation:cf-blink 0.5s step-start infinite}@keyframes cf-blink{50%{opacity:0}}`;
+        document.head.appendChild(style);
+      }
+
+      ensureBannerSlot();
+      ensureViewMonthNav();
+      initRangeToggle();
+      initViewToggle();
+      initSyncForm();
+      initCardDelegation();
+      ensureDueTool();
     }
-
-    ensureBannerSlot();
-    ensureViewMonthNav();
-    initRangeToggle();
-    initViewToggle();
-    initSyncForm();
-    initCardDelegation();
-    ensureDueTool();
     loadAndRender().catch(console.error);
   }
 
