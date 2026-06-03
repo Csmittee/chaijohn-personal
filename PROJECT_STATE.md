@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-02 — Batch 4 fixes complete — source singleSelect patch, project_funding routing, M2.2 presale transactions, M3.3 delete button + ghost card handling
+> Last updated: 2026-06-03 — Batch 5 complete — transaction model simplified (canonical L099–L106), patchSourceOptions removed, M2.3 filter uses budget_id presence, presale POST removes category_id, project_funding POST adds project_id
 
 ---
 

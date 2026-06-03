@@ -26,6 +26,15 @@ Check `panel-xxx.classList.contains('active')` at IIFE parse time for direct has
 6. For ANY external Airtable base (not chaijohn-core): call Meta API to verify
    field names BEFORE writing code. Never assume from prompt specs. See L077.
 
+## TRANSACTION MODEL
+See RULES.md L099–L106 for the full canonical model.
+Short version:
+- Cashflow = all transactions
+- Expenses M2.3 = type=Expense AND budget_id not empty
+- Sales M2.2 = type=Income grouped by source
+- NEVER write category_id on new transactions
+- source field = Airtable singleSelect (owner manages options)
+
 ## Read next
 - `RULES.md` — compact lessons (required before every task)
 - `PROJECT_STATE.md` — phases, roadmap, file inventory (required for Build Mode only)
