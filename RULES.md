@@ -4,6 +4,21 @@
 
 ---
 
+L135  P&L Generator KV storage — one model per project: Key = pl-generator:proj_{projectId} (overwrite on Save).
+      Selecting a project in dropdown auto-loads KV model for that project if exists.
+      No project selected: versioned key pl-generator:{timestamp}. PDF/ODS never save to KV — export only.
+      R2 not configured — KV only for all P&L storage.
+
+L134  P&L Generator panel ID is panel-pl-generator, route is pl-generator (confirmed after fix/pl-generator-core).
+      Injector panelactivated listener must use e.detail === 'pl-generator'.
+      panel() function must return document.getElementById('panel-pl-generator').
+
+L133  Data entry inputs: NEVER use type="number". Always use type="text" inputmode="numeric" pattern="[0-9.]*".
+      Browser spinners waste space and are never needed. User types values directly.
+      Apply to all existing and future injectors. No exceptions unless explicitly specified.
+
+---
+
 ## BATCH 6 FIXES — Cashflow reload + Sales Projects lane key
 
 L109  Sales Projects lane presalesByProject map key = p.project_id (Airtable record ID from /api/sales response).

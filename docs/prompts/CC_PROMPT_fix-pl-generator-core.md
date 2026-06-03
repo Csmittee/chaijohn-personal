@@ -1,4 +1,6 @@
 # CC_PROMPT_fix-pl-generator-core.md
+> ✅ COMPLETE — fix/pl-generator-core — 2026-06-03
+> Route pl-gen→pl-generator, panel ID fix, panelactivated, type=text inputs, project selector auto-load KV, resetForm/loadProjectModel, resizer getBoundingClientRect, RULES L133-L135
 > Fix P&L Generator — panel ID mismatch, generate/chart, resizer, number inputs, project UX
 > Branch: fix/pl-generator-core
 
