@@ -1,4 +1,5 @@
 # CC_PROMPT_fix-batch7.md
+✅ COMPLETE — 2026-06-03 — M2.2 asset dedup, summary strip presale+asset totals, Projects lane compact cards, list sub-headers, M2.1 cashflow list grouped sections, M2.4 compact budget+presale cards, RULES L110–L115
 > Batch 7 — M2.2 asset dedup + summary strip, M2.2 card widths + list sections, M2.4 compact cards, M2.1 list sections, L110 doc
 > Branch: fix/batch7
 > Merge to main after owner QA confirms checklist

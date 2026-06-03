@@ -109,9 +109,10 @@ export async function onRequestGet(context) {
 
   // ── Parallel fetch: Business ID registry + core data ─────────────────────
   const corePromises = [
-    listAllRecords(env.AIRTABLE_API_KEY, CORE_BASE, ASSETS, {
-      filterByFormula: `AND({status}='Sold',NOT(IS_BEFORE({sold_date},'${startDate}')))`,
-      sort: [{ field: 'sold_date', direction: 'desc' }]
+    listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
+      filterByFormula: `AND(OR({source}='collection',{source}='hard_asset_sale'),NOT(IS_BEFORE({date},'${startDate}')))`,
+      sort: [{ field: 'date', direction: 'desc' }],
+      maxRecords: 500
     }),
     listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
       filterByFormula: `AND({type}='Earn',{source}='Manual',NOT(IS_BEFORE({date},'${startDate}')))`,
@@ -120,11 +121,6 @@ export async function onRequestGet(context) {
     }),
     listAllRecords(env.AIRTABLE_API_KEY, CORE_BASE, PROJECTS_T, {
       filterByFormula: `AND({sales_forecast_sent}=TRUE(),{type}='Active')`
-    }),
-    listRecords(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, {
-      filterByFormula: `AND({source}='collection',NOT(IS_BEFORE({date},'${startDate}')))`,
-      sort: [{ field: 'date', direction: 'desc' }],
-      maxRecords: 500
     })
   ];
 
@@ -146,13 +142,13 @@ export async function onRequestGet(context) {
     Promise.resolve({ records: [] })
   ];
 
-  let assetsRes, manualTxRes, projectsRes, collectionTxRes;
+  let assetTxRes, manualTxRes, projectsRes;
   let bizIdsRes, saleRecordsRes, productsRes;
   let bizUnavailable = false;
 
   let bizError = null;
   try {
-    [assetsRes, manualTxRes, projectsRes, collectionTxRes] = await Promise.all(corePromises);
+    [assetTxRes, manualTxRes, projectsRes] = await Promise.all(corePromises);
   } catch (err) {
     return errorResponse(err.message, 500);
   }
@@ -299,42 +295,30 @@ export async function onRequestGet(context) {
     };
   });
 
-  // ── Personal: asset sales ─────────────────────────────────────────────────
-  const asset_sales = (assetsRes.records || []).map(r => {
+  // ── Personal: asset sales — source of truth = Transactions only (L111) ───
+  const asset_sales = (assetTxRes.records || []).map(r => {
     const f = r.fields;
     return {
-      asset_id:   r.id,
-      name:       f.name || '',
-      category:   f.category || '',
-      sold_price: Number(f.sold_price || 0),
-      sold_date:  f.sold_date || '',
-      sold_via:   f.sold_via || '',
-      cost_price: Number(f.cost_price || 0),
-      image_url:  f.cloudinary_image_url || null,
-      gain:       Number(f.sold_price || 0) - Number(f.cost_price || 0)
-    };
-  });
-
-  // Merge collection-source transactions into asset_sales
-  const collectionSales = (collectionTxRes?.records || []).map(r => {
-    const f = r.fields;
-    const amount = Number(f.amount || 0);
-    return {
-      asset_id:   r.id,
-      name:       f.description || 'Collection sale',
-      category:   'Collection sale',
-      sold_price: amount,
+      tx_id:      r.id,
+      name:       f.description || f.entity || '',
+      category:   f.source === 'collection' ? 'Collection sale' : 'Asset sale',
+      sold_price: Number(f.amount || 0),
       sold_date:  f.date || '',
       sold_via:   f.entity || '',
       cost_price: 0,
       image_url:  null,
-      gain:       amount
+      gain:       0,
+      source:     f.source || ''
     };
   });
-  asset_sales.push(...collectionSales);
   asset_sales.sort((a, b) => (b.sold_date || '').localeCompare(a.sold_date || ''));
 
   const manual_entries = (manualTxRes.records || []).map(r => ({ id: r.id, ...r.fields }));
+
+  // ── Personal totals by source ─────────────────────────────────────────────
+  const total_presale    = projects.reduce((s, p) => s + (p.presale_total || 0), 0);
+  const total_collection = asset_sales.filter(a => a.source === 'collection').reduce((s, a) => s + a.sold_price, 0);
+  const total_hard_asset = asset_sales.filter(a => a.source === 'hard_asset_sale').reduce((s, a) => s + a.sold_price, 0);
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const mtdStart = today.slice(0, 7) + '-01';
@@ -388,7 +372,8 @@ export async function onRequestGet(context) {
     summary: {
       total_earned_mtd, total_ar, total_overdue, ytd_revenue,
       open_quotes, open_quotes_total, nearest_overdue,
-      by_business, by_month
+      by_business, by_month,
+      total_presale, total_collection, total_hard_asset
     },
     biz_unavailable: bizUnavailable,
     biz_error: bizError,

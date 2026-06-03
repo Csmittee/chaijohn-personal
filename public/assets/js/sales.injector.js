@@ -114,7 +114,9 @@
       bubble('Total Overdue', fmt(s.total_overdue), s.total_overdue > 0 ? '#ef4444' : null),
       bubble('Open Quotes', fmt(s.open_quotes_total) + ` (${s.open_quotes})`, s.open_quotes > 0 ? '#8b5cf6' : null),
       nearOD ? bubble('Nearest Due', nearOD, '#ef4444') : '',
-      bubble('YTD Revenue', fmt(s.ytd_revenue), null)
+      bubble('YTD Revenue', fmt(s.ytd_revenue), null),
+      bubble('Presale Total', fmt(s.total_presale || 0), (s.total_presale || 0) > 0 ? '#22c55e' : null),
+      bubble('Asset Sales', fmt((s.total_collection || 0) + (s.total_hard_asset || 0)), ((s.total_collection || 0) + (s.total_hard_asset || 0)) > 0 ? '#d4af37' : null)
     ].join('');
   }
 
@@ -328,7 +330,9 @@
     } else if (currentView === 'list') {
       html += `<table style="width:100%;border-collapse:collapse;font-size:0.72rem;margin-bottom:0.5rem"><tbody>${projectsWithPresales.map(p => projectLaneCard(p)).join('')}</tbody></table>`;
     } else {
+      html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.25rem 0">`;
       projectsWithPresales.forEach(p => { html += projectLaneCard(p); });
+      html += `</div>`;
     }
     html += '</div>';
 
@@ -337,7 +341,7 @@
     const hasManual = (personal.manual_entries || []).length > 0;
     html += sectionHeader('PERSONAL', 'sales-sec-personal');
     html += `<div id="sales-sec-personal-body">`;
-    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">ASSET SALES</div>`;
+    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.4rem 0 0.2rem;letter-spacing:0.04em;border-top:1px solid var(--border);margin-top:0.25rem">ASSET SALES</div>`;
     if (hasSold) {
       if (currentView === 'list') {
         html += `<table style="width:100%;border-collapse:collapse;font-size:0.72rem;margin-bottom:0.5rem">
@@ -356,7 +360,7 @@
     } else {
       html += `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0 0.5rem">— No sold assets yet</div>`;
     }
-    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.3rem 0;letter-spacing:0.04em">MANUAL ENTRIES</div>`;
+    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.4rem 0 0.2rem;letter-spacing:0.04em;border-top:1px solid var(--border);margin-top:0.25rem">MANUAL ENTRIES</div>`;
     if (hasManual) {
       html += `<div style="font-size:0.75rem;color:var(--text-dim)">`;
       (personal.manual_entries || []).forEach(t => {
@@ -518,23 +522,22 @@
       return headerRow + dataRows;
     }
 
-    // Card view — compact header + rows, no heavy bordered box
+    // Card view — compact card with max-width, sits side by side in flex-wrap row
     const cardRows = sorted.map(t =>
-      `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border);font-size:0.75rem">
-        <span style="color:var(--text-dim);white-space:nowrap;min-width:68px">${fmtDate(t.date)}</span>
+      `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border);font-size:0.72rem">
+        <span style="color:var(--text-dim);white-space:nowrap;min-width:60px">${fmtDate(t.date)}</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.entity||t.description||'')}</span>
-        <span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:#22c55e22;color:#22c55e;white-space:nowrap">presale</span>
         <span style="font-weight:700;color:#22c55e;white-space:nowrap">${fmt(t.amount)}</span>
       </div>`
     ).join('');
 
-    return `<div style="margin-bottom:0.5rem;padding-bottom:0.1rem">
-      <div style="display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0 0.2rem">
-        <span style="font-weight:700;font-size:0.82rem">${esc(p.name)}</span>
+    return `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;min-width:160px;max-width:220px;flex:0 0 auto">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:0.78rem">${esc(p.name)}</span>
         ${p.current_phase ? `<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>` : ''}
         ${presaleTotal > 0 ? `<span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:#22c55e">${fmt(presaleTotal)}</span>` : ''}
       </div>
-      ${cardRows || `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0">No presale bookings yet</div>`}
+      ${cardRows || `<div style="font-size:0.72rem;color:var(--text-dim);padding:0.2rem 0">No presale bookings yet</div>`}
     </div>`;
   }
 

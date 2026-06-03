@@ -189,7 +189,7 @@
         <div id="pf-resources-${p.id}" style="margin-bottom:1rem">
           <div style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);
             text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Budget Cards</div>
-          <div id="pf-res-list-${p.id}">
+          <div id="pf-res-list-${p.id}" style="display:flex;flex-wrap:wrap;gap:0.25rem;align-items:flex-start">
             <div style="font-size:0.82rem;color:var(--text-secondary)">Loading…</div>
           </div>
         </div>
@@ -197,7 +197,7 @@
         <div style="margin-bottom:1rem" id="pf-presale-section-${p.id}">
           <div style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);
             text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Presale Records</div>
-          <div id="pf-presale-list-${p.id}">
+          <div id="pf-presale-list-${p.id}" style="display:flex;flex-wrap:wrap;gap:0.25rem;align-items:flex-start">
             ${presales.map(t => presaleCardHtml(t)).join('')}
           </div>
           <div id="pf-presale-form-${p.id}" style="display:none;margin-top:0.5rem;border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;background:var(--bg-raised)">
@@ -252,8 +252,9 @@
 
   function presaleCardHtml(t) {
     return `
-      <div style="border:1px solid var(--border);border-radius:var(--radius);
-        padding:0.6rem 0.75rem;margin-bottom:0.4rem;background:rgba(34,197,94,0.04)">
+      <div style="display:inline-flex;flex-direction:column;min-width:160px;max-width:220px;width:auto;
+        vertical-align:top;margin:0.25rem;border:1px solid var(--border);border-radius:var(--radius);
+        padding:0.6rem 0.75rem;background:rgba(34,197,94,0.04)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:0.78rem;color:var(--text-secondary)">${fmtDate(t.date)}</span>
           <span style="font-weight:700;color:#22c55e">+${fmt(t.amount)}</span>
@@ -276,6 +277,7 @@
         container.innerHTML = '<div style="font-size:0.82rem;color:var(--text-secondary)">No budget items yet — add resources in Project Assets.</div>';
         return;
       }
+      container.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.25rem;align-items:flex-start';
       container.innerHTML = resources.map(r => resourceCardHtml(r)).join('');
       wireConfirmButtons(container, projId);
     } catch (err) {
@@ -288,21 +290,20 @@
     const showConfirm = r.status === 'Planned';
     return `
       <div class="pf-res-card" data-res-id="${r.id}"
-        style="border:1px solid var(--border);border-radius:var(--radius);
-        padding:0.6rem 0.75rem;margin-bottom:0.4rem;display:flex;align-items:center;gap:0.75rem">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:0.5rem">
-            <strong style="font-size:0.85rem">${esc(r.item)}</strong>
-            <span style="font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:20px;
-              background:${statusColor}22;color:${statusColor}">${r.status || 'Planned'}</span>
-          </div>
-          ${r.time_needed ? `<div style="font-size:0.75rem;color:var(--text-secondary)">Time: ${esc(r.time_needed)}</div>` : ''}
-          <div style="font-size:0.82rem;font-weight:600;margin-top:0.1rem">${fmt(r.cost)}</div>
+        style="display:inline-flex;flex-direction:column;min-width:160px;max-width:220px;width:auto;
+        vertical-align:top;margin:0.25rem;border:1px solid var(--border);border-radius:var(--radius);
+        padding:0.6rem 0.75rem;background:var(--bg-card)">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.15rem">
+          <strong style="font-size:0.85rem">${esc(r.item)}</strong>
+          <span style="font-size:0.7rem;padding:0.1rem 0.4rem;border-radius:20px;
+            background:${statusColor}22;color:${statusColor}">${r.status || 'Planned'}</span>
         </div>
+        ${r.time_needed ? `<div style="font-size:0.75rem;color:var(--text-secondary)">Time: ${esc(r.time_needed)}</div>` : ''}
+        <div style="font-size:0.82rem;font-weight:600;margin-top:0.1rem;margin-bottom:${showConfirm?'0.4rem':'0'}">${fmt(r.cost)}</div>
         ${showConfirm ? `<button class="pf-confirm-res" data-res-id="${r.id}" data-item="${esc(r.item)}" data-cost="${r.cost||0}"
-          style="flex-shrink:0;font-size:0.78rem;padding:0.25rem 0.6rem;
+          style="font-size:0.78rem;padding:0.25rem 0.6rem;
           background:var(--color-primary);color:white;border:none;
-          border-radius:var(--radius);cursor:pointer">Confirm →</button>` : ''}
+          border-radius:var(--radius);cursor:pointer;align-self:flex-start">Confirm →</button>` : ''}
       </div>`;
   }
 
