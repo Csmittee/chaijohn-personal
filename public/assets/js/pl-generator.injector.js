@@ -327,7 +327,7 @@
           field('Sale price (฿)', inp('plg-sale-price', '0', storedInputs.sale_price))
         )}
       ` : ''}
-      <div>${lbl('Revenue / mo <span style="font-size:0.58rem;background:rgba(245,197,24,0.15);color:var(--yellow);padding:0.05rem 0.25rem;border-radius:3px">${unitMode ? "auto" : "manual"}</span>')}
+      <div>${lbl(`Revenue / mo <span style="font-size:0.58rem;background:rgba(245,197,24,0.15);color:var(--yellow);padding:0.05rem 0.25rem;border-radius:3px">${unitMode ? "auto" : "manual"}</span>`)}
         <input id="plg-revenue-mo" type="number" placeholder="0" value="${esc(storedInputs.revenue_mo || '')}" ${unitMode ? 'readonly style="opacity:0.6;"' : ''} style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:${unitMode ? '#22c55e' : 'var(--text)'};width:100%;box-sizing:border-box">
       </div>
       ${row2(
@@ -743,7 +743,7 @@
         </div>
       </div>`;
 
-    const projectOpts = `<option value="">No project</option>` + _projects.map(p => `<option value="${p.id}">${esc(p.fields?.name || p.id)}</option>`).join('');
+    const projectOpts = `<option value="">No project</option>` + _projects.map(p => `<option value="${p.id}">${esc(p.name || p.id)}</option>`).join('');
 
     return `
       <style>
@@ -917,7 +917,7 @@
         _projects = Array.isArray(data) ? data : (data.records || []);
         const sel = $('plg-project-sel');
         if (sel) {
-          sel.innerHTML = `<option value="">No project</option>` + _projects.map(p => `<option value="${p.id}">${esc(p.fields?.name || p.id)}</option>`).join('');
+          sel.innerHTML = `<option value="">No project</option>` + _projects.map(p => `<option value="${p.id}">${esc(p.name || p.id)}</option>`).join('');
         }
       }
     } catch { /* no-op */ }
