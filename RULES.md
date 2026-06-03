@@ -240,8 +240,19 @@ L119  AI "Generate tasks" prompt must request JSON array ONLY — no markdown, n
       Parse with try/catch. Strip ```json``` fences before parsing. On success show "Add N tasks"
       button that POSTs each task to /api/project-tasks. On parse fail fall back to pre-wrap text.
 
-L120  P&L Generator (route pl-gen, panel panel-pl-gen) is a placeholder panel in Finance nav group.
+L120  P&L Generator (route pl-gen, panel panel-pl-gen) is a placeholder panel in Tools nav group.
       Show "soon" badge on nav item. Panel contains centered placeholder — no injector needed yet.
+      Nav was incorrectly placed under Finance in batch8 — corrected to Tools in batch9.
+
+L128  ai-chat.js: when body.stream === false, return buffered JSON { reply } (non-streaming).
+      AI panel chat UI always uses streaming (no stream key in body).
+      Project AI inquiry (runAiInquiry) must pass stream: false in body — never use SSE path for inquiry.
+
+L129  Focus view event delegation: ALL click handlers (collapse, filter) must use ONE delegated
+      listener on zone container — never bind directly to innerHTML elements.
+      Direct binding is lost on every re-render. Delegation survives because zone element persists.
+      Bound once via zone._focusBound flag. Status select uses change event delegation on same zone.
+      _resCollapsed module var tracks resource section collapse state across renders.
 
 ---
 

@@ -28,6 +28,36 @@ export async function onRequestPost(context) {
     return errorResponse('messages array is required');
   }
 
+  // Non-streaming mode: return buffered JSON { reply } — used by project AI inquiry
+  if (body.stream === false) {
+    let claudeRes;
+    try {
+      claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          stream: false,
+          messages
+        })
+      });
+    } catch (err) {
+      return errorResponse('Claude API request failed: ' + err.message, 500);
+    }
+    if (!claudeRes.ok) {
+      const errText = await claudeRes.text();
+      return errorResponse(`Claude API error: ${errText}`, claudeRes.status);
+    }
+    const data = await claudeRes.json();
+    const reply = data.content?.[0]?.text || '';
+    return jsonResponse({ reply });
+  }
+
   const systemPrompt = SYSTEM_PROMPT_PREFIX + (context_json || '{}');
 
   let claudeRes;

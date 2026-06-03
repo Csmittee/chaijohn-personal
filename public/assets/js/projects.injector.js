@@ -35,7 +35,10 @@
 
   // Task focus state
   let _taskSectionCollapsed = {};
-  let _taskFilter           = 'all';
+  let _taskFilter           = {};   // keyed by projectId
+  let _resCollapsed         = false;
+  let _currentTasks         = [];   // flat tasks array for last-rendered focus project
+  let _currentPhaseCodeMap  = {};   // phaseId → phase_code for last-rendered focus project
 
   // Drawer state
   let drawerMode     = null;   // null | 'create' | 'edit' | 'redclear'
@@ -402,6 +405,62 @@
     return exits;
   }
 
+  /* ── Task zone builder (called from renderFocusView + filter delegation) ── */
+
+  function buildTaskZone(tasks, pid) {
+    const phaseOrder = ['DS','PT','PD','PV','LA'];
+    const activeFilter = _taskFilter[pid] || 'all';
+    const byPhase = {};
+    phaseOrder.forEach(pc => { byPhase[pc] = []; });
+    tasks.forEach(t => {
+      const phIdRef = Array.isArray(t.phase_id) ? t.phase_id[0] : (t.phase_id || null);
+      const pc = t.phase_code || (phIdRef ? _currentPhaseCodeMap[phIdRef] : null) || 'DS';
+      if (byPhase[pc]) byPhase[pc].push(t);
+      else byPhase['DS'].push(t);
+    });
+    return phaseOrder.map(pc => {
+      const ts = (activeFilter === 'all' || activeFilter === pc) ? byPhase[pc] : [];
+      if (!ts.length) return '';
+      const collapsed = _taskSectionCollapsed[pid + '_' + pc];
+      const clr = PHASE_COLORS[pc];
+      const doneCount = ts.filter(t => t.status === 'Done').length;
+      return `<div style="margin-bottom:0.35rem">
+        <div data-task-sec="${pid}_${pc}"
+          style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0.4rem;
+          background:${clr}11;border-left:3px solid ${clr};border-radius:0 3px 3px 0;
+          cursor:pointer;user-select:none;margin-bottom:0.15rem">
+          <span class="sec-arrow" style="font-size:0.65rem;color:${clr}">${collapsed ? '▸' : '▾'}</span>
+          <span style="font-size:0.72rem;font-weight:700;color:${clr}">${pc} — ${PHASE_NAMES[pc]}</span>
+          <span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto">${doneCount}/${ts.length} done</span>
+        </div>
+        <div data-task-body="${pid}_${pc}" style="${collapsed ? 'display:none' : ''}">
+          <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+            <colgroup><col style="width:56px"><col><col style="width:80px"><col style="width:110px"></colgroup>
+            <tbody>${ts.map(t => {
+              const overdue = t.finish_by && t.finish_by < todayStr() && t.status !== 'Done';
+              const statusClr = t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':t.status==='In progress'?'#3b82f6':'var(--text-dim)';
+              return `<tr style="border-bottom:1px solid var(--border);${overdue?'background:rgba(239,68,68,0.04)':''}">
+                <td style="padding:0.2rem 0.35rem 0.2rem 0">${phaseBadge(pc)}</td>
+                <td style="padding:0.2rem 0.35rem;min-width:0" title="${t.measure?esc(t.measure):''}">
+                  <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''}">${esc(t.title)}</div>
+                  ${t.assigned_to && t.assigned_to !== 'Me' ? `<div style="font-size:0.65rem;color:var(--text-dim)">${esc(t.assigned_to)}</div>` : ''}
+                </td>
+                <td style="padding:0.2rem 0.35rem;white-space:nowrap;font-size:0.68rem;color:var(--text-dim);text-align:right">${fmtDate(t.finish_by)}</td>
+                <td style="padding:0.2rem 0.35rem 0.2rem 0">
+                  <select class="proj-status-sel" data-taskid="${t.id}" data-projid="${pid}"
+                    style="width:100%;font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid ${statusClr}44;border-radius:3px;color:${statusClr}">
+                    ${['Open','In progress','Done','Delayed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
+                  </select>
+                </td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+  }
+
   /* ── Focus view ──────────────────────────────────────────────────────────── */
 
   async function renderFocusView(projectId) {
@@ -419,17 +478,10 @@
 
       const phaseOrder = ['DS','PT','PD','PV','LA'];
 
-      // Tasks by phase
-      const tasksByPhase = {};
-      phaseOrder.forEach(pc => { tasksByPhase[pc] = []; });
-      const phaseCodeByPhaseId = {};
-      phases.forEach(ph => { if (ph.id && ph.phase_code) phaseCodeByPhaseId[ph.id] = ph.phase_code; });
-      tasks.forEach(t => {
-        const phIdRef = Array.isArray(t.phase_id) ? t.phase_id[0] : (t.phase_id || null);
-        const pc = t.phase_code || (phIdRef ? phaseCodeByPhaseId[phIdRef] : null) || 'DS';
-        if (tasksByPhase[pc]) tasksByPhase[pc].push(t);
-        else tasksByPhase['DS'].push(t);
-      });
+      // Store at module level for delegation handlers
+      _currentTasks = tasks;
+      _currentPhaseCodeMap = {};
+      phases.forEach(ph => { if (ph.id && ph.phase_code) _currentPhaseCodeMap[ph.id] = ph.phase_code; });
 
       const phaseExits = computePhaseExits(tasks);
 
@@ -481,78 +533,48 @@
           <div style="margin-bottom:0.75rem">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;flex-wrap:wrap;gap:0.3rem">
               <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);letter-spacing:0.04em">TASKS</div>
-              <div style="display:flex;gap:0.25rem;flex-wrap:wrap" id="proj-task-filter-btns">
-                ${['all',...phaseOrder].map(f=>`<button class="proj-tf-btn" data-filter="${f}"
-                  style="font-size:0.62rem;padding:0.12rem 0.4rem;border-radius:3px;cursor:pointer;
-                  border:1px solid ${f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'};
-                  background:${_taskFilter===f?(f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'):'transparent'};
-                  color:${_taskFilter===f?'#fff':(f==='all'?'var(--text-dim)':PHASE_COLORS[f]||'var(--text-dim)')}">
-                  ${f==='all'?'All':f}</button>`).join('')}
+              <div style="display:flex;gap:0.25rem;flex-wrap:wrap">
+                ${['all',...phaseOrder].map(f=>{
+                  const active = (_taskFilter[projectId]||'all') === f;
+                  return `<button data-task-filter="${f}" data-projid="${projectId}"
+                    style="font-size:0.62rem;padding:0.12rem 0.4rem;border-radius:3px;cursor:pointer;
+                    border:1px solid ${f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'};
+                    background:${active?(f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'):'transparent'};
+                    color:${active?'#fff':(f==='all'?'var(--text-dim)':PHASE_COLORS[f]||'var(--text-dim)')}">
+                    ${f==='all'?'All':f}</button>`;
+                }).join('')}
               </div>
             </div>
-            ${phaseOrder.map(pc=>{
-              const ts = (_taskFilter === 'all' || _taskFilter === pc) ? tasksByPhase[pc] : [];
-              if (!ts.length) return '';
-              const collapsed = _taskSectionCollapsed[projectId + '_' + pc];
-              const clr = PHASE_COLORS[pc];
-              const doneCount = ts.filter(t=>t.status==='Done').length;
-              return `<div style="margin-bottom:0.35rem">
-                <div class="proj-sec-hdr" data-projid="${projectId}" data-phase="${pc}"
-                  style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0.4rem;
-                  background:${clr}11;border-left:3px solid ${clr};border-radius:0 3px 3px 0;
-                  cursor:pointer;user-select:none;margin-bottom:0.15rem">
-                  <span style="font-size:0.65rem;color:${clr}">${collapsed?'▶':'▼'}</span>
-                  <span style="font-size:0.72rem;font-weight:700;color:${clr}">${pc} — ${PHASE_NAMES[pc]}</span>
-                  <span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto">${doneCount}/${ts.length} done</span>
-                </div>
-                ${collapsed ? '' : `<div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
-                  <colgroup><col style="width:56px"><col><col style="width:80px"><col style="width:110px"></colgroup>
-                  <tbody>${ts.map(t=>{
-                    const overdue = t.finish_by && t.finish_by < todayStr() && t.status !== 'Done';
-                    const statusClr = t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':t.status==='In progress'?'#3b82f6':'var(--text-dim)';
-                    return `<tr class="proj-task-row" data-taskid="${t.id}" data-projid="${projectId}"
-                      style="border-bottom:1px solid var(--border);${overdue?'background:rgba(239,68,68,0.04)':''}">
-                      <td style="padding:0.2rem 0.35rem 0.2rem 0">${phaseBadge(pc)}</td>
-                      <td style="padding:0.2rem 0.35rem;min-width:0" title="${t.measure?esc(t.measure):''}">
-                        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''}">${esc(t.title)}</div>
-                        ${t.assigned_to && t.assigned_to !== 'Me' ? `<div style="font-size:0.65rem;color:var(--text-dim)">${esc(t.assigned_to)}</div>` : ''}
-                      </td>
-                      <td style="padding:0.2rem 0.35rem;white-space:nowrap;font-size:0.68rem;color:var(--text-dim);text-align:right">${fmtDate(t.finish_by)}</td>
-                      <td style="padding:0.2rem 0.35rem 0.2rem 0">
-                        <select class="proj-status-sel" data-taskid="${t.id}" data-projid="${projectId}"
-                          style="width:100%;font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid ${statusClr}44;border-radius:3px;color:${statusClr}">
-                          ${['Open','In progress','Done','Delayed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
-                        </select>
-                      </td>
-                    </tr>`;
-                  }).join('')}</tbody>
-                </table></div>`}
-              </div>`;
-            }).filter(Boolean).join('')}
+            <div data-task-zone data-projid="${projectId}">${buildTaskZone(tasks, projectId)}</div>
             <button id="proj-add-task-btn" data-projid="${projectId}"
               style="font-size:0.72rem;padding:0.2rem 0.6rem;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);cursor:pointer;margin-top:0.35rem">+ Add task</button>
           </div>
           <!-- Resources -->
           <div style="margin-bottom:0.75rem">
-            <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);margin-bottom:0.4rem;letter-spacing:0.04em">RESOURCES</div>
-            ${resources.length ? `
-            <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
-              <thead><tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:0.2rem">Item</th>
-                <th style="text-align:left;padding:0.2rem">Time</th>
-                <th style="text-align:right;padding:0.2rem">Cost</th>
-                <th style="text-align:left;padding:0.2rem">Status</th>
-              </tr></thead>
-              <tbody>${resources.map(r=>`<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:0.2rem">${esc(r.item)}</td>
-                <td style="padding:0.2rem;color:var(--text-dim)">${esc(r.time_needed||'—')}</td>
-                <td style="padding:0.2rem;text-align:right">${fmt(r.cost)}</td>
-                <td style="padding:0.2rem;color:var(--text-dim)">${esc(r.status||'—')}</td>
-              </tr>`).join('')}</tbody>
-              <tfoot><tr><td colspan="2" style="padding:0.3rem;font-weight:700">Total</td>
-                <td style="text-align:right;padding:0.3rem;font-weight:700">${fmt(inv)}</td><td></td></tr></tfoot>
-            </table>` : `<div style="font-size:0.75rem;color:var(--text-dim)">No resources added yet.</div>`}
+            <div data-res-sec style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;user-select:none;margin-bottom:0.4rem">
+              <span class="sec-arrow" style="font-size:0.65rem;color:var(--text-dim)">${_resCollapsed ? '▸' : '▾'}</span>
+              <span style="font-size:0.75rem;font-weight:700;color:var(--text-dim);letter-spacing:0.04em">RESOURCES</span>
+              ${resources.length ? `<span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto">${resources.length} items · ${fmt(inv)}</span>` : ''}
+            </div>
+            <div data-res-body style="${_resCollapsed ? 'display:none' : ''}">
+              ${resources.length ? `
+              <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+                <thead><tr style="border-bottom:1px solid var(--border)">
+                  <th style="text-align:left;padding:0.2rem">Item</th>
+                  <th style="text-align:left;padding:0.2rem">Time</th>
+                  <th style="text-align:right;padding:0.2rem">Cost</th>
+                  <th style="text-align:left;padding:0.2rem">Status</th>
+                </tr></thead>
+                <tbody>${resources.map(r=>`<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:0.2rem">${esc(r.item)}</td>
+                  <td style="padding:0.2rem;color:var(--text-dim)">${esc(r.time_needed||'—')}</td>
+                  <td style="padding:0.2rem;text-align:right">${fmt(r.cost)}</td>
+                  <td style="padding:0.2rem;color:var(--text-dim)">${esc(r.status||'—')}</td>
+                </tr>`).join('')}</tbody>
+                <tfoot><tr><td colspan="2" style="padding:0.3rem;font-weight:700">Total</td>
+                  <td style="text-align:right;padding:0.3rem;font-weight:700">${fmt(inv)}</td><td></td></tr></tfoot>
+              </table>` : `<div style="font-size:0.75rem;color:var(--text-dim)">No resources added yet.</div>`}
+            </div>
           </div>
           <!-- P&L summary -->
           <div style="margin-bottom:0.75rem;background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:0.75rem">
@@ -586,23 +608,6 @@
         </div>`;
 
       document.getElementById('proj-back-btn')?.addEventListener('click', () => { selectedId = null; renderAll(); });
-
-      // Task filter buttons
-      zone.querySelectorAll('.proj-tf-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          _taskFilter = btn.dataset.filter;
-          renderFocusView(projectId);
-        });
-      });
-
-      // Task section collapse toggles
-      zone.querySelectorAll('.proj-sec-hdr').forEach(hdr => {
-        hdr.addEventListener('click', () => {
-          const key = hdr.dataset.projid + '_' + hdr.dataset.phase;
-          _taskSectionCollapsed[key] = !_taskSectionCollapsed[key];
-          renderFocusView(projectId);
-        });
-      });
       document.getElementById('proj-focus-edit')?.addEventListener('click', () => openDrawer('edit', projectId));
       document.getElementById('proj-focus-finance')?.addEventListener('click', async () => {
         try {
@@ -618,24 +623,69 @@
       document.getElementById('proj-focus-clear')?.addEventListener('click', () => openRedClearance(projectId));
       document.getElementById('proj-add-task-btn')?.addEventListener('click', () => openDrawer('addtask', projectId));
 
-      // Task status selects
-      zone.querySelectorAll('.proj-status-sel').forEach(sel => {
-        sel.addEventListener('change', async () => {
-          const taskId = sel.dataset.taskid;
-          const pid    = sel.dataset.projid;
-          try {
-            await api(`/api/project-tasks/${taskId}`, {
-              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: sel.value })
+      // ONE delegated listener per zone lifetime — survives innerHTML re-renders
+      if (!zone._focusBound) {
+        zone._focusBound = true;
+        zone.addEventListener('click', e => {
+          // Task section collapse
+          const taskSec = e.target.closest('[data-task-sec]');
+          if (taskSec) {
+            const key = taskSec.dataset.taskSec;
+            _taskSectionCollapsed[key] = !_taskSectionCollapsed[key];
+            const body  = zone.querySelector(`[data-task-body="${key}"]`);
+            const arrow = taskSec.querySelector('.sec-arrow');
+            if (body)  body.style.display  = _taskSectionCollapsed[key] ? 'none' : '';
+            if (arrow) arrow.textContent   = _taskSectionCollapsed[key] ? '▸' : '▾';
+            return;
+          }
+          // Resource section collapse
+          const resSec = e.target.closest('[data-res-sec]');
+          if (resSec) {
+            _resCollapsed = !_resCollapsed;
+            const body  = zone.querySelector('[data-res-body]');
+            const arrow = resSec.querySelector('.sec-arrow');
+            if (body)  body.style.display  = _resCollapsed ? 'none' : '';
+            if (arrow) arrow.textContent   = _resCollapsed ? '▸' : '▾';
+            return;
+          }
+          // Task phase filter
+          const filterBtn = e.target.closest('[data-task-filter]');
+          if (filterBtn) {
+            const pid = filterBtn.dataset.projid;
+            _taskFilter[pid] = filterBtn.dataset.taskFilter;
+            zone.querySelectorAll('[data-task-filter]').forEach(b => {
+              const active = b.dataset.taskFilter === _taskFilter[pid];
+              b.style.background = active
+                ? (b.dataset.taskFilter === 'all' ? 'var(--border)' : PHASE_COLORS[b.dataset.taskFilter] || 'var(--border)')
+                : 'transparent';
+              b.style.color = active ? '#fff'
+                : (b.dataset.taskFilter === 'all' ? 'var(--text-dim)' : PHASE_COLORS[b.dataset.taskFilter] || 'var(--text-dim)');
             });
-            await loadAll();
-            renderFocusView(pid);
-          } catch (err) {
-            const msg = el('proj-focus-msg');
-            if (msg) { msg.textContent = err.message; msg.style.color = '#ef4444'; msg.style.display = 'block'; }
+            const taskZone = zone.querySelector('[data-task-zone]');
+            if (taskZone) taskZone.innerHTML = buildTaskZone(_currentTasks, pid);
+            return;
           }
         });
-      });
+        zone.addEventListener('change', e => {
+          const sel = e.target.closest('.proj-status-sel');
+          if (!sel) return;
+          const taskId = sel.dataset.taskid;
+          const pid    = sel.dataset.projid;
+          (async () => {
+            try {
+              await api(`/api/project-tasks/${taskId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: sel.value })
+              });
+              await loadAll();
+              renderFocusView(pid);
+            } catch (err) {
+              const msg = el('proj-focus-msg');
+              if (msg) { msg.textContent = err.message; msg.style.color = '#ef4444'; msg.style.display = 'block'; }
+            }
+          })();
+        });
+      }
 
     } catch (err) {
       zone.innerHTML = `<div style="color:#ef4444;font-size:0.85rem">${err.message}</div>`;
@@ -1267,7 +1317,7 @@
     try {
       const res = await api('/api/ai-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompts[type] }], session_id: 'project-ai-' + Date.now() })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompts[type] }], session_id: 'project-ai-' + Date.now(), stream: false })
       });
       const reply = res.reply || res.message || '';
 
