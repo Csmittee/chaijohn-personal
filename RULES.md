@@ -254,6 +254,43 @@ L129  Focus view event delegation: ALL click handlers (collapse, filter) must us
       Bound once via zone._focusBound flag. Status select uses change event delegation on same zone.
       _resCollapsed module var tracks resource section collapse state across renders.
 
+L121  P&L Generator (M4.4) is now LIVE. Nav placement: Tools section only (not Finance).
+      Panel ID: panel-pl-gen. Injector: pl-generator.injector.js (standalone IIFE).
+      Storage: CHAIJOHN_KV with prefix pl-generator:{id}. No Airtable reads or writes.
+      API: GET /api/pl-generator (list), POST /api/pl-generator (save), GET/DELETE /api/pl-generator/:id.
+
+L122  P&L computation is client-side only in pl-generator.injector.js → computePL(inputs, periods).
+      Returns: { pl[], bs[], cf[], kpis{} }. No server-side calculation.
+      Conservative growth = +3%/mo. Aggressive = +8%/mo plateau at M9.
+      Depreciation = straight-line from period 1. Tax = 20% of positive EBIT.
+
+L123  PDF export = window.print() with @media print CSS. Inject review-note header before print,
+      remove after. Review note appears as italic bordered paragraph in PDF header.
+      ODS export = SheetJS XLSX.writeFile with bookType:'ods'. 3 sheets: P&L, Balance Sheet, Cashflow.
+
+L124  Archive view: list all KV keys with prefix pl-generator:, display as searchable/filterable list.
+      Load restores full inputs + outputs. Soft delete removes from KV.
+      Search by model name or assumption note. Filter by period (12mo / 5yr).
+
+L125  P&L Generator CSS: uses ONLY global CSS variables. Font sizes: KPI values 0.95rem bold,
+      table data 0.72rem, inputs 0.78rem, labels 0.65rem, badges 0.62rem.
+      Panel anatomy: stats strip → chart (120px) → two-column (280px sidebar | output).
+
+L126  P&L Generator project state alignment:
+      Accessible for projects in any state (Draft / Active / Active+InSales).
+      Pre-fill via project selector dropdown only (optional). Never writes back to project.
+      Nav placement: Tools section only. Panel ID: panel-pl-gen.
+
+L127  Project state definitions (canonical):
+      Draft = saved but not activated. Grey frame. M3.4 only. No M2.4 connection.
+      Active = "Update + Active" triggered. Grey frame. M3.4 only. No M2.4 connection.
+      Active+InSales = "✓ In Sales" triggered from focus card. Green frame. Visible in M2.4.
+      P&L Generator available at all 3 states.
+      No Airtable reads or writes — data stored in CHAIJOHN_KV as JSON.
+      KV key prefix: pl-generator:{id}
+      API: GET /api/pl-generator (list), POST /api/pl-generator (save), GET /api/pl-generator/:id (fetch).
+      Startup cost entered manually by user — not auto-pulled from M3.4.
+
 ---
 
 ## QA BLOCKER FIXES (bugfix session)
