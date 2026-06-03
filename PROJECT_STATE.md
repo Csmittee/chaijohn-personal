@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — Batch 8 complete — M3.4 focus view task table + filter + collapse, phase auto-exit dates, M2.4 payback months display, AI generate tasks JSON, 4.4 P&L Generator placeholder, RULES L116–L120
+> Last updated: 2026-06-03 — Batch 9 complete — AI non-stream mode for inquiry, focus view event delegation (no API call on collapse/filter), P&L Generator nav moved to Tools, RULES L128–L129
 
 ---
 
@@ -123,6 +123,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | P2 sale-origins + hard assets | M3.3 Hard Assets panel (cards/add/edit/sell modal), entry expense-only + Cash In tab, inline presale in M2.4, focus view full-width task rows, lane phase segments | ✅ COMPLETE |
 | Fix batch7 | M2.2 asset dedup (Transactions only), summary strip presale+asset totals, Projects lane compact cards, list sub-headers, M2.1 cashflow list grouped sections, M2.4 compact budget+presale cards, RULES L110–L115 | ✅ COMPLETE |
 | Fix batch8 | M3.4 focus view task table+filter+collapse, phase auto-exit dates, M2.4 payback months, AI generate tasks JSON+add button, 4.4 P&L Generator placeholder, RULES L116–L120 | ✅ COMPLETE |
+| Fix batch9 | AI non-stream inquiry mode, focus view event delegation (no API call on collapse/filter), P&L nav moved to Tools, RULES L128–L129 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
