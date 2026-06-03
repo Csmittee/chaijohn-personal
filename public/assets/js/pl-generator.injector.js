@@ -34,7 +34,7 @@
   let _projects = [];
   let _sidebarW = 280;
 
-  function panel() { return document.getElementById('panel-pl-gen'); }
+  function panel() { return document.getElementById('panel-pl-generator'); }
   function $ (id) { return document.getElementById(id); }
 
   // ── Computation engine ──────────────────────────────────────
@@ -286,7 +286,10 @@
   }
 
   function inp(id, placeholder, val, type, extra) {
-    return `<input id="${id}" type="${type || 'number'}" placeholder="${placeholder || ''}" value="${esc(val || '')}" ${extra || ''} style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);width:100%;box-sizing:border-box">`;
+    const isNum = !type || type === 'number';
+    const t = isNum ? 'text' : type;
+    const numAttrs = isNum ? ' inputmode="numeric" pattern="[0-9.]*"' : '';
+    return `<input id="${id}" type="${t}"${numAttrs} placeholder="${placeholder || ''}" value="${esc(val || '')}" ${extra || ''} style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);width:100%;box-sizing:border-box">`;
   }
 
   function sel(id, opts, val) {
@@ -329,7 +332,7 @@
         )}
       ` : ''}
       <div>${lbl(`Revenue / mo <span style="font-size:0.58rem;background:rgba(245,197,24,0.15);color:var(--yellow);padding:0.05rem 0.25rem;border-radius:3px">${unitMode ? "auto" : "manual"}</span>`)}
-        <input id="plg-revenue-mo" type="number" placeholder="0" value="${esc(storedInputs.revenue_mo || '')}" ${unitMode ? 'readonly style="opacity:0.6;"' : ''} style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:${unitMode ? '#22c55e' : 'var(--text)'};width:100%;box-sizing:border-box">
+        <input id="plg-revenue-mo" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="0" value="${esc(storedInputs.revenue_mo || '')}" ${unitMode ? 'readonly style="opacity:0.6;"' : ''} style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:${unitMode ? '#22c55e' : 'var(--text)'};width:100%;box-sizing:border-box">
       </div>
       ${row2(
         field('Probability %', inp('plg-probability', '70', storedInputs.probability)),
@@ -379,7 +382,7 @@
       ${_semiItems.map((item, i) => `
         <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-semi-desc="${i}" type="text" placeholder="Description" value="${esc(item.desc || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
-          <input data-semi-amt="${i}" type="number" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input data-semi-amt="${i}" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-semi-freq="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
             ${['Monthly', 'Annual', 'Per unit', 'Per billing'].map(t => `<option${item.freq === t ? ' selected' : ''}>${t}</option>`).join('')}
           </select>
@@ -392,7 +395,7 @@
       ${_fixedItems.map((item, i) => `
         <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:center;margin-top:0.3rem">
           <div style="font-size:0.72rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(item.cat)}">${esc(item.cat)}</div>
-          <input data-fix-amt="${i}" type="number" placeholder="0" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input data-fix-amt="${i}" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="0" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-fix-freq="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
             ${['Monthly', 'Annual'].map(t => `<option${item.freq === t ? ' selected' : ''}>${t}</option>`).join('')}
           </select>
@@ -430,8 +433,8 @@
       ${_assetItems.map((item, i) => `
         <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) 60px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-asset-name="${i}" type="text" placeholder="Asset name" value="${esc(item.name || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
-          <input data-asset-val="${i}" type="number" placeholder="฿ value" value="${esc(item.val || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
-          <input data-asset-years="${i}" type="number" placeholder="yrs" value="${esc(item.years || '3')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input data-asset-val="${i}" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="฿ value" value="${esc(item.val || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input data-asset-years="${i}" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="yrs" value="${esc(item.years || '3')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <button data-asset-del="${i}" style="background:#ef444422;border:1px solid #ef444444;border-radius:var(--radius);color:#ef4444;cursor:pointer;font-size:0.68rem;padding:0.2rem 0.4rem">✕</button>
         </div>
       `).join('')}
@@ -472,7 +475,7 @@
       ${_fundItems.map((item, i) => `
         <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-fund-src="${i}" type="text" placeholder="Source name" value="${esc(item.src || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
-          <input data-fund-amt="${i}" type="number" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <input data-fund-amt="${i}" type="text" inputmode="numeric" pattern="[0-9.]*" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-fund-type="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
             ${['Equity', 'Loan', 'Grant', 'Presale'].map(t => `<option${item.type === t ? ' selected' : ''}>${t}</option>`).join('')}
           </select>
@@ -717,7 +720,7 @@
     const cfMode = (window._plgCfMode || 'monthly') === 'cumulative';
 
     const sidebar = `
-      <div data-plg-sb style="width:${_sidebarW}px;min-width:${_sidebarW}px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+      <div id="plg-sidebar" style="width:${_sidebarW}px;min-width:${_sidebarW}px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
         <div style="display:flex;border-bottom:1px solid var(--border)">
           ${['revenue', 'costs', 'assets', 'funding'].map(t => tabBtn(t, t.charAt(0).toUpperCase() + t.slice(1), _activeTab === t)).join('')}
         </div>
@@ -748,10 +751,11 @@
 
     return `
       <style>
+        input[type=text] { -webkit-appearance:none; appearance:none; }
         @media print {
           body > *:not(#main) { display:none !important; }
-          #main > *:not(#panel-pl-gen) { display:none !important; }
-          #panel-pl-gen { all:unset !important; display:block !important; position:static !important; }
+          #main > *:not(#panel-pl-generator) { display:none !important; }
+          #panel-pl-generator { all:unset !important; display:block !important; position:static !important; }
           #plg-sidebar, #plg-save-bar, #plg-header, .main-nav, aside { display:none !important; }
           #plg-print-header { display:block !important; }
           #plg-output-body { font-size:0.85rem; }
@@ -766,7 +770,7 @@
       <div id="plg-header" style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <div>
           <div style="font-size:0.95rem;font-weight:700">P&amp;L Generator</div>
-          <div style="font-size:0.72rem;color:var(--text-dim)">// financial modelling · 12-month · 5-year</div>
+          <div id="plg-subtitle" style="font-size:0.72rem;color:var(--text-dim)">// financial modelling · 12-month · 5-year</div>
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center">
           <select id="plg-project-sel" style="font-size:0.72rem;padding:0.2rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">${projectOpts}</select>
@@ -841,7 +845,8 @@
   // ── Save ──────────────────────────────────────────────────────
   async function save() {
     const si = getInputs();
-    const id = `pl_${Date.now()}`;
+    const projectId = ($('plg-project-sel') || {}).value || '';
+    const id = projectId ? `proj_${projectId}` : `pl_${Date.now()}`;
     const version = 'v' + (_savedVersion + 1);
     const record = {
       id, version,
@@ -946,7 +951,6 @@
       : _activeTab === 'costs' ? renderCostsTab(si)
       : _activeTab === 'assets' ? renderAssetsTab(si)
       : renderFundingTab(si);
-    wireGenButtons();
   }
 
   function rebuildOutput() {
@@ -963,11 +967,52 @@
     if (strip) strip.innerHTML = renderKPIs(_computed ? _computed.kpis : null);
   }
 
-  function wireGenButtons() {
-    const g12 = $('plg-gen-12');
-    const g5y = $('plg-gen-5y');
-    if (g12) g12.onclick = () => generate(12);
-    if (g5y) g5y.onclick = () => generate(60);
+  function resetForm() {
+    _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
+    _semiItems = [
+      { desc: 'Office staff', amt: '', freq: 'Monthly' },
+      { desc: 'Packaging', amt: '', freq: 'Monthly' },
+      { desc: 'Accountant', amt: '', freq: 'Monthly' }
+    ];
+    _fixedItems = [
+      { cat: 'Office labor', amt: '', freq: 'Monthly' }, { cat: 'Utility', amt: '', freq: 'Monthly' },
+      { cat: 'Rental', amt: '', freq: 'Monthly' }, { cat: 'IT/Software', amt: '', freq: 'Monthly' },
+      { cat: 'Maintenance', amt: '', freq: 'Monthly' }, { cat: 'Insurance', amt: '', freq: 'Monthly' },
+      { cat: 'Marketing', amt: '', freq: 'Monthly' }, { cat: 'Services', amt: '', freq: 'Monthly' }
+    ];
+    _assetItems = [];
+    _fundItems = [{ src: 'Owner equity', amt: '', type: 'Equity' }, { src: 'Bank loan', amt: '', type: 'Loan' }];
+    const pSel = $('plg-project-sel');
+    const currentProject = pSel ? pSel.value : '';
+    const p = panel(); if (!p) return;
+    p.innerHTML = renderPanel();
+    const newSel = $('plg-project-sel');
+    if (newSel && currentProject) newSel.value = currentProject;
+  }
+
+  async function loadProjectModel(projectId) {
+    const p = panel(); if (!p) return;
+    try {
+      const r = await fetch(`/api/pl-generator/proj_${projectId}`, { credentials: 'same-origin' });
+      if (!r.ok) { resetForm(); return; }
+      const saved = await r.json();
+      _computed = saved.outputs || null;
+      _activePeriod = saved.period || '12mo';
+      _savedVersion = parseInt((saved.version || 'v1').replace('v', ''), 10) || 1;
+      if (saved.inputs) {
+        if (saved.inputs.var_items)   _varItems   = saved.inputs.var_items;
+        if (saved.inputs.semi_items)  _semiItems  = saved.inputs.semi_items;
+        if (saved.inputs.fixed_items) _fixedItems = saved.inputs.fixed_items;
+        if (saved.inputs.asset_items) _assetItems = saved.inputs.asset_items;
+        if (saved.inputs.fund_items)  _fundItems  = saved.inputs.fund_items;
+      }
+      const pSel = $('plg-project-sel');
+      const currentProject = pSel ? pSel.value : '';
+      p.innerHTML = renderPanel(saved.inputs);
+      const newSel = $('plg-project-sel');
+      if (newSel && currentProject) newSel.value = currentProject;
+      if (_computed && _computed.pl) renderChart(_computed, _activePeriod);
+    } catch { resetForm(); }
   }
 
   function generate(periods) {
@@ -998,7 +1043,6 @@
     p.style.overflow = 'hidden';
     p.innerHTML = renderPanel();
 
-    wireGenButtons();
     loadProjects();
 
     // Load SheetJS if not present
@@ -1011,25 +1055,31 @@
     // Sidebar resizer drag
     const rsz = p.querySelector('#plg-resizer');
     if (rsz) {
-      let _rx, _rw;
+      let dragging = false;
       const onDrag = ev => {
-        const newW = Math.min(480, Math.max(220, _rw + ev.clientX - _rx));
+        if (!dragging) return;
+        const sidebar = p.querySelector('#plg-sidebar');
+        if (!sidebar) return;
+        const panelRect = p.getBoundingClientRect();
+        const newW = Math.min(480, Math.max(220, ev.clientX - panelRect.left));
         _sidebarW = newW;
-        const sb = p.querySelector('[data-plg-sb]');
-        if (sb) { sb.style.width = newW + 'px'; sb.style.minWidth = newW + 'px'; }
+        sidebar.style.width = newW + 'px';
+        sidebar.style.minWidth = newW + 'px';
+        sidebar.style.flexShrink = '0';
       };
       rsz.addEventListener('mousedown', ev => {
-        _rx = ev.clientX; _rw = _sidebarW;
-        rsz.style.background = 'var(--yellow)';
+        dragging = true;
+        document.body.style.cursor = 'col-resize';
         document.addEventListener('mousemove', onDrag);
         document.addEventListener('mouseup', () => {
+          dragging = false;
+          document.body.style.cursor = '';
           document.removeEventListener('mousemove', onDrag);
-          rsz.style.background = 'transparent';
         }, { once: true });
         ev.preventDefault();
       });
       rsz.addEventListener('mouseover', () => { rsz.style.background = 'var(--yellow)'; });
-      rsz.addEventListener('mouseout', () => { rsz.style.background = 'transparent'; });
+      rsz.addEventListener('mouseout', () => { if (!dragging) rsz.style.background = 'transparent'; });
     }
 
     // Delegated events
@@ -1122,22 +1172,7 @@
 
       // Header buttons
       const newBtn = e.target.closest('#plg-new-btn');
-      if (newBtn) {
-        _computed = null; _savedVersion = 0; _varItems = []; _semiItems = [
-          { desc: 'Office staff', amt: '', freq: 'Monthly' }, { desc: 'Packaging', amt: '', freq: 'Monthly' }, { desc: 'Accountant', amt: '', freq: 'Monthly' }
-        ];
-        _fixedItems = [
-          { cat: 'Office labor', amt: '', freq: 'Monthly' }, { cat: 'Utility', amt: '', freq: 'Monthly' },
-          { cat: 'Rental', amt: '', freq: 'Monthly' }, { cat: 'IT/Software', amt: '', freq: 'Monthly' },
-          { cat: 'Maintenance', amt: '', freq: 'Monthly' }, { cat: 'Insurance', amt: '', freq: 'Monthly' },
-          { cat: 'Marketing', amt: '', freq: 'Monthly' }, { cat: 'Services', amt: '', freq: 'Monthly' }
-        ];
-        _assetItems = []; _fundItems = [{ src: 'Owner equity', amt: '', type: 'Equity' }, { src: 'Bank loan', amt: '', type: 'Loan' }];
-        p.innerHTML = renderPanel();
-        wireGenButtons();
-        loadProjects();
-        return;
-      }
+      if (newBtn) { resetForm(); loadProjects(); return; }
 
       const arcBtn = e.target.closest('#plg-archive-btn');
       if (arcBtn) {
@@ -1199,7 +1234,6 @@
             if (saved.inputs.fund_items) _fundItems = saved.inputs.fund_items;
           }
           p.innerHTML = renderPanel(saved.inputs);
-          wireGenButtons();
           loadProjects();
           if (_computed && _computed.pl) renderChart(_computed, _activePeriod);
         } catch { alert('Failed to load model'); }
@@ -1229,6 +1263,18 @@
     });
 
     p.addEventListener('change', (e) => {
+      // Project selector — update subtitle + auto-load KV model
+      if (e.target.id === 'plg-project-sel') {
+        const projectId = e.target.value;
+        const projectName = e.target.options[e.target.selectedIndex].text;
+        const sub = p.querySelector('#plg-subtitle');
+        if (sub) {
+          sub.textContent = projectId ? `// ${projectName}` : '// financial modelling · 12-month · 5-year';
+          sub.style.color = projectId ? 'var(--yellow)' : 'var(--text-dim)';
+        }
+        if (projectId) { loadProjectModel(projectId); } else { resetForm(); loadProjects(); }
+        return;
+      }
       // Input mode change — rebuild revenue tab
       if (e.target.id === 'plg-input-mode') {
         const si = getInputs();
@@ -1284,9 +1330,9 @@
 
   // ── Panel activation ──────────────────────────────────────────
   window.addEventListener('panelactivated', (e) => {
-    if (e.detail === 'pl-gen') init();
+    if (e.detail === 'pl-generator') init();
   });
-  if (document.getElementById('panel-pl-gen') && document.getElementById('panel-pl-gen').classList.contains('active')) {
+  if (document.getElementById('panel-pl-generator') && document.getElementById('panel-pl-generator').classList.contains('active')) {
     init();
   }
 
