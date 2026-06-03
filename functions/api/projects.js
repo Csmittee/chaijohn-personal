@@ -6,6 +6,8 @@ const PHASES     = 'ProjectPhases';
 const MILESTONES = 'ProjectMilestones';
 const TASKS      = 'ProjectTasks';
 const RESOURCES  = 'ProjectResources';
+const KV_KEY = 'projects_all_v1';
+const KV_TTL = 300; // 5 minutes
 
 function linkedId(f) { return Array.isArray(f) ? (f[0] || null) : (f || null); }
 function flat(r)     { return { id: r.id, ...r.fields }; }
@@ -30,6 +32,17 @@ export async function onRequestGet(context) {
   const { env, request } = context;
   const url    = new URL(request.url);
   const typeF  = url.searchParams.get('type');
+  const refresh = url.searchParams.get('refresh') === '1';
+
+  // Cache only unfiltered full list
+  const canCache = !typeF;
+
+  if (canCache && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   try {
     let filter;
@@ -60,11 +73,6 @@ export async function onRequestGet(context) {
       const pendingTasks = ptasks.filter(t => t.status === 'Open' || t.status === 'In progress').length;
       const investmentTotal = presoures.reduce((s, r) => s + Number(r.cost || 0), 0);
 
-      // Days to launch: latest finish_by among LA phase tasks
-      const laTasks  = ptasks.filter(t => {
-        const pc = linkedId(t.phase_id);
-        return t.phase_code === 'LA' || (t.phase_code == null);
-      });
       const laFuture = ptasks.filter(t => t.finish_by && t.finish_by >= today && t.status !== 'Done');
       const latestLA = laFuture.length ? laFuture.sort((a,b)=>b.finish_by.localeCompare(a.finish_by))[0].finish_by : null;
       const daysToLaunch = latestLA
@@ -73,6 +81,10 @@ export async function onRequestGet(context) {
 
       return { ...p, total_tasks: totalTasks, delayed_tasks: delayedTasks, pending_tasks: pendingTasks, investment_total: investmentTotal, days_to_launch: daysToLaunch };
     });
+
+    if (canCache && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(enriched), { expirationTtl: KV_TTL }).catch(() => {});
+    }
 
     return jsonResponse({ records: enriched });
   } catch (err) {
@@ -89,14 +101,13 @@ export async function onRequestPost(context) {
   const { name } = body;
   if (!name) return errorResponse('name is required');
 
-  // Dedup: reject if project with same name already exists (case-insensitive)
   try {
     const nameFilter = `LOWER({name})=LOWER("${name.replace(/"/g, '\\"')}")`;
     const existing = await listAllRecords(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, { filterByFormula: nameFilter });
     if (existing.records.length > 0) {
       return jsonResponse({ error: 'A project with this name already exists', existing_id: existing.records[0].id }, 409);
     }
-  } catch { /* non-fatal — proceed with create if dedup check fails */ }
+  } catch { /* non-fatal */ }
 
   const fields = {
     name,
@@ -127,7 +138,6 @@ export async function onRequestPost(context) {
   const pid = project.id;
   const warnings = [];
 
-  // Auto-create 5 phases — wrapped individually; missing table must not block
   const phaseMap = {};
   try {
     for (const ph of PHASE_DEFS) {
@@ -145,7 +155,6 @@ export async function onRequestPost(context) {
     warnings.push('phases — run POST /api/setup/schema-projects to create ProjectPhases table');
   }
 
-  // Auto-create 4 exit milestones
   try {
     for (const md of MILESTONE_DEFS) {
       await createRecord(env.AIRTABLE_API_KEY, BASE_ID, MILESTONES, {
@@ -161,7 +170,6 @@ export async function onRequestPost(context) {
     warnings.push('milestones');
   }
 
-  // Seed tasks if provided
   if (Array.isArray(body.tasks) && body.tasks.length > 0) {
     try {
       for (const t of body.tasks) {
@@ -183,7 +191,6 @@ export async function onRequestPost(context) {
     }
   }
 
-  // Seed resources if provided
   if (Array.isArray(body.resources) && body.resources.length > 0) {
     try {
       for (const r of body.resources) {
@@ -201,6 +208,8 @@ export async function onRequestPost(context) {
       warnings.push('resources');
     }
   }
+
+  if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
 
   return jsonResponse({
     record: { id: pid, ...project.fields },

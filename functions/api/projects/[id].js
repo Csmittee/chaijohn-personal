@@ -1,5 +1,7 @@
 import { listRecords, listAllRecords, getRecord, updateRecord, jsonResponse, errorResponse } from '../../_airtable.js';
 
+const KV_KEY = 'projects_all_v1';
+
 async function ensureCheckboxFields(apiKey, baseId, tableNameToFind, fieldNames) {
   try {
     const metaRes = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
@@ -120,6 +122,7 @@ export async function onRequestPatch(context) {
       if (!existing.fields.finance_opened) finance_ready = true;
     }
 
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record: result, finance_ready });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -132,6 +135,7 @@ export async function onRequestDelete(context) {
   const id = params.id;
   try {
     await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, PROJECTS, id, { type: 'Draft' });
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ ok: true, id, type: 'Draft' });
   } catch (err) {
     return errorResponse(err.message, 500);
