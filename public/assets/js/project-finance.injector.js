@@ -87,10 +87,13 @@
       const revMo  = Number(p.target_revenue_monthly || 0);
       const inv    = Number(p.investment_total || 0);
       const netMo  = revMo * (1 - sga);
-      return netMo > 0 ? inv / (netMo * 12) : null;
+      return netMo > 0 ? inv / netMo : null; // months
     }).filter(v => v !== null);
-    const avgPayback = paybackVals.length
-      ? (paybackVals.reduce((s, v) => s + v, 0) / paybackVals.length).toFixed(1)
+    const avgPaybackMonths = paybackVals.length
+      ? paybackVals.reduce((s, v) => s + v, 0) / paybackVals.length
+      : null;
+    const avgPayback = avgPaybackMonths !== null
+      ? (avgPaybackMonths < 12 ? Math.round(avgPaybackMonths) + ' mo' : (avgPaybackMonths / 12).toFixed(1) + ' yr')
       : null;
 
     panel.innerHTML = `
@@ -100,7 +103,7 @@
           ${bubbleHtml('Pipeline', pipelineCount, 'projects')}
           ${bubbleHtml('Total CAPEX', fmt(totalCapex), '')}
           ${bubbleHtml('Monthly Rev (Active)', fmt(totalRevMonthly), '')}
-          ${bubbleHtml('Avg Payback', avgPayback !== null ? avgPayback + ' yr' : '—', '')}
+          ${bubbleHtml('Avg Payback', avgPayback !== null ? avgPayback : '—', '')}
         </div>
         <div id="pf-body" style="flex:1;overflow-y:auto;padding:0.75rem 1rem">
           ${allProjects.map(p => boundaryCardHtml(p)).join('')}
@@ -124,7 +127,8 @@
     const revMo     = Number(p.target_revenue_monthly || 0);
     const inv       = Number(p.investment_total || 0);
     const netMo     = revMo * (1 - sga);
-    const payback   = netMo > 0 ? (inv / (netMo * 12)).toFixed(1) : null;
+    const paybackMo = netMo > 0 ? inv / netMo : null;
+    const payback   = paybackMo !== null ? (paybackMo < 12 ? Math.round(paybackMo) + ' mo' : (paybackMo / 12).toFixed(1) + ' yr') : null;
     const presales  = presaleByProject[p.id] || [];
     const presaleTotal = presales.reduce((s, t) => s + Number(t.amount || 0), 0);
     const phaseColor = PHASE_COLORS[p.current_phase] || '#94a3b8';
@@ -146,7 +150,7 @@
                 border-radius:20px;background:#22c55e22;color:#22c55e">Active</span>` : ''}
             </div>
             <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.2rem">
-              P&amp;L: ${fmt(revMo)}/mo · ${payback !== null ? payback + ' yr payback' : 'no revenue set'}
+              P&amp;L: ${fmt(revMo)}/mo · ${payback !== null ? payback + ' payback' : 'no revenue set'}
             </div>
             ${inv > 0 ? fundingBarHtml(p) : ''}
             ${presaleTotal > 0 ? `<div style="font-size:0.75rem;color:#22c55e;margin-top:0.2rem">
