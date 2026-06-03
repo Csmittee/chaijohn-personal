@@ -1,5 +1,7 @@
 import { listAllRecords, createRecord, jsonResponse, errorResponse } from '../_airtable.js';
 
+const PROJECTS_KV_KEY = 'projects_all_v1';
+
 const BASE_ID    = 'apphBGWfSPL45oSFd';
 const TASKS      = 'ProjectTasks';
 const PHASES     = 'ProjectPhases';
@@ -64,6 +66,7 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TASKS, fields);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(PROJECTS_KV_KEY).catch(() => {});
     return jsonResponse({ record: flat(record) }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);

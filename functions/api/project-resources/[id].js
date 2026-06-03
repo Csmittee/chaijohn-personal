@@ -2,6 +2,7 @@ import { updateRecord, deleteRecord, jsonResponse, errorResponse } from '../../_
 
 const BASE_ID   = 'apphBGWfSPL45oSFd';
 const RESOURCES = 'ProjectResources';
+const PROJECTS_KV_KEY = 'projects_all_v1';
 
 export async function onRequestPatch(context) {
   const { env, params, request } = context;
@@ -24,6 +25,7 @@ export async function onRequestDelete(context) {
   const id = params.id;
   try {
     await deleteRecord(env.AIRTABLE_API_KEY, BASE_ID, RESOURCES, id);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(PROJECTS_KV_KEY).catch(() => {});
     return jsonResponse({ ok: true, id });
   } catch (err) {
     return errorResponse(err.message, 500);

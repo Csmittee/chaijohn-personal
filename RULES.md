@@ -254,6 +254,27 @@ L129  Focus view event delegation: ALL click handlers (collapse, filter) must us
       Bound once via zone._focusBound flag. Status select uses change event delegation on same zone.
       _resCollapsed module var tracks resource section collapse state across renders.
 
+L130  KV cache strategy — all heavy GET endpoints use KV-first pattern (assets.js as reference).
+      TTLs: categories=3600s, liabilities=1800s, budgets=600s, projects=300s, transactions=300s.
+      sales.js caches biz data only (sales_biz_v1, 600s, default view period=6m only).
+      All support ?refresh=1 bypass. All invalidate on write (POST/PATCH/DELETE).
+      transactions.js reads budgets+categories from KV first — reduces tx GET from 3 Airtable
+      calls to 1 on warm cache.
+      transactions.js cache condition: unfiltered requests only (no type/source/project/category).
+
+L131  KV key naming convention:
+      Static lists : {table}_all_v1          (e.g. categories_all_v1, budgets_all_v1)
+      Period-scoped: tx:{period}:{bust}       (e.g. tx:2026-06-01:14)
+      Bust counter : tx:bust                  (integer, TTL 24hr)
+      Biz data     : sales_biz_v1
+      P&L models   : pl-generator:{id}
+
+L132  KV free tier write budget: 1,000/day.
+      Guardrails: no list+delete patterns; task ticks (project-tasks/[id].js) do NOT invalidate
+      projects cache; sales caches biz layer only; all puts/deletes wrapped in .catch(()=>{}).
+      budgets_all_v1 cached only on all=true (full unfiltered list — what transactions enrichment needs).
+      Estimated Airtable reduction: ~80% on warm cache during a typical session.
+
 L121  P&L Generator (M4.4) is now LIVE. Nav placement: Tools section only (not Finance).
       Panel ID: panel-pl-gen. Injector: pl-generator.injector.js (standalone IIFE).
       Storage: CHAIJOHN_KV with prefix pl-generator:{id}. No Airtable reads or writes.

@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — feat/pl-generator complete — M4.4 P&L Generator: full UI, computation engine, archive view, PDF/ODS export, CHAIJOHN_KV storage, RULES L121–L127
+> Last updated: 2026-06-03 — optim/kv-cache complete — KV cache layer on all heavy GETs, ~80% Airtable call reduction on warm cache, RULES L130–L132
 
 ---
 
@@ -125,6 +125,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix batch8 | M3.4 focus view task table+filter+collapse, phase auto-exit dates, M2.4 payback months, AI generate tasks JSON+add button, 4.4 P&L Generator placeholder, RULES L116–L120 | ✅ COMPLETE |
 | Fix batch9 | AI non-stream inquiry mode, focus view event delegation (no API call on collapse/filter), P&L nav moved to Tools, RULES L128–L129 | ✅ COMPLETE |
 | feat/pl-generator | M4.4 P&L Generator: full build (UI, computePL engine, archive, PDF/ODS export, KV storage), RULES L121–L127 | ✅ COMPLETE |
+| optim/kv-cache | KV cache on all heavy GETs (categories/budgets/liabilities/transactions/projects/sales), bust counter for tx, ~80% Airtable reduction, RULES L130–L132 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |

@@ -97,12 +97,16 @@ async function resolveBusEarnCategory(apiKey, busId, busName) {
   } catch { return null; }
 }
 
+const BIZ_KV_KEY = 'sales_biz_v1';
+const BIZ_KV_TTL = 600; // 10 minutes
+
 // ── GET /api/sales ────────────────────────────────────────────────────────────
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url      = new URL(request.url);
   const period   = url.searchParams.get('period') || '6m';
   const busFilter = url.searchParams.get('bus_id') || 'all';
+  const refresh  = url.searchParams.get('refresh') === '1';
   const today    = todayStr();
   const startDate = periodStart(period);
   const bizBaseId = env.AIRTABLE_BUSINESS_BASE_ID;
@@ -124,7 +128,19 @@ export async function onRequestGet(context) {
     })
   ];
 
-  const bizPromises = bizBaseId ? [
+  // Cache biz data only for default view (period=6m, busFilter=all) — parameterised views fall through
+  const canCacheBiz = bizBaseId && period === '6m' && busFilter === 'all';
+
+  let bizCached = null;
+  if (canCacheBiz && !refresh && env.CHAIJOHN_KV) {
+    bizCached = await env.CHAIJOHN_KV.get(BIZ_KV_KEY, { type: 'json' }).catch(() => null);
+  }
+
+  const bizPromises = bizCached ? [
+    Promise.resolve({ records: bizCached.bizIds }),
+    Promise.resolve({ records: bizCached.saleRecords }),
+    Promise.resolve({ records: bizCached.products })
+  ] : bizBaseId ? [
     listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Business ID', {
       filterByFormula: `{Status}='Active'`,
       sort: [{ field: 'Business Name', direction: 'asc' }]
@@ -133,7 +149,7 @@ export async function onRequestGet(context) {
       filterByFormula: busFilter !== 'all'
         ? `AND(NOT(IS_BEFORE({Sale date},'${startDate}')),{business_id}='${busFilter}')`
         : `NOT(IS_BEFORE({Sale date},'${startDate}'))`,
-    sort: [{ field: 'Sale date', direction: 'desc' }]
+      sort: [{ field: 'Sale date', direction: 'desc' }]
     }),
     listAllBizRecords(env.AIRTABLE_API_KEY, bizBaseId, 'Products', { maxRecords: 500 })
   ] : [
@@ -155,6 +171,14 @@ export async function onRequestGet(context) {
 
   try {
     [bizIdsRes, saleRecordsRes, productsRes] = await Promise.all(bizPromises);
+    // Write biz data to KV on first load (when not from cache)
+    if (canCacheBiz && !bizCached && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(BIZ_KV_KEY, JSON.stringify({
+        bizIds: bizIdsRes.records,
+        saleRecords: saleRecordsRes.records,
+        products: productsRes.records
+      }), { expirationTtl: BIZ_KV_TTL }).catch(() => {});
+    }
   } catch(err) {
     bizUnavailable = true;
     bizError = err.message;
@@ -414,6 +438,7 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, CORE_BASE, TRANSACTIONS, fields);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(BIZ_KV_KEY).catch(() => {});
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
