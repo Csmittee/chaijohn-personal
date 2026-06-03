@@ -25,35 +25,11 @@
   let presaleByProject = {}; // project_id → [transactions]
   let expandedId       = null;
   let initialized      = false;
-  let presaleCategoryId = null;
 
   function panelEl() { return el('panel-projects'); }
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  async function loadPresaleCategory() {
-    if (presaleCategoryId !== null) return;
-    try {
-      const data = await api('/api/categories');
-      const cats = data.records || [];
-      let cat = cats.find(c => (c.fields ? c.fields.name : c.name) === 'Pre-sale');
-      if (cat) {
-        presaleCategoryId = cat.id;
-        return;
-      }
-      // Create if missing
-      const res = await api('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Pre-sale', group: 'Bus-earn', type: 'Earn', active: true })
-      });
-      presaleCategoryId = (res.record || {}).id || null;
-    } catch (e) {
-      console.warn('Could not load Pre-sale category:', e.message);
-    }
-  }
-
   async function loadAll() {
-    await loadPresaleCategory();
 
     const [projRes, txRes] = await Promise.allSettled([
       api('/api/projects'),
@@ -352,6 +328,7 @@
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 type: 'Expense', source: 'project_funding',
+                project_id: projId,
                 amount: resCost, date: today,
                 entity: proj ? proj.name : '',
                 description: `Project funding — ${resItem}`
@@ -465,7 +442,6 @@
             amount, date, entity, note,
             description: 'Pre-sale — ' + projName
           };
-          if (presaleCategoryId) txBody.category_id = [presaleCategoryId];
           Object.keys(txBody).forEach(k => { if (txBody[k] === undefined) delete txBody[k]; });
 
           await api('/api/transactions', {
