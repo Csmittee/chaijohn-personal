@@ -226,6 +226,23 @@ L114  M2.1 cashflow list view: group by section (INCOME / EXPENSES / PROJECT FUN
 L115  M2.4 budget cards + presale record cards: max-width:220px, inline-flex, flex-wrap container.
       Multiple cards per row — same density as expense card layout. Width never full panel.
 
+L116  M3.4 focus view tasks: table layout with grid 56px|1fr|80px|110px. Phase badge in col 1.
+      Collapsible per-phase sections with _taskSectionCollapsed[projId+'_'+pc] state.
+      Filter buttons (All/DS/PT/PD/PV/LA) above tasks — _taskFilter module var, default 'all'.
+
+L117  Phase auto-exit dates: computePhaseExits(tasks) — latest finish_by per phase_code + 3 days.
+      Client-side display only in phase pills. Never write auto_date back to Airtable from injector.
+
+L118  M2.4 payback display: < 12 months → "N mo payback", >= 12 months → "N.N yr payback", null → "—".
+      Apply to both per-card payback AND avg payback strip bubble. Never show raw years when < 1yr.
+
+L119  AI "Generate tasks" prompt must request JSON array ONLY — no markdown, no explanation.
+      Parse with try/catch. Strip ```json``` fences before parsing. On success show "Add N tasks"
+      button that POSTs each task to /api/project-tasks. On parse fail fall back to pre-wrap text.
+
+L120  P&L Generator (route pl-gen, panel panel-pl-gen) is a placeholder panel in Finance nav group.
+      Show "soon" badge on nav item. Panel contains centered placeholder — no injector needed yet.
+
 ---
 
 ## QA BLOCKER FIXES (bugfix session)

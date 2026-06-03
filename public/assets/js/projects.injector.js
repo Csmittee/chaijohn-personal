@@ -33,6 +33,10 @@
   let showConn       = false;
   let initialized    = false;
 
+  // Task focus state
+  let _taskSectionCollapsed = {};
+  let _taskFilter           = 'all';
+
   // Drawer state
   let drawerMode     = null;   // null | 'create' | 'edit' | 'redclear'
   let drawerProjId   = null;
@@ -385,6 +389,19 @@
     return Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
   }
 
+  function computePhaseExits(tasks) {
+    const exits = {};
+    ['DS','PT','PD','PV','LA'].forEach(pc => {
+      const phaseTasks = tasks.filter(t => (t.phase_code || 'DS') === pc && t.finish_by);
+      if (!phaseTasks.length) return;
+      const latest = phaseTasks.reduce((max, t) => t.finish_by > max ? t.finish_by : max, '');
+      const d = new Date(latest + 'T00:00:00');
+      d.setDate(d.getDate() + 3);
+      exits[pc] = d.toISOString().split('T')[0];
+    });
+    return exits;
+  }
+
   /* ── Focus view ──────────────────────────────────────────────────────────── */
 
   async function renderFocusView(projectId) {
@@ -413,6 +430,8 @@
         if (tasksByPhase[pc]) tasksByPhase[pc].push(t);
         else tasksByPhase['DS'].push(t);
       });
+
+      const phaseExits = computePhaseExits(tasks);
 
       const inv  = resources.reduce((s,r)=>s+Number(r.cost||0),0);
       const revMo= Number(p.target_revenue_monthly||0);
@@ -444,7 +463,7 @@
               const clr = PHASE_COLORS[pc];
               return `<div style="padding:0.2rem 0.65rem;border-radius:20px;font-size:0.72rem;font-weight:600;
                 border:1.5px solid ${clr};background:${done?clr:cur?clr+'33':'transparent'};color:${done||cur?'#fff':clr}">
-                ${pc} — ${PHASE_NAMES[pc]}${done?' ✓':''}
+                ${pc} — ${PHASE_NAMES[pc]}${done?' ✓':''}${phaseExits[pc] ? `<span style="font-size:0.62rem;opacity:0.8;font-weight:400"> · ${fmtDate(phaseExits[pc])}</span>` : ''}
               </div>`;
             }).join('')}
           </div>
@@ -460,31 +479,55 @@
           </div>` : ''}
           <!-- Tasks by phase -->
           <div style="margin-bottom:0.75rem">
-            <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);margin-bottom:0.4rem;letter-spacing:0.04em">TASKS</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;flex-wrap:wrap;gap:0.3rem">
+              <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);letter-spacing:0.04em">TASKS</div>
+              <div style="display:flex;gap:0.25rem;flex-wrap:wrap" id="proj-task-filter-btns">
+                ${['all',...phaseOrder].map(f=>`<button class="proj-tf-btn" data-filter="${f}"
+                  style="font-size:0.62rem;padding:0.12rem 0.4rem;border-radius:3px;cursor:pointer;
+                  border:1px solid ${f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'};
+                  background:${_taskFilter===f?(f==='all'?'var(--border)':PHASE_COLORS[f]||'var(--border)'):'transparent'};
+                  color:${_taskFilter===f?'#fff':(f==='all'?'var(--text-dim)':PHASE_COLORS[f]||'var(--text-dim)')}">
+                  ${f==='all'?'All':f}</button>`).join('')}
+              </div>
+            </div>
             ${phaseOrder.map(pc=>{
-              const ts = tasksByPhase[pc];
+              const ts = (_taskFilter === 'all' || _taskFilter === pc) ? tasksByPhase[pc] : [];
               if (!ts.length) return '';
-              return `<div style="margin-bottom:0.5rem">
-                <div style="font-size:0.7rem;font-weight:700;color:${PHASE_COLORS[pc]};margin-bottom:0.25rem">${pc} — ${PHASE_NAMES[pc]}</div>
-                ${ts.map(t=>{
-                  const overdue = t.finish_by && t.finish_by < todayStr() && t.status !== 'Done';
-                  const borderClr = t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':PHASE_COLORS[pc];
-                  return `<div class="proj-task-row" data-taskid="${t.id}" data-projid="${projectId}"
-                    style="display:flex;align-items:center;gap:0.35rem;padding:0.3rem 0.5rem 0.3rem 0;
-                    border-left:4px solid ${borderClr};
-                    border-bottom:1px solid var(--border);padding-left:0.4rem;
-                    ${overdue?'background:rgba(239,68,68,0.04)':''}">
-                    <div style="flex:1;min-width:0" title="${t.measure?esc(t.measure):''}">
-                      <div style="font-size:0.78rem;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</div>
-                    </div>
-                    <div style="width:90px;flex-shrink:0;font-size:0.7rem;color:var(--text-dim);text-align:right;white-space:nowrap">${fmtDate(t.finish_by)}</div>
-                    <div style="width:70px;flex-shrink:0;font-size:0.7rem;color:var(--text-dim);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.assigned_to||'Me'}</div>
-                    <select class="proj-status-sel" data-taskid="${t.id}" data-projid="${projectId}"
-                      style="width:90px;flex-shrink:0;font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:3px;color:var(--text)">
-                      ${['Open','In progress','Done','Delayed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
-                    </select>
-                  </div>`;
-                }).join('')}
+              const collapsed = _taskSectionCollapsed[projectId + '_' + pc];
+              const clr = PHASE_COLORS[pc];
+              const doneCount = ts.filter(t=>t.status==='Done').length;
+              return `<div style="margin-bottom:0.35rem">
+                <div class="proj-sec-hdr" data-projid="${projectId}" data-phase="${pc}"
+                  style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0.4rem;
+                  background:${clr}11;border-left:3px solid ${clr};border-radius:0 3px 3px 0;
+                  cursor:pointer;user-select:none;margin-bottom:0.15rem">
+                  <span style="font-size:0.65rem;color:${clr}">${collapsed?'▶':'▼'}</span>
+                  <span style="font-size:0.72rem;font-weight:700;color:${clr}">${pc} — ${PHASE_NAMES[pc]}</span>
+                  <span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto">${doneCount}/${ts.length} done</span>
+                </div>
+                ${collapsed ? '' : `<div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+                  <colgroup><col style="width:56px"><col><col style="width:80px"><col style="width:110px"></colgroup>
+                  <tbody>${ts.map(t=>{
+                    const overdue = t.finish_by && t.finish_by < todayStr() && t.status !== 'Done';
+                    const statusClr = t.status==='Done'?'#22c55e':t.status==='Delayed'?'#ef4444':t.status==='In progress'?'#3b82f6':'var(--text-dim)';
+                    return `<tr class="proj-task-row" data-taskid="${t.id}" data-projid="${projectId}"
+                      style="border-bottom:1px solid var(--border);${overdue?'background:rgba(239,68,68,0.04)':''}">
+                      <td style="padding:0.2rem 0.35rem 0.2rem 0">${phaseBadge(pc)}</td>
+                      <td style="padding:0.2rem 0.35rem;min-width:0" title="${t.measure?esc(t.measure):''}">
+                        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.status==='Done'?'text-decoration:line-through;opacity:0.55':''}">${esc(t.title)}</div>
+                        ${t.assigned_to && t.assigned_to !== 'Me' ? `<div style="font-size:0.65rem;color:var(--text-dim)">${esc(t.assigned_to)}</div>` : ''}
+                      </td>
+                      <td style="padding:0.2rem 0.35rem;white-space:nowrap;font-size:0.68rem;color:var(--text-dim);text-align:right">${fmtDate(t.finish_by)}</td>
+                      <td style="padding:0.2rem 0.35rem 0.2rem 0">
+                        <select class="proj-status-sel" data-taskid="${t.id}" data-projid="${projectId}"
+                          style="width:100%;font-size:0.68rem;padding:0.15rem 0.3rem;background:var(--bg-page);border:1px solid ${statusClr}44;border-radius:3px;color:${statusClr}">
+                          ${['Open','In progress','Done','Delayed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s}</option>`).join('')}
+                        </select>
+                      </td>
+                    </tr>`;
+                  }).join('')}</tbody>
+                </table></div>`}
               </div>`;
             }).filter(Boolean).join('')}
             <button id="proj-add-task-btn" data-projid="${projectId}"
@@ -543,6 +586,23 @@
         </div>`;
 
       document.getElementById('proj-back-btn')?.addEventListener('click', () => { selectedId = null; renderAll(); });
+
+      // Task filter buttons
+      zone.querySelectorAll('.proj-tf-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          _taskFilter = btn.dataset.filter;
+          renderFocusView(projectId);
+        });
+      });
+
+      // Task section collapse toggles
+      zone.querySelectorAll('.proj-sec-hdr').forEach(hdr => {
+        hdr.addEventListener('click', () => {
+          const key = hdr.dataset.projid + '_' + hdr.dataset.phase;
+          _taskSectionCollapsed[key] = !_taskSectionCollapsed[key];
+          renderFocusView(projectId);
+        });
+      });
       document.getElementById('proj-focus-edit')?.addEventListener('click', () => openDrawer('edit', projectId));
       document.getElementById('proj-focus-finance')?.addEventListener('click', async () => {
         try {
@@ -1200,7 +1260,7 @@
 
     const prompts = {
       feasibility: `You are a business advisor. Assess the feasibility of this project:\nName: ${drawerData.name}\nIdea: ${drawerData.idea}\nCustomer: ${drawerData.customer_group}\nProblem: ${drawerData.problem_solved}\nAnswer in 3-5 bullet points.`,
-      tasks:       `Generate a task list for launching this project:\nName: ${drawerData.name}\nIdea: ${drawerData.idea}\nPhases: DS (Design), PT (Prototyping), PD (Process dev), PV (Product develop), LA (Launch)\nList 3-5 tasks per phase. Format: Phase: task title | measure`,
+      tasks:       `Generate a task list for launching this project as a JSON array only. No explanation, no markdown, just the JSON array.\nName: ${drawerData.name}\nIdea: ${drawerData.idea}\nPhases: DS (Design), PT (Prototyping), PD (Process dev), PV (Product develop), LA (Launch)\nReturn 3-5 tasks per phase as a JSON array of objects with fields: title (string), phase_code (DS/PT/PD/PV/LA), measure (string, how you know it's done). Example: [{"title":"...","phase_code":"DS","measure":"..."}]`,
       extend:      `Extend and improve this business idea:\nName: ${drawerData.name}\nIdea: ${drawerData.idea}\nCustomer: ${drawerData.customer_group}\nSuggest 3 extensions or pivot angles.`
     };
 
@@ -1209,8 +1269,54 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: prompts[type] }], session_id: 'project-ai-' + Date.now() })
       });
-      resultEl.style.whiteSpace = 'pre-wrap';
-      resultEl.textContent = res.reply || res.message || 'No response';
+      const reply = res.reply || res.message || '';
+
+      if (type === 'tasks') {
+        let parsed = null;
+        try {
+          const jsonStr = reply.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').replace(/^```\s*/,'');
+          parsed = JSON.parse(jsonStr);
+        } catch (_) {}
+
+        if (parsed && Array.isArray(parsed) && parsed.length) {
+          resultEl.innerHTML = `<div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.4rem">${parsed.length} tasks generated:</div>
+            ${parsed.map(t=>`<div style="padding:0.2rem 0;border-bottom:1px solid var(--border);font-size:0.75rem">
+              <span style="font-size:0.62rem;font-weight:700;color:${PHASE_COLORS[t.phase_code]||'var(--text-dim)'};margin-right:0.3rem">${esc(t.phase_code||'?')}</span>
+              ${esc(t.title)}
+              ${t.measure?`<div style="font-size:0.65rem;color:var(--text-dim)">${esc(t.measure)}</div>`:''}
+            </div>`).join('')}
+            <button id="pd-ai-add-tasks" style="margin-top:0.5rem;font-size:0.75rem;padding:0.3rem 0.75rem;background:var(--yellow);color:#0a0a10;border:none;border-radius:var(--radius);cursor:pointer;font-weight:700">Add ${parsed.length} tasks</button>`;
+
+          drawer.querySelector('#pd-ai-add-tasks')?.addEventListener('click', async () => {
+            const addBtn = drawer.querySelector('#pd-ai-add-tasks');
+            if (addBtn) addBtn.disabled = true;
+            const projectId = drawerProjId;
+            if (!projectId) {
+              resultEl.insertAdjacentHTML('beforeend', '<div style="color:#ef4444;font-size:0.75rem;margin-top:0.3rem">Save the project first before adding tasks.</div>');
+              if (addBtn) addBtn.disabled = false;
+              return;
+            }
+            let added = 0;
+            for (const t of parsed) {
+              try {
+                await api('/api/project-tasks', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ project_id: projectId, title: t.title, phase_code: t.phase_code || 'DS', measure: t.measure || '', assigned_to: 'Me' })
+                });
+                added++;
+              } catch (_) {}
+            }
+            resultEl.insertAdjacentHTML('beforeend', `<div style="color:#22c55e;font-size:0.75rem;margin-top:0.3rem">✓ ${added} tasks added</div>`);
+            if (addBtn) { addBtn.disabled = true; addBtn.textContent = `✓ Added ${added}`; }
+          });
+        } else {
+          resultEl.style.whiteSpace = 'pre-wrap';
+          resultEl.textContent = reply || 'No response';
+        }
+      } else {
+        resultEl.style.whiteSpace = 'pre-wrap';
+        resultEl.textContent = reply || 'No response';
+      }
     } catch (err) {
       resultEl.textContent = 'AI error: ' + err.message;
     }
