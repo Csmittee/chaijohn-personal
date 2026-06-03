@@ -2,6 +2,8 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Budgets';
+const KV_KEY = 'budgets_all_v1';
+const KV_TTL = 600; // 10 minutes
 
 function linkedId(field) {
   if (!field) return null;
@@ -36,6 +38,17 @@ export async function onRequestGet(context) {
   const all         = url.searchParams.get('all')          === 'true';
   const activeOnly  = url.searchParams.get('active_only')  === 'true';
   const expenseOnly = url.searchParams.get('expense_only') === 'true';
+  const refresh     = url.searchParams.get('refresh') === '1';
+
+  // Cache the full unfiltered list (all=true, no expense_only)
+  const canCache = all && !expenseOnly;
+
+  if (canCache && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   let filterByFormula;
   if (all) {
@@ -54,12 +67,14 @@ export async function onRequestGet(context) {
       maxRecords: 500
     });
 
-    // G2: enrich with category_name, category_group, category_type
     let records = await enrichWithCategories(env.AIRTABLE_API_KEY, data.records);
 
-    // G2: filter to expense categories only when requested
     if (expenseOnly) {
       records = records.filter(r => r.fields.category_type === 'Expense');
+    }
+
+    if (canCache && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(records), { expirationTtl: KV_TTL }).catch(() => {});
     }
 
     return jsonResponse({ records });
@@ -85,7 +100,6 @@ export async function onRequestPost(context) {
     ? (Array.isArray(body.category_id) ? body.category_id[0] : body.category_id)
     : null;
 
-  // G5: check for duplicate label + same category
   if (catId) {
     try {
       const existing = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
@@ -101,7 +115,7 @@ export async function onRequestPost(context) {
       if (duplicate) {
         return errorResponse('Budget label already exists for this item with the same period');
       }
-    } catch { /* non-fatal — allow creation if check fails */ }
+    } catch { /* non-fatal */ }
   }
 
   const fields = {
@@ -117,6 +131,7 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);

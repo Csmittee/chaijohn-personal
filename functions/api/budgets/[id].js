@@ -2,6 +2,7 @@ import { updateRecord, deleteRecord, jsonResponse, errorResponse } from '../_air
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Budgets';
+const KV_KEY = 'budgets_all_v1';
 
 export async function onRequestPatch(context) {
   const { env, request, params } = context;
@@ -37,6 +38,7 @@ export async function onRequestPatch(context) {
 
   try {
     const record = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, recordId, fields);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -51,6 +53,7 @@ export async function onRequestDelete(context) {
 
   try {
     const result = await deleteRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, recordId);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ deleted: true, id: result.id });
   } catch (err) {
     return errorResponse(err.message, 500);
