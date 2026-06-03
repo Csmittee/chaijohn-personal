@@ -322,7 +322,7 @@
     // Projects section — always visible, shows presale transactions per project
     html += sectionHeader('PROJECTS (presales)', 'sales-sec-proj');
     html += `<div id="sales-sec-proj-body" style="padding:0.5rem 0">`;
-    const projectsWithPresales = projects.filter(p => (presalesByProject[p.id] || []).length > 0);
+    const projectsWithPresales = projects.filter(p => (presalesByProject[p.project_id] || []).length > 0);
     if (projectsWithPresales.length === 0) {
       html += `<div style="padding:0.5rem 0;font-size:0.78rem;color:var(--text-dim)">No presale bookings yet.<br><span style="font-size:0.72rem">Add from M2.4 Finance Projects → expanded project → + Add presale</span></div>`;
     } else {
@@ -497,7 +497,7 @@
   function projectLaneCard(p) {
     const PHASE_C = { DS:'#3b82f6', PT:'#8b5cf6', PD:'#06b6d4', PV:'#f59e0b', LA:'#22c55e' };
     const phColor = PHASE_C[p.current_phase] || '#666';
-    const presales = presalesByProject[p.id] || [];
+    const presales = presalesByProject[p.project_id] || [];
     const presaleTotal = presales.reduce((s, t) => s + Number(t.amount || 0), 0);
 
     const rows = presales.length
