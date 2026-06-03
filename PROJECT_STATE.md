@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — Batch 9 complete — AI non-stream mode for inquiry, focus view event delegation (no API call on collapse/filter), P&L Generator nav moved to Tools, RULES L128–L129
+> Last updated: 2026-06-03 — feat/pl-generator complete — M4.4 P&L Generator: full UI, computation engine, archive view, PDF/ODS export, CHAIJOHN_KV storage, RULES L121–L127
 
 ---
 
@@ -124,6 +124,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix batch7 | M2.2 asset dedup (Transactions only), summary strip presale+asset totals, Projects lane compact cards, list sub-headers, M2.1 cashflow list grouped sections, M2.4 compact budget+presale cards, RULES L110–L115 | ✅ COMPLETE |
 | Fix batch8 | M3.4 focus view task table+filter+collapse, phase auto-exit dates, M2.4 payback months, AI generate tasks JSON+add button, 4.4 P&L Generator placeholder, RULES L116–L120 | ✅ COMPLETE |
 | Fix batch9 | AI non-stream inquiry mode, focus view event delegation (no API call on collapse/filter), P&L nav moved to Tools, RULES L128–L129 | ✅ COMPLETE |
+| feat/pl-generator | M4.4 P&L Generator: full build (UI, computePL engine, archive, PDF/ODS export, KV storage), RULES L121–L127 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
@@ -267,6 +268,7 @@ Every CC session must preserve:
             ├── diary.injector.js         ✅
             ├── collection.injector.js    ✅
             ├── ai.injector.js            ✅
+            ├── pl-generator.injector.js  ✅ M4.4 — P&L Generator (standalone, CHAIJOHN_KV, computePL engine)
             └── dashboard.injector.js     ✅ retired from shell, kept for reference
 functions/
 ├── _middleware.js                        ✅
@@ -298,7 +300,9 @@ functions/
     ├── project-resources/[id].js        ✅ 9C — PATCH + DELETE
     ├── sales.js                          ✅ 9D — GET unified aggregator (biz+projects+personal) + POST manual entry
     ├── hard-assets.js                    ✅ P2 — GET list + POST create (HardAssets table)
-    └── hard-assets/[id].js               ✅ P2 — GET detail + PATCH + DELETE (soft → status=Disposed)
+    ├── hard-assets/[id].js               ✅ P2 — GET detail + PATCH + DELETE (soft → status=Disposed)
+    ├── pl-generator.js                   ✅ M4.4 — GET list (KV prefix pl-generator:) + POST save
+    └── pl-generator/[id].js              ✅ M4.4 — GET single version + DELETE
 ```
 
 ---
