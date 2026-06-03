@@ -205,6 +205,8 @@ One verification pass prevents 5 debug cycles.
 
 L071  Airtable primary field rule: the FIRST field in any new table definition MUST be type singleLineText. singleSelect, number, date, and checkbox are all rejected as primary field types. Always start every table definition with { name: 'name', type: 'singleLineText' }.
 
+L110: category_id field permanently deleted from Transactions table on 2026-06-03.
+      Never recreate it. Transaction model uses type + source + budget_id + project_id only.
 ---
 
 ## QA BLOCKER FIXES (bugfix session)
