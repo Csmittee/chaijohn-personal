@@ -48,8 +48,9 @@
     dueInDays:  null
   };
 
-  let cfChart     = null;
-  let initialized = false;
+  let cfChart          = null;
+  let initialized      = false;
+  let _cfListCollapsed = {}; // { income: bool, expense: bool, project_funding: bool }
 
   /* ── Budget helpers ──────────────────────────────────────────────────────── */
 
@@ -1086,24 +1087,71 @@
   /* ── List view ───────────────────────────────────────────────────────────── */
 
   function renderListView(zone) {
-    const rows = [...CF.transactions].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 80);
-    if (!rows.length) {
+    if (!CF.transactions.length) {
       zone.style.cssText = '';
       zone.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;padding:0.75rem 0">No transactions</p>';
       return;
     }
     zone.style.cssText = '';
-    zone.innerHTML = rows.map(t => {
+
+    const sorted = [...CF.transactions].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 80);
+
+    const incomeRows   = sorted.filter(t => t.type === 'Income');
+    const fundingRows  = sorted.filter(t => t.type === 'Expense' && t.source === 'project_funding');
+    const expenseRows  = sorted.filter(t => t.type === 'Expense' && t.source !== 'project_funding');
+
+    function txRow(t) {
       const isIn  = t.type === 'Income';
       const label = t.budget_label || t.category_name || t.entity || t.description || '—';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.75rem;border-bottom:1px solid var(--border)">
         <div style="min-width:0;flex:1;margin-right:0.5rem">
           <span style="font-size:0.75rem;font-weight:600;color:var(--text)">${esc(label)}</span>
-          <span style="font-size:0.66rem;color:var(--text-dim);margin-left:0.3rem">${t.date.slice(5)}${t.entity ? ' · ' + esc(t.entity) : ''}</span>
+          <span style="font-size:0.66rem;color:var(--text-dim);margin-left:0.3rem">${(t.date||'').slice(5)}${t.entity ? ' · ' + esc(t.entity) : ''}</span>
         </div>
         <div style="font-size:0.78rem;font-weight:700;white-space:nowrap;color:${isIn?'var(--green)':'var(--red)'}">${isIn?'+':'-'}${fmt(t.amount)}</div>
       </div>`;
-    }).join('');
+    }
+
+    function secHeader(key, label, total, color) {
+      const collapsed = !!_cfListCollapsed[key];
+      return `<div data-cf-list-sec="${key}" style="display:flex;justify-content:space-between;align-items:center;
+        padding:0.3rem 0.75rem;background:var(--bg-card);border-bottom:1px solid var(--border);
+        cursor:pointer;user-select:none">
+        <span style="font-size:0.72rem;font-weight:700;color:var(--text-dim);letter-spacing:0.04em">
+          ${label} <span style="font-size:0.65rem;opacity:0.6">${collapsed ? '▶' : '▼'}</span>
+        </span>
+        <span style="font-size:0.78rem;font-weight:700;color:${color}">${total}</span>
+      </div>`;
+    }
+
+    const totalIncome  = incomeRows.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const totalExpense = expenseRows.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const totalFunding = fundingRows.reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    let html = '';
+    html += secHeader('income', 'INCOME', fmt(totalIncome), 'var(--green)');
+    if (!_cfListCollapsed.income) html += incomeRows.map(txRow).join('');
+
+    html += secHeader('expense', 'EXPENSES', fmt(totalExpense), 'var(--red)');
+    if (!_cfListCollapsed.expense) html += expenseRows.map(txRow).join('');
+
+    if (fundingRows.length) {
+      html += secHeader('project_funding', 'PROJECT FUNDING', fmt(totalFunding), 'var(--red)');
+      if (!_cfListCollapsed.project_funding) html += fundingRows.map(txRow).join('');
+    }
+
+    zone.innerHTML = html;
+
+    if (!zone._listSectionBound) {
+      zone._listSectionBound = true;
+      zone.addEventListener('click', e => {
+        const sec = e.target.closest('[data-cf-list-sec]');
+        if (!sec) return;
+        const key = sec.dataset.cfListSec;
+        _cfListCollapsed[key] = !_cfListCollapsed[key];
+        renderListView(zone);
+      });
+    }
   }
 
   /* ── X-days due tool ─────────────────────────────────────────────────────── */
