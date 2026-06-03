@@ -205,8 +205,27 @@ One verification pass prevents 5 debug cycles.
 
 L071  Airtable primary field rule: the FIRST field in any new table definition MUST be type singleLineText. singleSelect, number, date, and checkbox are all rejected as primary field types. Always start every table definition with { name: 'name', type: 'singleLineText' }.
 
-L110: category_id field permanently deleted from Transactions table on 2026-06-03.
+L110  category_id field permanently deleted from Transactions table on 2026-06-03.
       Never recreate it. Transaction model uses type + source + budget_id + project_id only.
+
+L111  M2.2 asset_sales source of truth = Transactions table ONLY (source=collection or hard_asset_sale).
+      Never read from Collection/HardAssets table records for M2.2 display — causes duplicate cards.
+      Transactions do not store cost_price — gain is not shown in M2.2 Asset Sales (acceptable).
+
+L112  M2.2 summary strip must include: total_presale (sum of all project presale totals) and
+      total_collection + total_hard_asset (from asset_sales transactions). These fields come from
+      /api/sales response summary object. Strip bubbles: Presale Total (green) + Asset Sales (gold).
+
+L113  M2.2 Projects lane card view: each project card max-width:220px in a flex-wrap row.
+      Never let project presale cards stretch full panel width — constrain same as assetSaleCard().
+
+L114  M2.1 cashflow list view: group by section (INCOME / EXPENSES / PROJECT FUNDING) with
+      collapsible headers + section totals. Collapsed state stored in _cfListCollapsed module var.
+      Same pattern as card view sections. Default all expanded.
+
+L115  M2.4 budget cards + presale record cards: max-width:220px, inline-flex, flex-wrap container.
+      Multiple cards per row — same density as expense card layout. Width never full panel.
+
 ---
 
 ## QA BLOCKER FIXES (bugfix session)

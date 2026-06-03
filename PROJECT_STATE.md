@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — Batch 6 complete — cashflow reloads on every nav, M2.2 projects lane p.project_id fix — transaction model simplified (canonical L099–L106), patchSourceOptions removed, M2.3 filter uses budget_id presence, presale POST removes category_id, project_funding POST adds project_id
+> Last updated: 2026-06-03 — Batch 7 complete — M2.2 asset dedup (Transactions only), summary strip presale+asset totals, Projects lane compact cards, list view sub-headers, M2.1 cashflow list grouped sections, M2.4 compact budget+presale cards, RULES L110–L115
 
 ---
 
@@ -121,6 +121,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | QA batch 3 | M3.4 buttons redesign (Edit/Open Finance/Send to Sales), Open Finance hash fix + PATCH finance_opened, sendToSales bug fix, defensive field creation via Meta API, M2.4 Confirm button color fix + hash fix, M2.2 Projects lane removes forecast (shows presale only), M2.2 Personal manual earn source fix (M2.2→Manual), M3.2 Collection sell creates source=collection transaction | ✅ COMPLETE |
 | Hotfix M3.4 focus view | Fix /api/projects/:id ARRAYJOIN filter formula (returns names not IDs) — fetch project first then filter by name. Fix phase auto-create missing `name` field. Add POST /api/setup/repair-phase-names. Fix renderFocusView phaseId→phase_code lookup. Resources empty state. M2.4 budget cards unblocked as side-effect. | ✅ COMPLETE |
 | P2 sale-origins + hard assets | M3.3 Hard Assets panel (cards/add/edit/sell modal), entry expense-only + Cash In tab, inline presale in M2.4, focus view full-width task rows, lane phase segments | ✅ COMPLETE |
+| Fix batch7 | M2.2 asset dedup (Transactions only), summary strip presale+asset totals, Projects lane compact cards, list sub-headers, M2.1 cashflow list grouped sections, M2.4 compact budget+presale cards, RULES L110–L115 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
@@ -146,7 +147,11 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
 - M3.4 Projects: card/lane/focus views, tasks/resources in focus view, button set (Edit + Open Finance + Send to Sales/✓ In Sales), Open Finance PATCHes finance_opened + navigates to M2.4, Send to Sales works with defensive field creation ✅
 - M2.4 Finance Projects: project cards with CAPEX bar + presale total, expanded Budget Cards (resources) + Presale Records, Confirm button visible, View Project hash correct ✅
-- M2.2 Sales: Projects lane shows pipeline tracker only (presale total + launch date, no forecast revenue), Personal manual earn entries from Entry drawer (source=Manual), Personal Asset Sales includes collection transactions ✅
+- M2.2 Sales: Projects lane shows pipeline tracker only (presale total + launch date, no forecast revenue), Personal manual earn entries from Entry drawer (source=Manual), Personal Asset Sales from Transactions only (no duplicates) ✅
+- M2.2 Sales: Summary strip shows Presale Total + Asset Sales bubbles ✅
+- M2.2 Sales: Projects lane card view compact flex-wrap cards (max-width:220px) ✅
+- M2.1 Cashflow: list view groups by INCOME / EXPENSES / PROJECT FUNDING with collapsible headers ✅
+- M2.4 Finance Projects: budget cards + presale record cards compact inline-flex (multiple per row) ✅
 - M3.2 Collection: Sell creates Transaction with source=collection + category_id for M2.2 routing ✅
 
 **Next: CC_PROMPT_feat-sale-origins-and-hard-assets (P2 — new builds)**
