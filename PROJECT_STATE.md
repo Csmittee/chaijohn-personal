@@ -126,6 +126,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix batch9 | AI non-stream inquiry mode, focus view event delegation (no API call on collapse/filter), P&L nav moved to Tools, RULES L128–L129 | ✅ COMPLETE |
 | feat/pl-generator | M4.4 P&L Generator: full build (UI, computePL engine, archive, PDF/ODS export, KV storage), RULES L121–L127 | ✅ COMPLETE |
 | optim/kv-cache | KV cache on all heavy GETs (categories/budgets/liabilities/transactions/projects/sales), bust counter for tx, ~80% Airtable reduction, RULES L130–L132 | ✅ COMPLETE |
+| hotfix/pl-nav | Add 'pl-gen' to ROUTES array in index.html — P&L Generator nav was falling back to dashboard because route was unrecognised | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
