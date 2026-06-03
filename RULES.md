@@ -4,6 +4,19 @@
 
 ---
 
+## TRANSACTION MODEL (canonical — confirmed 2026-06-03)
+
+L099  Transaction model is the single source of truth for all money flow. Never add complexity beyond this table.
+L100  category_id on Transactions: NEVER write on new records. Read legacy records for display only. Silently ignore if sent in POST body.
+L101  POST validation rule: budget_id required ONLY when type=Expense AND source=Manual (or source absent). All other sources bypass budget requirement.
+L102  project_id on Transactions: plain text string (not array). Required for source=presale and source=project_funding.
+L103  View filters by source: Expenses M2.3 = budget_id not empty. Projects lane M2.2 = source=presale. Asset Sales = source IN (collection, hard_asset_sale). Cashflow = everything.
+L104  source field in Airtable Transactions is singleSelect. Do NOT attempt to patch options via Meta API — requires schema admin permission. Owner manages allowed values in Airtable UI.
+L105  Presale POST body: {type:Income, source:presale, project_id, amount, date, entity, description}. Nothing else.
+L106  Project funding POST body: {type:Expense, source:project_funding, project_id, amount, date, entity, description}. No budget_id, no category_id.
+
+---
+
 ## BATCH 4 FIXES — Source routing, presale transactions, M3.3 delete
 
 L098  M3.3 Hard Assets: each card must have a Delete button. Ghost records (blank name) show

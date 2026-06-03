@@ -2,50 +2,6 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'Transactions';
-const META_BASE = 'https://api.airtable.com/v0/meta/bases';
-
-// Required source values — kept in sync with all callers
-const REQUIRED_SOURCE_VALUES = [
-  'Manual', 'LiabilityPayment', 'M2.2', 'presale', 'cash_in',
-  'hard_asset_sale', 'project_funding', 'collection'
-];
-
-// Patched once per cold start so the first POST isn't blocked by 422
-let sourceFieldPatched = false;
-
-async function patchSourceOptions(apiKey) {
-  if (sourceFieldPatched) return;
-  sourceFieldPatched = true; // optimistic — don't retry on every POST even if it fails
-  try {
-    const tablesRes = await fetch(`${META_BASE}/${BASE_ID}/tables`, {
-      headers: { Authorization: `Bearer ${apiKey}` }
-    });
-    if (!tablesRes.ok) return;
-    const { tables } = await tablesRes.json();
-    const txTable = tables.find(t => t.name === TABLE);
-    if (!txTable) return;
-    const srcField = txTable.fields.find(f => f.name === 'source');
-    if (!srcField || srcField.type !== 'singleSelect') return;
-
-    const existingNames = new Set((srcField.options?.choices || []).map(c => c.name));
-    const toAdd = REQUIRED_SOURCE_VALUES.filter(v => !existingNames.has(v));
-    if (toAdd.length === 0) return;
-
-    const allChoices = [
-      ...(srcField.options?.choices || []),
-      ...toAdd.map(name => ({ name }))
-    ];
-
-    await fetch(`${META_BASE}/${BASE_ID}/tables/${txTable.id}/fields/${srcField.id}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ options: { choices: allChoices } })
-    });
-  } catch (e) {
-    // Non-fatal — the save will still be attempted
-    console.warn('patchSourceOptions failed:', e.message);
-  }
-}
 
 function linkedId(field) {
   if (!field) return null;
@@ -73,9 +29,9 @@ export async function onRequestGet(context) {
   if (source)    filters.push(`{source}='${source}'`);
   if (projectId) filters.push(`{project_id}='${projectId}'`);
 
-  // M2.3 Expense view: exclude project_funding (it hits Cashflow only, not Expense panel)
+  // M2.3 Expense view: only show budgeted expenses (budget_id present)
   if (type === 'Expense' && !source) {
-    filters.push(`NOT({source}='project_funding')`);
+    filters.push(`NOT({budget_id}='')`);
   }
 
   const filterByFormula = filters.length === 0
@@ -161,15 +117,10 @@ export async function onRequestPost(context) {
     return errorResponse('type must be Income or Expense');
   }
 
-  // Expense transactions require budget_id, except for LiabilityPayment and project_funding
-  if (type === 'Expense' && !body.budget_id
-      && body.source !== 'LiabilityPayment'
-      && body.source !== 'project_funding') {
-    return errorResponse('budget_id is required for Expense transactions');
+  // Only personal (Manual) expenses require a budget
+  if (type === 'Expense' && (!body.source || body.source === 'Manual') && !body.budget_id) {
+    return errorResponse('budget_id is required for personal expense transactions');
   }
-
-  // Ensure source singleSelect field has all required options (once per cold start)
-  await patchSourceOptions(env.AIRTABLE_API_KEY);
 
   const fields = {
     date,
@@ -184,14 +135,12 @@ export async function onRequestPost(context) {
   if (body.fixed_variable) fields.fixed_variable = body.fixed_variable;
   if (body.period)         fields.period         = body.period;
 
-  // budget_id for expense; category_id for earn/income only
+  // budget_id for personal expenses only
   if (body.budget_id) {
     fields.budget_id = Array.isArray(body.budget_id) ? body.budget_id : [body.budget_id];
   }
-  if (body.category_id && type !== 'Expense') {
-    fields.category_id = Array.isArray(body.category_id) ? body.category_id : [body.category_id];
-  }
-  if (body.project_id) fields.project_id = body.project_id;
+  // category_id: never written on new transactions (read legacy for display only)
+  if (body.project_id) fields.project_id = body.project_id; // plain string, not array
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
