@@ -2,6 +2,7 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'Transactions';
+const KV_TTL  = 300; // 5 minutes
 
 function linkedId(field) {
   if (!field) return null;
@@ -20,6 +21,24 @@ export async function onRequestGet(context) {
   const source    = params.get('source');
   const projectId = params.get('project_id');
   const limit     = parseInt(params.get('limit') || '200', 10);
+  const refresh   = params.get('refresh') === '1';
+
+  // Bust counter — read once upfront for cache key construction
+  const bust = env.CHAIJOHN_KV
+    ? ((await env.CHAIJOHN_KV.get('tx:bust', { type: 'text' }).catch(() => null)) || '0')
+    : '0';
+
+  // Cache only unfiltered date-range requests (no type/source/project/category filters)
+  const canCache = !type && !source && !projectId && !category;
+  const period   = start || 'all';
+  const KV_KEY   = `tx:${period}:${bust}`;
+
+  if (canCache && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   const filters = [];
   if (type)      filters.push(`{type}='${type}'`);
@@ -29,7 +48,6 @@ export async function onRequestGet(context) {
   if (source)    filters.push(`{source}='${source}'`);
   if (projectId) filters.push(`{project_id}='${projectId}'`);
 
-  // M2.3 Expense view: only show budgeted expenses (budget_id present)
   if (type === 'Expense' && !source) {
     filters.push(`NOT({budget_id}='')`);
   }
@@ -50,25 +68,37 @@ export async function onRequestGet(context) {
     const hasCatLinks    = records.some(r => linkedId(r.fields.category_id));
 
     if (!hasBudgetLinks && !hasCatLinks) {
+      if (canCache && env.CHAIJOHN_KV) {
+        await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(records), { expirationTtl: KV_TTL }).catch(() => {});
+      }
       return jsonResponse({ records });
     }
 
-    // Fetch budgets and categories in parallel for enrichment
+    // KV-first lookup for budgets and categories — reduces 3 Airtable calls to 1 on warm cache
+    const [budgetsCached, catsCached] = await Promise.all([
+      env.CHAIJOHN_KV?.get('budgets_all_v1', { type: 'json' }).catch(() => null) ?? null,
+      env.CHAIJOHN_KV?.get('categories_all_v1', { type: 'json' }).catch(() => null) ?? null
+    ]);
+
     const [budgetRes, catRes] = await Promise.allSettled([
-      hasBudgetLinks
+      hasBudgetLinks && !budgetsCached
         ? listRecords(env.AIRTABLE_API_KEY, BASE_ID, 'Budgets', { maxRecords: 500 })
-        : Promise.resolve({ records: [] }),
-      listRecords(env.AIRTABLE_API_KEY, BASE_ID, 'Categories', { maxRecords: 500 })
+        : Promise.resolve({ records: budgetsCached || [] }),
+      !catsCached
+        ? listRecords(env.AIRTABLE_API_KEY, BASE_ID, 'Categories', { maxRecords: 500 })
+        : Promise.resolve({ records: catsCached })
     ]);
 
     const budgetMap = {};
     const catMap    = {};
 
     if (budgetRes.status === 'fulfilled') {
-      budgetRes.value.records.forEach(r => { budgetMap[r.id] = r.fields; });
+      const recs = Array.isArray(budgetRes.value.records) ? budgetRes.value.records : budgetsCached || [];
+      recs.forEach(r => { budgetMap[r.id] = r.fields; });
     }
     if (catRes.status === 'fulfilled') {
-      catRes.value.records.forEach(r => { catMap[r.id] = r.fields; });
+      const recs = Array.isArray(catRes.value.records) ? catRes.value.records : catsCached || [];
+      recs.forEach(r => { catMap[r.id] = r.fields; });
     }
 
     const enriched = records.map(r => {
@@ -92,6 +122,10 @@ export async function onRequestGet(context) {
 
       return { ...r, fields };
     });
+
+    if (canCache && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(enriched), { expirationTtl: KV_TTL }).catch(() => {});
+    }
 
     return jsonResponse({ records: enriched });
   } catch (err) {
@@ -117,7 +151,6 @@ export async function onRequestPost(context) {
     return errorResponse('type must be Income or Expense');
   }
 
-  // Only personal (Manual) expenses require a budget
   if (type === 'Expense' && (!body.source || body.source === 'Manual') && !body.budget_id) {
     return errorResponse('budget_id is required for personal expense transactions');
   }
@@ -135,15 +168,18 @@ export async function onRequestPost(context) {
   if (body.fixed_variable) fields.fixed_variable = body.fixed_variable;
   if (body.period)         fields.period         = body.period;
 
-  // budget_id for personal expenses only
   if (body.budget_id) {
     fields.budget_id = Array.isArray(body.budget_id) ? body.budget_id : [body.budget_id];
   }
-  // category_id: never written on new transactions (read legacy for display only)
-  if (body.project_id) fields.project_id = body.project_id; // plain string, not array
+  if (body.project_id) fields.project_id = body.project_id;
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
+    // Increment bust counter — old tx:* cache entries expire by TTL naturally (no list+delete needed)
+    if (env.CHAIJOHN_KV) {
+      const cur = parseInt(await env.CHAIJOHN_KV.get('tx:bust', { type: 'text' }).catch(() => '0')) || 0;
+      await env.CHAIJOHN_KV.put('tx:bust', String(cur + 1), { expirationTtl: 86400 }).catch(() => {});
+    }
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
