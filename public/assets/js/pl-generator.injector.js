@@ -32,6 +32,7 @@
   let _currentVersions = [];
   let _savedVersion = 0;
   let _projects = [];
+  let _sidebarW = 280;
 
   function panel() { return document.getElementById('panel-pl-gen'); }
   function $ (id) { return document.getElementById(id); }
@@ -363,7 +364,7 @@
         field('Freight outbound', inp('plg-freight-out', '฿ or % sale', si.freight_out, 'text'))
       )}
       ${_varItems.map((item, i) => `
-        <div style="display:grid;grid-template-columns:1fr 80px 90px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-var-name="${i}" type="text" placeholder="Item name" value="${esc(item.name || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <input data-var-val="${i}" type="text" placeholder="Value" value="${esc(item.val || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-var-type="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
@@ -376,7 +377,7 @@
 
       ${secHdr('Semi-fixed costs')}
       ${_semiItems.map((item, i) => `
-        <div style="display:grid;grid-template-columns:1fr 80px 90px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-semi-desc="${i}" type="text" placeholder="Description" value="${esc(item.desc || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <input data-semi-amt="${i}" type="number" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-semi-freq="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
@@ -389,8 +390,8 @@
 
       ${secHdr('Fixed costs (monthly amount)')}
       ${_fixedItems.map((item, i) => `
-        <div style="display:grid;grid-template-columns:90px 1fr 90px 24px;gap:0.3rem;align-items:center;margin-top:0.3rem">
-          <div style="font-size:0.72rem;color:var(--text-dim)">${esc(item.cat)}</div>
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:center;margin-top:0.3rem">
+          <div style="font-size:0.72rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(item.cat)}">${esc(item.cat)}</div>
           <input data-fix-amt="${i}" type="number" placeholder="0" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-fix-freq="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
             ${['Monthly', 'Annual'].map(t => `<option${item.freq === t ? ' selected' : ''}>${t}</option>`).join('')}
@@ -427,7 +428,7 @@
 
       ${secHdr('Fixed assets')}
       ${_assetItems.map((item, i) => `
-        <div style="display:grid;grid-template-columns:1fr 80px 60px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) 60px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-asset-name="${i}" type="text" placeholder="Asset name" value="${esc(item.name || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <input data-asset-val="${i}" type="number" placeholder="฿ value" value="${esc(item.val || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <input data-asset-years="${i}" type="number" placeholder="yrs" value="${esc(item.years || '3')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
@@ -469,7 +470,7 @@
 
       ${secHdr('Funding sources')}
       ${_fundItems.map((item, i) => `
-        <div style="display:grid;grid-template-columns:1fr 90px 80px 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(70px,2fr) minmax(0,90px) 24px;gap:0.3rem;align-items:end;margin-top:0.3rem">
           <input data-fund-src="${i}" type="text" placeholder="Source name" value="${esc(item.src || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <input data-fund-amt="${i}" type="number" placeholder="Amount" value="${esc(item.amt || '')}" style="font-size:0.72rem;padding:0.25rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
           <select data-fund-type="${i}" style="font-size:0.68rem;padding:0.25rem 0.3rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
@@ -716,7 +717,7 @@
     const cfMode = (window._plgCfMode || 'monthly') === 'cumulative';
 
     const sidebar = `
-      <div style="width:280px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+      <div data-plg-sb style="width:${_sidebarW}px;min-width:${_sidebarW}px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
         <div style="display:flex;border-bottom:1px solid var(--border)">
           ${['revenue', 'costs', 'assets', 'funding'].map(t => tabBtn(t, t.charAt(0).toUpperCase() + t.slice(1), _activeTab === t)).join('')}
         </div>
@@ -784,6 +785,7 @@
 
       <div style="display:flex;flex:1;overflow:hidden;min-height:0" id="plg-body">
         ${sidebar}
+        <div id="plg-resizer" style="width:4px;flex-shrink:0;background:transparent;cursor:col-resize;transition:background 0.1s"></div>
         ${output}
       </div>
 
@@ -814,24 +816,26 @@
     const bgRev = data.map(p => p.m < (bepM || 999) ? '#3b82f6' : '#22c55e');
     const bgCost = data.map(() => '#ef444488');
 
-    plChart = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Revenue', data: data.map(p => p.rev), backgroundColor: bgRev, barPercentage: 0.7 },
-          { label: 'Total cost', data: data.map(p => p.cogs + p.semiF + p.fixedMo + p.sgaTotal), backgroundColor: bgCost, barPercentage: 0.7 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { font: { size: 10 }, color: '#888' } } },
-        scales: {
-          x: { ticks: { font: { size: 9 }, color: '#888', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-          y: { ticks: { font: { size: 9 }, color: '#888' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+    try {
+      plChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Revenue', data: data.map(p => p.rev), backgroundColor: bgRev, barPercentage: 0.7 },
+            { label: 'Total cost', data: data.map(p => p.cogs + p.semiF + p.fixedMo + p.sgaTotal), backgroundColor: bgCost, barPercentage: 0.7 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { font: { size: 10 }, color: '#888' } } },
+          scales: {
+            x: { ticks: { font: { size: 9 }, color: '#888', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { ticks: { font: { size: 9 }, color: '#888' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+          }
         }
-      }
-    });
+      });
+    } catch (err) { console.error('[pl-gen] chart:', err); }
   }
 
   // ── Save ──────────────────────────────────────────────────────
@@ -1004,8 +1008,36 @@
       document.head.appendChild(s);
     }
 
+    // Sidebar resizer drag
+    const rsz = p.querySelector('#plg-resizer');
+    if (rsz) {
+      let _rx, _rw;
+      const onDrag = ev => {
+        const newW = Math.min(480, Math.max(220, _rw + ev.clientX - _rx));
+        _sidebarW = newW;
+        const sb = p.querySelector('[data-plg-sb]');
+        if (sb) { sb.style.width = newW + 'px'; sb.style.minWidth = newW + 'px'; }
+      };
+      rsz.addEventListener('mousedown', ev => {
+        _rx = ev.clientX; _rw = _sidebarW;
+        rsz.style.background = 'var(--yellow)';
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', () => {
+          document.removeEventListener('mousemove', onDrag);
+          rsz.style.background = 'transparent';
+        }, { once: true });
+        ev.preventDefault();
+      });
+      rsz.addEventListener('mouseover', () => { rsz.style.background = 'var(--yellow)'; });
+      rsz.addEventListener('mouseout', () => { rsz.style.background = 'transparent'; });
+    }
+
     // Delegated events
     p.addEventListener('click', async (e) => {
+      // Generate buttons — delegated so they always work regardless of wireGenButtons timing
+      if (e.target.closest('#plg-gen-12')) { generate(12); return; }
+      if (e.target.closest('#plg-gen-5y')) { generate(60); return; }
+
       // Tab switching
       const tabBtn = e.target.closest('[data-plg-tab]');
       if (tabBtn) {
