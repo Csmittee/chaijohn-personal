@@ -4,11 +4,24 @@ const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Liabilities';
 const TX_TABLE = 'Transactions';
 const CAT_TABLE = 'Categories';
+const KV_KEY = 'liabilities_all_v1';
+const KV_TTL = 1800; // 30 minutes — liabilities change rarely
 
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
   const all = url.searchParams.get('all') === 'true';
+  const refresh = url.searchParams.get('refresh') === '1';
+
+  // Cache only the full unfiltered list
+  const canCache = all;
+
+  if (canCache && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   let filterByFormula;
   if (!all) {
@@ -20,6 +33,11 @@ export async function onRequestGet(context) {
       filterByFormula,
       sort: [{ field: 'name', direction: 'asc' }]
     });
+
+    if (canCache && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(data.records), { expirationTtl: KV_TTL }).catch(() => {});
+    }
+
     return jsonResponse({ records: data.records });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -52,7 +70,6 @@ export async function onRequestPost(context) {
   if (body.start_date) fields.start_date = body.start_date;
   if (body.notes) fields.notes = body.notes;
 
-  // Default current_balance to loan_size — a new loan starts fully outstanding
   const loanAmt = Number(body.loan_size || 0);
   if (body.current_balance !== undefined && body.current_balance !== null && body.current_balance !== '') {
     fields.current_balance = Number(body.current_balance);
@@ -63,7 +80,6 @@ export async function onRequestPost(context) {
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
 
-    // E3: loan received = cash IN — create Income transaction (non-fatal)
     const loanSize = Number(body.loan_size || 0);
     if (loanSize > 0) {
       try {
@@ -85,6 +101,7 @@ export async function onRequestPost(context) {
       } catch { /* non-fatal */ }
     }
 
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);

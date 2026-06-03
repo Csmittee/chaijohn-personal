@@ -5,6 +5,7 @@ const TABLE = 'Liabilities';
 const PAYMENTS_TABLE = 'Liability_Payments';
 const TX_TABLE = 'Transactions';
 const CAT_TABLE = 'Categories';
+const KV_KEY = 'liabilities_all_v1';
 
 export async function onRequestGet(context) {
   const { env, params } = context;
@@ -31,7 +32,6 @@ export async function onRequestPatch(context) {
     return errorResponse('Invalid JSON body');
   }
 
-  // Payment flow: payment_amount triggers interest calculation
   if (body.payment_amount !== undefined) {
     const paymentAmount = Number(body.payment_amount);
     const paymentDate = body.date || new Date().toISOString().split('T')[0];
@@ -65,7 +65,6 @@ export async function onRequestPatch(context) {
       return errorResponse('Failed to create payment record: ' + err.message, 500);
     }
 
-    // E3: loan payment = cash OUT — create Expense transaction with entity + category (non-fatal)
     try {
       const catRes = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, CAT_TABLE, {
         filterByFormula: `AND({active}=TRUE(),{type}='Loan')`,
@@ -91,10 +90,10 @@ export async function onRequestPatch(context) {
       return errorResponse('Payment logged but failed to update balance: ' + err.message, 500);
     }
 
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ payment, new_balance: newBalance, interest, principal });
   }
 
-  // Regular field update
   const fields = {};
   const allowed = ['name', 'creditor_type', 'loan_size', 'current_balance',
     'interest_rate', 'monthly_payment', 'payment_due_day', 'start_date', 'active', 'notes'];
@@ -110,6 +109,7 @@ export async function onRequestPatch(context) {
 
   try {
     const record = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, id, fields);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -123,6 +123,7 @@ export async function onRequestDelete(context) {
 
   try {
     const result = await deleteRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, id);
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ deleted: true, id: result.id });
   } catch (err) {
     return errorResponse(err.message, 500);
