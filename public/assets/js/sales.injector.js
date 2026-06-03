@@ -325,6 +325,8 @@
     const projectsWithPresales = projects.filter(p => (presalesByProject[p.project_id] || []).length > 0);
     if (projectsWithPresales.length === 0) {
       html += `<div style="padding:0.5rem 0;font-size:0.78rem;color:var(--text-dim)">No presale bookings yet.<br><span style="font-size:0.72rem">Add from M2.4 Finance Projects → expanded project → + Add presale</span></div>`;
+    } else if (currentView === 'list') {
+      html += `<table style="width:100%;border-collapse:collapse;font-size:0.72rem;margin-bottom:0.5rem"><tbody>${projectsWithPresales.map(p => projectLaneCard(p)).join('')}</tbody></table>`;
     } else {
       projectsWithPresales.forEach(p => { html += projectLaneCard(p); });
     }
@@ -499,41 +501,40 @@
     const phColor = PHASE_C[p.current_phase] || '#666';
     const presales = presalesByProject[p.project_id] || [];
     const presaleTotal = presales.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const sorted = [...presales].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
-    const rows = presales.length
-      ? presales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t =>
-          currentView === 'list'
-            ? `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:0.2rem 0.4rem;white-space:nowrap">${fmtDate(t.date)}</td>
-                <td style="padding:0.2rem 0.4rem">${esc(t.entity||t.description||'')}</td>
-                <td style="padding:0.2rem 0.4rem"><span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:#22c55e22;color:#22c55e">presale</span></td>
-                <td style="padding:0.2rem 0.4rem;text-align:right;font-weight:700">${fmt(t.amount)}</td>
-              </tr>`
-            : `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.25rem 0;border-bottom:1px solid var(--border);font-size:0.75rem">
-                <span style="color:var(--text-dim)">${fmtDate(t.date)}</span>
-                <span>${esc(t.entity||t.description||'')}</span>
-                <span style="font-weight:700;color:#22c55e">${fmt(t.amount)}</span>
-              </div>`
-        ).join('')
-      : '';
+    if (currentView === 'list') {
+      // Group header row + data rows — same table/padding as Asset Sales list view
+      const headerRow = `<tr><td colspan="4" style="padding:0.35rem 0.4rem 0.1rem;font-size:0.72rem;font-weight:700;color:var(--text-dim);letter-spacing:0.03em">
+        ${esc(p.name)}${p.current_phase ? ` <span style="font-size:0.65rem;padding:0.1rem 0.3rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>` : ''}
+        <span style="float:right;color:#22c55e">${presaleTotal > 0 ? fmt(presaleTotal) : ''}</span>
+      </td></tr>`;
+      const dataRows = sorted.map(t => `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.25rem 0.4rem;white-space:nowrap">${fmtDate(t.date)}</td>
+        <td style="padding:0.25rem 0.4rem">${esc(t.entity||t.description||'')}</td>
+        <td style="padding:0.25rem 0.4rem"><span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:#22c55e22;color:#22c55e">presale</span></td>
+        <td style="padding:0.25rem 0.4rem;text-align:right;font-weight:700">${fmt(t.amount)}</td>
+      </tr>`).join('');
+      return headerRow + dataRows;
+    }
 
-    const emptyHtml = presales.length === 0
-      ? `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.3rem 0">No presale bookings yet</div>`
-      : '';
+    // Card view — compact header + rows, no heavy bordered box
+    const cardRows = sorted.map(t =>
+      `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border);font-size:0.75rem">
+        <span style="color:var(--text-dim);white-space:nowrap;min-width:68px">${fmtDate(t.date)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.entity||t.description||'')}</span>
+        <span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:#22c55e22;color:#22c55e;white-space:nowrap">presale</span>
+        <span style="font-weight:700;color:#22c55e;white-space:nowrap">${fmt(t.amount)}</span>
+      </div>`
+    ).join('');
 
-    const bodyHtml = currentView === 'list' && presales.length
-      ? `<table style="width:100%;border-collapse:collapse;font-size:0.72rem">
-          <tbody>${rows}</tbody>
-        </table>`
-      : rows + emptyHtml;
-
-    return `<div style="margin-bottom:0.65rem;border:1px solid var(--border);border-radius:var(--radius);padding:0.65rem;background:var(--bg-card)">
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem">
+    return `<div style="margin-bottom:0.5rem;padding-bottom:0.1rem">
+      <div style="display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0 0.2rem">
         <span style="font-weight:700;font-size:0.82rem">${esc(p.name)}</span>
-        ${p.current_phase ? `<span style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>` : ''}
-        ${presaleTotal > 0 ? `<span style="font-size:0.72rem;font-weight:700;color:#22c55e;margin-left:auto">${fmt(presaleTotal)}</span>` : ''}
+        ${p.current_phase ? `<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:999px;background:${phColor}20;color:${phColor};font-weight:700">${p.current_phase}</span>` : ''}
+        ${presaleTotal > 0 ? `<span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:#22c55e">${fmt(presaleTotal)}</span>` : ''}
       </div>
-      ${bodyHtml}
+      ${cardRows || `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.2rem 0">No presale bookings yet</div>`}
     </div>`;
   }
 
