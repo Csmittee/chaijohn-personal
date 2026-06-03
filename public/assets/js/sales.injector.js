@@ -115,8 +115,8 @@
       bubble('Open Quotes', fmt(s.open_quotes_total) + ` (${s.open_quotes})`, s.open_quotes > 0 ? '#8b5cf6' : null),
       nearOD ? bubble('Nearest Due', nearOD, '#ef4444') : '',
       bubble('YTD Revenue', fmt(s.ytd_revenue), null),
-      bubble('Presale Total', fmt(s.total_presale || 0), (s.total_presale || 0) > 0 ? '#22c55e' : null),
-      bubble('Asset Sales', fmt((s.total_collection || 0) + (s.total_hard_asset || 0)), ((s.total_collection || 0) + (s.total_hard_asset || 0)) > 0 ? '#d4af37' : null)
+      s.total_presale > 0 ? bubble('Presale Total', fmt(s.total_presale), '#22c55e') : '',
+      (s.total_collection > 0 || s.total_hard_asset > 0) ? bubble('Asset Sales', fmt((s.total_collection || 0) + (s.total_hard_asset || 0)), '#d4af37') : ''
     ].join('');
   }
 
@@ -322,7 +322,9 @@
     html += '</div>';
 
     // Projects section — always visible, shows presale transactions per project
-    html += sectionHeader('PROJECTS (presales)', 'sales-sec-proj');
+    const totalPresale = Object.values(presalesByProject).flat().reduce((s, t) => s + Number(t.amount || 0), 0);
+    html += sectionHeader('PROJECTS (presales)', 'sales-sec-proj',
+      totalPresale > 0 ? `<span style="color:#22c55e">${fmt(totalPresale)}</span>` : null);
     html += `<div id="sales-sec-proj-body" style="padding:0.5rem 0">`;
     const projectsWithPresales = projects.filter(p => (presalesByProject[p.project_id] || []).length > 0);
     if (projectsWithPresales.length === 0) {
@@ -339,7 +341,11 @@
     // Personal section — always visible
     const hasSold = (personal.asset_sales || []).length > 0;
     const hasManual = (personal.manual_entries || []).length > 0;
-    html += sectionHeader('PERSONAL', 'sales-sec-personal');
+    const totalAssets  = (personal.asset_sales || []).reduce((s, a) => s + a.sold_price, 0);
+    const totalManual  = (personal.manual_entries || []).reduce((s, t) => s + Number((t.fields || t).amount || 0), 0);
+    const totalPersonal = totalAssets + totalManual;
+    html += sectionHeader('PERSONAL', 'sales-sec-personal',
+      totalPersonal > 0 ? `<span style="color:#d4af37">${fmt(totalPersonal)}</span>` : null);
     html += `<div id="sales-sec-personal-body">`;
     html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-dim);padding:0.4rem 0 0.2rem;letter-spacing:0.04em;border-top:1px solid var(--border);margin-top:0.25rem">ASSET SALES</div>`;
     if (hasSold) {
@@ -407,10 +413,11 @@
     }
   }
 
-  function sectionHeader(label, id) {
+  function sectionHeader(label, id, amountHtml) {
     return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--border);margin-bottom:0.35rem;margin-top:0.5rem">
       <button class="sales-sec-toggle" data-target="${id}-body" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:0.75rem;padding:0">▼</button>
       <span style="font-size:0.72rem;font-weight:700;color:var(--text-dim);letter-spacing:0.05em">${label}</span>
+      ${amountHtml ? `<span style="margin-left:auto;font-size:0.78rem;font-weight:700;color:var(--text)">${amountHtml}</span>` : ''}
     </div>`;
   }
 
