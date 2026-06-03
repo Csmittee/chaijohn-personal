@@ -2,9 +2,10 @@ import { listRecords, createRecord, jsonResponse, errorResponse } from '../_airt
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE = 'Categories';
+const KV_KEY = 'categories_all_v1';
+const KV_TTL = 3600; // 1 hour — categories are near-static
 
 async function resolveOrCreateGroup(apiKey, groupInput) {
-  // Step 1: fetch categories schema to get current choices with their IDs
   let choices = [];
   let tableId, fieldId;
   try {
@@ -25,11 +26,9 @@ async function resolveOrCreateGroup(apiKey, groupInput) {
     }
   } catch { /* fall through */ }
 
-  // Step 2: case-insensitive match against existing choices
   const match = choices.find(c => c.name.toLowerCase() === groupInput.toLowerCase());
-  if (match) return match.name; // return the correctly-cased existing value
+  if (match) return match.name;
 
-  // Step 3: truly new group — add it via Meta API (requires schema.bases:write)
   if (tableId && fieldId) {
     try {
       await fetch(
@@ -40,14 +39,14 @@ async function resolveOrCreateGroup(apiKey, groupInput) {
           body: JSON.stringify({
             options: {
               choices: [
-                ...choices.map(c => ({ id: c.id, name: c.name })), // existing choices MUST include id
-                { name: groupInput }                                  // new choice has no id
+                ...choices.map(c => ({ id: c.id, name: c.name })),
+                { name: groupInput }
               ]
             }
           })
         }
       );
-    } catch { /* if Meta API fails, typecast:true on record create is the fallback */ }
+    } catch { /* typecast:true fallback */ }
   }
 
   return groupInput;
@@ -59,6 +58,17 @@ export async function onRequestGet(context) {
   const type = url.searchParams.get('type');
   const group = url.searchParams.get('group');
   const activeOnly = url.searchParams.get('active') !== 'false';
+  const refresh = url.searchParams.get('refresh') === '1';
+
+  // Cache only the default unfiltered active list (no type/group filters)
+  const canCache = !type && !group && activeOnly;
+
+  if (canCache && !refresh && env.CHAIJOHN_KV) {
+    try {
+      const cached = await env.CHAIJOHN_KV.get(KV_KEY, { type: 'json' });
+      if (cached) return jsonResponse({ records: cached, cached: true });
+    } catch { /* KV miss — fall through */ }
+  }
 
   const filters = [];
   if (activeOnly) filters.push(`{active}=TRUE()`);
@@ -78,6 +88,11 @@ export async function onRequestGet(context) {
       ],
       maxRecords: 500
     });
+
+    if (canCache && env.CHAIJOHN_KV) {
+      await env.CHAIJOHN_KV.put(KV_KEY, JSON.stringify(data.records), { expirationTtl: KV_TTL }).catch(() => {});
+    }
+
     return jsonResponse({ records: data.records });
   } catch (err) {
     return errorResponse(err.message, 500);
@@ -100,7 +115,6 @@ export async function onRequestPost(context) {
   const validTypes = ['Earn', 'Expense', 'Loan', 'Investment'];
   if (!validTypes.includes(type)) return errorResponse(`type must be one of: ${validTypes.join(', ')}`);
 
-  // Duplicate name check — category names must be unique
   try {
     const existing = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
       filterByFormula: `LOWER({name})="${name.toLowerCase().replace(/"/g, '\\"')}"`,
@@ -109,7 +123,7 @@ export async function onRequestPost(context) {
     if (existing.records.length > 0) {
       return errorResponse(`Category "${name}" already exists`);
     }
-  } catch { /* non-fatal — allow creation if check fails */ }
+  } catch { /* non-fatal */ }
 
   const fields = {
     name,
@@ -124,6 +138,7 @@ export async function onRequestPost(context) {
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields, { typecast: true });
+    if (env.CHAIJOHN_KV) await env.CHAIJOHN_KV.delete(KV_KEY).catch(() => {});
     return jsonResponse({ record }, 201);
   } catch (err) {
     return errorResponse(err.message, 500);
