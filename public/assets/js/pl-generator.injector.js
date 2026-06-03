@@ -1251,8 +1251,8 @@
   }
 
   // ── Panel activation ──────────────────────────────────────────
-  document.addEventListener('panelactivated', (e) => {
-    if (e.detail && e.detail.route === 'pl-gen') init();
+  window.addEventListener('panelactivated', (e) => {
+    if (e.detail === 'pl-gen') init();
   });
   if (document.getElementById('panel-pl-gen') && document.getElementById('panel-pl-gen').classList.contains('active')) {
     init();
