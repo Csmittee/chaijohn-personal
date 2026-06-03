@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — Batch 5 complete — transaction model simplified (canonical L099–L106), patchSourceOptions removed, M2.3 filter uses budget_id presence, presale POST removes category_id, project_funding POST adds project_id
+> Last updated: 2026-06-03 — Batch 6 complete — cashflow reloads on every nav, M2.2 projects lane p.project_id fix — transaction model simplified (canonical L099–L106), patchSourceOptions removed, M2.3 filter uses budget_id presence, presale POST removes category_id, project_funding POST adds project_id
 
 ---
 
