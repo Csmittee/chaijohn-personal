@@ -4,6 +4,20 @@
 
 ---
 
+L144  P&L 5yr chart: aggregate monthly pl[] into 5 yearly totals before rendering.
+      Show 5 bars Y1–Y5. Never pass raw 60-month array to chart in 5yr mode.
+
+L143  P&L Generator — canonical 4-margin table structure (never change order):
+      Revenue → [variable costs indented: mat, labor, freight, other] → Variable cost margin →
+      [semi-fixed, fixed indented] → Gross profit →
+      [SG&A, depreciation indented] → EBITDA →
+      [interest, tax indented] → Net profit →
+      [% rows: variable cost margin%, gross margin%, EBITDA%, net margin%]
+      Variable cost margin = Revenue − mat − labor − freight − var items
+      Gross profit = Variable cost margin − semi-fixed − fixed costs
+      EBITDA = Gross profit − SG&A − depreciation
+      Net profit = EBITDA − interest − tax
+
 L142  P&L Generator period toggle (12mo/5yr): use rebuildOutputHeader() after _activePeriod changes.
       Same rule as L136 — active state lives in module var, button styles reconstructed from it.
       Never rely on post-click querySelectorAll style patches alone; they fail when DOM is rebuilt.

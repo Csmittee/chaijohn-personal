@@ -144,21 +144,25 @@
 
       const rev = baseRev * prob * growth;
       const unitsN = unitMode ? units * growth : rev / (price || 1);
-      const cogsPerUnit = matCost + laborCost;
-      const cogs = cogsPerUnit * unitsN
-        + parseFreightAmt(freightIn, rev, cogsPerUnit)
-        + parseFreightAmt(freightOut, rev, cogsPerUnit)
-        + otherVarItems.reduce((s, v) => {
-            if (v.type === '% sale') return s + rev * (parseFloat(String(v.val || '').replace('%', '')) / 100 || 0);
-            if (v.type === '% COGS') return s + (cogsPerUnit * unitsN) * (parseFloat(String(v.val || '').replace('%', '')) / 100 || 0);
-            return s + v.val * unitsN;
-          }, 0);
 
-      const grossProfit = rev - cogs;
+      // Variable costs (broken out for table display, summed as cogs for BS/CF)
+      const varMat = matCost * unitsN;
+      const varLabor = laborCost * unitsN;
+      const varFreight = parseFreightAmt(freightIn, rev, matCost + laborCost)
+                       + parseFreightAmt(freightOut, rev, matCost + laborCost);
+      const varOther = otherVarItems.reduce((s, v) => {
+        if (v.type === '% sale') return s + rev * (parseFloat(String(v.val || '').replace('%', '')) / 100 || 0);
+        if (v.type === '% COGS') return s + ((matCost + laborCost) * unitsN) * (parseFloat(String(v.val || '').replace('%', '')) / 100 || 0);
+        return s + v.val * unitsN;
+      }, 0);
+      const cogs = varMat + varLabor + varFreight + varOther; // total variable cost (used for BS/CF)
+
+      const variableCostMargin = rev - cogs;
       const semiF = semiFixedMo(rev, unitsN);
       const dep = depPerMo;
       const sgaTotal = rev * loyaltyPct + fixedSga;
-      const ebitda = grossProfit - semiF - fixedMo - dep - sgaTotal;
+      const grossProfit = variableCostMargin - semiF - fixedMo;
+      const ebitda = grossProfit - sgaTotal - dep;
 
       // Loan repayment
       let interest = 0;
@@ -189,8 +193,9 @@
 
       pl.push({
         m,
-        rev, cogs, grossProfit,
-        semiF, fixedMo, dep, sgaTotal,
+        rev, varMat, varLabor, varFreight, varOther, cogs,
+        variableCostMargin, semiF, fixedMo, grossProfit,
+        sgaTotal, dep,
         ebitda, interest, tax, netProfit,
         cumulativeNet,
         ar, ap, inv, cash, netFixedAssets, accDep, accrued,
@@ -200,6 +205,8 @@
 
     // KPIs
     const profMonths = pl.filter(p => p.rev > 0);
+    const varCostMarginPct = profMonths.length
+      ? profMonths.reduce((s, p) => s + p.variableCostMargin / p.rev, 0) / profMonths.length * 100 : 0;
     const grossMarginPct = profMonths.length
       ? profMonths.reduce((s, p) => s + p.grossProfit / p.rev, 0) / profMonths.length * 100 : 0;
     const ebitdaPct = profMonths.length
@@ -237,7 +244,7 @@
       pl,
       bs,
       cf: pl.map(p => ({ m: p.m, inflow: p.rev + (p.m === 1 ? totalFunding : 0), outflow: p.cogs + p.semiF + p.fixedMo + p.sgaTotal + p.interest + p.tax, net: p.netProfit })),
-      kpis: { gross_margin_pct: grossMarginPct, ebitda_pct: ebitdaPct, breakeven_month: bepMonth, payback_months: paybackMonths, burn_rate: burnRate }
+      kpis: { var_cost_margin_pct: varCostMarginPct, gross_margin_pct: grossMarginPct, ebitda_pct: ebitdaPct, breakeven_month: bepMonth, payback_months: paybackMonths, burn_rate: burnRate }
     };
   }
 
@@ -516,29 +523,31 @@
     const cols = is12 ? [1, 2, 3, 6, 9, 12] : [12, 24, 36, 60];
     const colLabels = is12 ? cols.map(c => 'M' + c) : ['Y1', 'Y2', 'Y3', 'Y5'];
     const data = cols.map(c => pl[c - 1]).filter(Boolean);
+    const nc = 1 + data.length;
 
-    function numRow(label, key, opts) {
-      const dimStyle = opts && opts.dim ? 'color:var(--text-dim);padding-left:1rem;' : '';
-      const boldStyle = opts && opts.bold ? 'font-weight:700;background:var(--bg-card);' : '';
-      const colorFn = opts && opts.color ? (v => v >= 0 ? '#22c55e' : '#ef4444') : null;
-      return `<tr style="${dimStyle}${boldStyle}">
-        <td style="font-size:0.72rem;padding:0.2rem 0.4rem">${label}</td>
+    function numRow(label, keyOrFn, opts) {
+      const dim = opts && opts.dim;
+      const bold = opts && opts.bold;
+      const color = opts && opts.color;
+      const tdStyle = `font-size:0.72rem;padding:0.2rem 0.4rem`;
+      const trStyle = `${dim ? 'color:var(--text-dim);' : ''}${bold ? 'font-weight:700;background:var(--bg-card);' : ''}`;
+      return `<tr style="${trStyle}">
+        <td style="${tdStyle}${dim ? ';padding-left:1.2rem' : ''}">${label}</td>
         ${data.map(d => {
-          const v = d[key] || 0;
-          const color = colorFn ? `color:${colorFn(v)};` : '';
-          return `<td style="font-size:0.72rem;padding:0.2rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;${color}">${fmt(v)}</td>`;
+          const v = typeof keyOrFn === 'function' ? keyOrFn(d) : (d[keyOrFn] || 0);
+          const c = color ? `color:${v >= 0 ? '#22c55e' : '#ef4444'};` : '';
+          return `<td style="${tdStyle};text-align:right;font-variant-numeric:tabular-nums;${c}">${fmt(v)}</td>`;
         }).join('')}
       </tr>`;
     }
 
     function pctRow(label, fn) {
-      return `<tr>
-        <td style="font-size:0.72rem;padding:0.2rem 0.4rem;color:var(--text-dim)">${label}</td>
-        ${data.map(d => {
-          const v = fn(d);
-          return `<td style="font-size:0.72rem;padding:0.2rem 0.4rem;text-align:right;color:var(--text-dim)">${pct(v)}</td>`;
-        }).join('')}
-      </tr>`;
+      return `<tr><td style="font-size:0.72rem;padding:0.2rem 0.4rem;color:var(--text-dim);padding-left:0.4rem">${label}</td>
+        ${data.map(d => `<td style="font-size:0.72rem;padding:0.2rem 0.4rem;text-align:right;color:var(--text-dim)">${pct(fn(d))}</td>`).join('')}</tr>`;
+    }
+
+    function divRow() {
+      return `<tr><td colspan="${nc}" style="border-top:1px solid var(--border);padding:0"></td></tr>`;
     }
 
     return `<div style="overflow-x:auto">
@@ -549,24 +558,28 @@
         </tr></thead>
         <tbody>
           ${numRow('Revenue', 'rev')}
-          ${numRow('Direct material', 'cogs', { dim: true })}
-          ${numRow('SG&A', 'sgaTotal', { dim: true })}
-          ${numRow('Gross profit', 'grossProfit', { bold: true })}
+          ${numRow('Direct material', 'varMat', { dim: true })}
+          ${numRow('Labor', 'varLabor', { dim: true })}
+          ${numRow('Freight', 'varFreight', { dim: true })}
+          ${numRow('Other variable', 'varOther', { dim: true })}
+          ${numRow('Variable cost margin', 'variableCostMargin', { bold: true })}
+          ${divRow()}
           ${numRow('Semi-fixed', 'semiF', { dim: true })}
           ${numRow('Fixed costs', 'fixedMo', { dim: true })}
+          ${numRow('Gross profit', 'grossProfit', { bold: true })}
+          ${divRow()}
+          ${numRow('SG&A', 'sgaTotal', { dim: true })}
           ${numRow('Depreciation', 'dep', { dim: true })}
           ${numRow('EBITDA', 'ebitda', { bold: true })}
+          ${divRow()}
           ${numRow('Interest', 'interest', { dim: true })}
           ${numRow('Tax (est.)', 'tax', { dim: true })}
           ${numRow('Net profit', 'netProfit', { bold: true, color: true })}
-          <tr><td colspan="${1 + data.length}" style="border-top:1px solid var(--border);padding:0"></td></tr>
+          ${divRow()}
+          ${pctRow('Variable cost margin %', d => d.rev ? d.variableCostMargin / d.rev * 100 : 0)}
           ${pctRow('Gross margin %', d => d.rev ? d.grossProfit / d.rev * 100 : 0)}
+          ${pctRow('EBITDA %', d => d.rev ? d.ebitda / d.rev * 100 : 0)}
           ${pctRow('Net margin %', d => d.rev ? d.netProfit / d.rev * 100 : 0)}
-          ${pctRow('ROI %', d => {
-            const si = getInputs();
-            const inv = Number(si.startup_cost) || 1;
-            return d.netProfit / inv * 100;
-          })}
         </tbody>
       </table>
     </div>`;
@@ -574,7 +587,7 @@
 
   // ── BS table ──────────────────────────────────────────────────
   function renderBSTable(result) {
-    if (!result) return `<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.78rem">Click "Generate" to compute</div>`;
+    if (!result || !result.bs) return `<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.78rem">Click "Generate" to compute</div>`;
     return result.bs.map(snap => {
       const balanced = Math.abs(snap.totalAssets - (snap.totalLiab + snap.totalEquity)) < 1;
       return `
@@ -617,7 +630,7 @@
 
   // ── CF view ───────────────────────────────────────────────────
   function renderCFView(result, cumMode) {
-    if (!result) return `<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.78rem">Click "Generate" to compute</div>`;
+    if (!result || !result.cf) return `<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.78rem">Click "Generate" to compute</div>`;
     const cf = result.cf;
     const bepM = result.kpis.breakeven_month;
     const maxVal = Math.max(...cf.map(p => Math.max(p.inflow, p.outflow)), 1);
@@ -756,12 +769,15 @@
         input[type=text] { -webkit-appearance:none; appearance:none; }
         #panel-pl-generator.active { display:flex; flex-direction:column; overflow:hidden; height:calc(100vh - 3rem); }
         @media print {
+          @page { size: A4 landscape; margin: 1cm; }
           body > *:not(#main) { display:none !important; }
           #main > *:not(#panel-pl-generator) { display:none !important; }
           #panel-pl-generator { all:unset !important; display:block !important; position:static !important; }
           #plg-sidebar, #plg-save-bar, #plg-header, .main-nav, aside { display:none !important; }
           #plg-print-header { display:block !important; }
           #plg-output-body { font-size:0.85rem; }
+          #plg-chart-area { text-align:center; }
+          #plg-chart { max-width:80%; margin:0 auto; display:block; }
         }
       </style>
       <div id="plg-print-header" style="display:none;padding:0.75rem;border-bottom:2px solid #ccc;margin-bottom:0.75rem">
@@ -811,12 +827,28 @@
     const pl = result.pl;
     const bepM = result.kpis.breakeven_month;
     const is12 = period !== '5yr';
-    const count = is12 ? 12 : 60;
-    const data = pl.slice(0, count);
-    const labels = data.map(p => is12 ? 'M' + p.m : (p.m % 12 === 0 ? 'Y' + p.m / 12 : ''));
 
-    const bgRev = data.map(p => p.m < (bepM || 999) ? '#3b82f6' : '#22c55e');
-    const bgCost = data.map(() => '#ef444488');
+    let data, labels, bgRev, bgCost;
+    if (is12) {
+      data = pl.slice(0, 12);
+      labels = data.map(p => 'M' + p.m);
+      bgRev = data.map(p => p.m < (bepM || 999) ? '#3b82f6' : '#22c55e');
+      bgCost = data.map(() => '#ef444488');
+    } else {
+      // Aggregate 60 months into 5 yearly totals
+      data = [1, 2, 3, 4, 5].map(yr => {
+        const months = pl.slice((yr - 1) * 12, yr * 12);
+        return {
+          yr,
+          rev: months.reduce((s, p) => s + p.rev, 0),
+          cost: months.reduce((s, p) => s + p.cogs + p.semiF + p.fixedMo + p.sgaTotal, 0),
+          bepPassed: bepM ? bepM <= yr * 12 : false
+        };
+      });
+      labels = data.map(d => 'Y' + d.yr);
+      bgRev = data.map(d => d.bepPassed ? '#22c55e' : '#3b82f6');
+      bgCost = data.map(() => '#ef444488');
+    }
 
     try {
       plChart = new Chart(canvas, {
@@ -824,8 +856,8 @@
         data: {
           labels,
           datasets: [
-            { label: 'Revenue', data: data.map(p => p.rev), backgroundColor: bgRev, barPercentage: 0.7 },
-            { label: 'Total cost', data: data.map(p => p.cogs + p.semiF + p.fixedMo + p.sgaTotal), backgroundColor: bgCost, barPercentage: 0.7 }
+            { label: 'Revenue', data: is12 ? data.map(p => p.rev) : data.map(d => d.rev), backgroundColor: bgRev, barPercentage: 0.7 },
+            { label: 'Total cost', data: is12 ? data.map(p => p.cogs + p.semiF + p.fixedMo + p.sgaTotal) : data.map(d => d.cost), backgroundColor: bgCost, barPercentage: 0.7 }
           ]
         },
         options: {
