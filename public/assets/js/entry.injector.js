@@ -260,6 +260,7 @@
         document.getElementById('tx-amount').value = '';
         document.getElementById('tx-description').value = '';
         document.getElementById('tx-note').value = '';
+        loadTransactions._refresh = true;
         loadTransactions();
         loadEntitySuggestions();
         updateBudgetBar(selectedId);
@@ -398,7 +399,8 @@
     txMap = {};
 
     try {
-      const res = await api(`/api/transactions?start=${start}&limit=200`);
+      const res = await api(`/api/transactions?start=${start}&limit=200${loadTransactions._refresh ? '&refresh=1' : ''}`);
+      loadTransactions._refresh = false;
       const records = (res.records || []).map(r => ({ _id: r.id, ...r.fields }));
       records.forEach(r => { txMap[r._id] = r; });
 
