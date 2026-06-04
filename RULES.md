@@ -50,6 +50,12 @@ L133  Data entry inputs: NEVER use type="number". Always use type="text" inputmo
       Browser spinners waste space and are never needed. User types values directly.
       Apply to all existing and future injectors. No exceptions unless explicitly specified.
 
+L147  Panel header integrity: any injector that uses p.innerHTML = renderPanel()
+      overwrites the full panel div including index.html header. The panel header
+      (title h2 + subtitle) MUST be rendered inside renderPanel() itself.
+      Never assume index.html header survives after injector runs.
+      When writing or reviewing any injector — always confirm header is in output.
+
 ---
 
 ## BATCH 6 FIXES — Cashflow reload + Sales Projects lane key
