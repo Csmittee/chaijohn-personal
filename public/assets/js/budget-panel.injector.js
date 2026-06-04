@@ -48,6 +48,54 @@
     return tax;
   }
 
+  /* isOverrideRecord: single-month override has start_date and end_date in same YYYY-MM */
+  function isOverrideRecord(b) {
+    return !!(b.start_date && b.end_date &&
+      b.start_date.slice(0, 7) === b.end_date.slice(0, 7));
+  }
+
+  /* getBudgetAmountForMonth: find the most specific (shortest range) budget record
+   * covering ym for the given base budget's label+category_id. */
+  function getBudgetAmountForMonth(baseId, ym) {
+    const base = budgets.find(b => b.id === baseId);
+    if (!base) return 0;
+
+    const ymStart = ym + '-01';
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const ymEnd = ym + '-' + String(lastDay).padStart(2, '0');
+
+    /* Siblings: same label + category_id, active */
+    const baseLabel = base.label;
+    const baseCatId = lid(base.category_id);
+    const siblings = budgets.filter(b =>
+      b.active !== false &&
+      b.label === baseLabel &&
+      lid(b.category_id) === baseCatId
+    );
+
+    /* Candidates that cover this month */
+    const candidates = siblings.filter(b => {
+      if (!b.start_date || !b.end_date) return true;
+      return b.start_date <= ymEnd && b.end_date >= ymStart;
+    });
+
+    if (!candidates.length) return mbr(base);
+
+    /* Sort by range length ascending (most specific first) */
+    candidates.sort((a, b) => {
+      const ra = (a.start_date && a.end_date)
+        ? new Date(a.end_date) - new Date(a.start_date)
+        : Infinity;
+      const rb = (b.start_date && b.end_date)
+        ? new Date(b.end_date) - new Date(b.start_date)
+        : Infinity;
+      return ra - rb;
+    });
+
+    return mbr(candidates[0]);
+  }
+
   /* ── Module state ── */
   let txData      = [];
   let budgets     = [];
@@ -56,7 +104,7 @@
   let initialized = false;
   let budgetChart = null;
 
-  /* Graph filter state */
+  /* Graph filter state — default FY so Jan is always visible (L153) */
   let graphView   = 'mobymo';  // 'mobymo' | 'accum'
   let graphPeriod = 'fy';      // 'fy' | 'rolling'
   let graphData   = 'bgact';   // 'bgact' | 'gap'
@@ -98,7 +146,7 @@
     const now = new Date();
     const year = now.getFullYear();
 
-    /* FY month keys: Jan–Dec of current year */
+    /* FY month keys: Jan–Dec of current year (L153) */
     const fyMonthKeys = [];
     for (let m = 1; m <= 12; m++) {
       fyMonthKeys.push(year + '-' + String(m).padStart(2, '0'));
@@ -133,10 +181,11 @@
       return d.toLocaleDateString('en', { month: 'short' }) + " '" + String(y).slice(2);
     });
 
-    /* spendByBudgetMonth: { budget_id: { YYYY-MM: amount } } */
-    const spendByBudgetMonth = {};
-    /* earnByBudgetMonth:  { budget_id: { YYYY-MM: amount } } */
-    const earnByBudgetMonth  = {};
+    /* spendByBudgetMonth: { budget_id: { YYYY-MM: amount } }
+     * L151: dedup — keep only the MOST RECENT transaction per budget_id+month.
+     * Latest = highest date string; on tie, last in array wins. */
+    const spendLatest = {};
+    const earnByBudgetMonth = {};
 
     txData.forEach(t => {
       const bid = lid(t.budget_id);
@@ -144,13 +193,27 @@
       const ym  = (t.date || '').slice(0, 7);
       if (!monthKeys.includes(ym)) return;
       const amt = Number(t.amount || 0);
+
       if (t.type === 'Expense') {
-        if (!spendByBudgetMonth[bid]) spendByBudgetMonth[bid] = {};
-        spendByBudgetMonth[bid][ym] = (spendByBudgetMonth[bid][ym] || 0) + amt;
+        if (!spendLatest[bid]) spendLatest[bid] = {};
+        const existing = spendLatest[bid][ym];
+        /* Replace if newer date or same date (last record in array wins) */
+        if (!existing || t.date >= existing.date) {
+          spendLatest[bid][ym] = t;
+        }
       } else if (t.type === 'Income') {
         if (!earnByBudgetMonth[bid]) earnByBudgetMonth[bid] = {};
         earnByBudgetMonth[bid][ym] = (earnByBudgetMonth[bid][ym] || 0) + amt;
       }
+    });
+
+    /* Convert spendLatest to amounts */
+    const spendByBudgetMonth = {};
+    Object.entries(spendLatest).forEach(([bid, byYm]) => {
+      spendByBudgetMonth[bid] = {};
+      Object.entries(byYm).forEach(([ym, tx]) => {
+        spendByBudgetMonth[bid][ym] = Number(tx.amount || 0);
+      });
     });
 
     /* Active liabilities with balance > 0 */
@@ -164,13 +227,14 @@
   function renderStats(maps) {
     const { catMap, spendByBudgetMonth, earnByBudgetMonth, monthKeys, debtMonthly } = maps;
 
+    /* Exclude override records from stats — base records represent the budgeted plan */
     const incBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Income';
+      return b.active !== false && cat?.type === 'Income' && !isOverrideRecord(b);
     });
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Expense';
+      return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
     const earnBudMo  = incBudgets.reduce((s, b) => s + mbr(b), 0);
@@ -209,11 +273,11 @@
 
     const incBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Income';
+      return b.active !== false && cat?.type === 'Income' && !isOverrideRecord(b);
     });
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Expense';
+      return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
     const earnBudMo  = incBudgets.reduce((s, b) => s + mbr(b), 0);
@@ -253,7 +317,7 @@
 
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Expense';
+      return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
     /* Per-month totals */
@@ -385,16 +449,18 @@
 
     const totalCols = 2 + monthKeys.length + 1; // Item + Budget/mo + months + Total
 
+    /* Earn: base records only (L152 — earn rows are always read-only) */
     const incBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Income';
+      return b.active !== false && cat?.type === 'Income' && !isOverrideRecord(b);
     });
+    /* Expense: base records only — overrides used for per-month amounts (L149, L150) */
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Expense';
+      return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
-    /* ── EARN rows ── */
+    /* ── EARN rows — always read-only (L152) ── */
     let totalEarnBud = 0;
     const earnRowsHtml = incBudgets.map(b => {
       const bAmt = mbr(b);
@@ -402,46 +468,24 @@
       const byMonth = earnByBudgetMonth[b.id] || {};
       let rowTotal = 0;
 
-      /* Budget/mo cell */
-      let budCell;
-      if (editMode && dataType !== 'bgact') {
-        budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
-          style="width:78px;text-align:right;font-size:0.62rem;"
-          data-id="${esc(b.id)}" data-field="budget"
-          value="${bAmt.toFixed(0)}"></td>`;
-      } else {
-        budCell = `<td style="${numCell}">${fmt(bAmt)}</td>`;
-      }
+      /* Budget/mo cell — always read-only for earn (L152) */
+      const budCell = `<td style="${numCell}color:var(--text-dim);">${fmt(bAmt)}</td>`;
 
-      /* Month cells */
+      /* Month cells — always read-only for earn (L152) */
       const monthCells = monthKeys.map(ym => {
         const actual = byMonth[ym] || 0;
         rowTotal += actual;
 
         if (dataType === 'bgact') {
-          /* Variance view: actual − budget, read-only. Positive = earned more (green) */
           const v = actual - bAmt;
           const vc = v >= 0 ? 'color:var(--green);' : 'color:var(--red);';
           const vs = v >= 0 ? '+' : '';
           return `<td style="${numCell}${vc}">${vs}${fmt(Math.abs(v))}</td>`;
         }
         if (dataType === 'bg') {
-          /* Show budget amount for each month (same as Budget/mo) */
-          if (editMode) {
-            return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-              style="width:72px;text-align:right;font-size:0.62rem;"
-              data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
-              value="${bAmt.toFixed(0)}"></td>`;
-          }
-          return `<td style="${numCell}">${fmt(bAmt)}</td>`;
+          return `<td style="${numCell}color:var(--text-dim);">${fmt(bAmt)}</td>`;
         }
-        /* data: show actual, editable */
-        if (editMode) {
-          return `<td style="${numCell}"><input type="number" class="bud-cell-input"
-            style="width:72px;text-align:right;font-size:0.62rem;"
-            data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Income"
-            value="${actual.toFixed(0)}"></td>`;
-        }
+        /* data: show actual — read-only for earn */
         const color = actual > bAmt ? 'color:var(--green);' : '';
         return `<td style="${numCell}${color}">${fmt(actual)}</td>`;
       }).join('');
@@ -472,9 +516,10 @@
         const byMonth = spendByBudgetMonth[b.id] || {};
         let rowTotal = 0;
 
+        /* Budget/mo cell: editable only for budget kind (base record PATCH) */
         let budCell;
         if (editMode && dataType !== 'bgact') {
-          budCell = `<td style="${numCell}"><input type="number" class="bud-cell-input"
+          budCell = `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
             style="width:78px;text-align:right;font-size:0.62rem;"
             data-id="${esc(b.id)}" data-field="budget"
             value="${bAmt.toFixed(0)}"></td>`;
@@ -487,26 +532,29 @@
           rowTotal += actual;
 
           if (dataType === 'bgact') {
-            /* Variance: actual − budget, read-only. Negative = under-budget (good for expenses) */
+            /* Variance: actual − budget, read-only */
             const v = actual - bAmt;
             const vc = v <= 0 ? 'color:var(--green);' : 'color:var(--red);';
             const vs = v >= 0 ? '+' : '';
             return `<td style="${numCell}${vc}">${vs}${fmt(Math.abs(v))}</td>`;
           }
           if (dataType === 'bg') {
+            /* Per-month budget amount — uses most specific record (L149) */
+            const moAmt = getBudgetAmountForMonth(b.id, ym);
             if (editMode) {
-              return `<td style="${numCell}"><input type="number" class="bud-cell-input"
+              /* data-cell-type="budget" → saveBatchChanges POSTs new override record (L150) */
+              return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
                 style="width:72px;text-align:right;font-size:0.62rem;"
-                data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
-                value="${bAmt.toFixed(0)}"></td>`;
+                data-id="${esc(b.id)}" data-month="${esc(ym)}" data-cell-type="budget"
+                value="${moAmt.toFixed(0)}"></td>`;
             }
-            return `<td style="${numCell}">${fmt(bAmt)}</td>`;
+            return `<td style="${numCell}">${fmt(moAmt)}</td>`;
           }
-          /* data: actual, editable */
+          /* data: actual, editable — data-cell-type="actual" → PATCH if exists (L151) */
           if (editMode) {
-            return `<td style="${numCell}"><input type="number" class="bud-cell-input"
+            return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
               style="width:72px;text-align:right;font-size:0.62rem;"
-              data-id="${esc(b.id)}" data-month="${esc(ym)}" data-dtype="Expense"
+              data-id="${esc(b.id)}" data-month="${esc(ym)}" data-cell-type="actual" data-dtype="Expense"
               value="${actual.toFixed(0)}"></td>`;
           }
           const over = actual > bAmt;
@@ -534,7 +582,6 @@
       const monthCells = monthKeys.map(ym => {
         if (mp === 0) return `<td style="${numCell}color:var(--text-dim);">—</td>`;
         if (ym < nowYM) {
-          /* Past months: show scheduled payment dimmed (historical plan) */
           return `<td style="${numCell}color:var(--text-dim);">${fmt(mp)}</td>`;
         }
         if (remaining <= 0) return `<td style="${numCell}color:var(--text-dim);font-size:0.56rem;">✓</td>`;
@@ -551,7 +598,7 @@
       </tr>`;
     }).join('');
 
-    /* ── GAP rows: Budget Plan (static forecast) + Actual (per-month) ── */
+    /* ── GAP rows ── */
     const gapBud = totalEarnBud - totalSpendBud - debtMonthly;
     const gapBudColor = gapBud >= 0 ? 'var(--green)' : 'var(--red)';
     const gapBudMonthCells = monthKeys.map(() =>
@@ -629,7 +676,7 @@
 
     const expBudgets = budgets.filter(b => {
       const cat = catMap[lid(b.category_id)];
-      return b.active !== false && cat?.type === 'Expense';
+      return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
     if (!expBudgets.length) {
@@ -680,27 +727,34 @@
           const id       = input.dataset.id;
           const field    = input.dataset.field;
           const monthKey = input.dataset.month;
+          const cellType = input.dataset.cellType; // 'budget' | 'actual'
           const dtype    = input.dataset.dtype;
           const newVal   = Number(input.value);
 
-          /* Find label */
           const bud   = budgets.find(b => b.id === id);
           const label = bud ? (bud.label || id) : id;
 
           if (field === 'budget') {
-            /* Budget amount change */
+            /* Budget/mo column — PATCH base record */
             const oldVal = bud ? mbr(bud) : 0;
-            const key    = 'budget:' + id;
-            pendingChanges[key] = { kind: 'budget', id, newVal, label, oldVal };
-          } else if (monthKey && dtype) {
-            /* Actual transaction change */
+            pendingChanges['budget:' + id] = { kind: 'budget', id, newVal, label, oldVal };
+
+          } else if (cellType === 'budget' && monthKey) {
+            /* Per-month budget cell — POST new override record (L150) */
+            pendingChanges['budget-month:' + id + ':' + monthKey] = {
+              kind: 'budget-month', id, monthKey, newVal, label
+            };
+
+          } else if (cellType === 'actual' && monthKey && dtype) {
+            /* Actual transaction cell — PATCH if exists, else POST (L151) */
             const maps2  = computeMaps();
             const byMo   = dtype === 'Income'
               ? (maps2.earnByBudgetMonth[id]  || {})
               : (maps2.spendByBudgetMonth[id] || {});
             const oldVal = byMo[monthKey] || 0;
-            const key    = 'actual:' + id + ':' + monthKey;
-            pendingChanges[key] = { kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype };
+            pendingChanges['actual:' + id + ':' + monthKey] = {
+              kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype
+            };
           }
 
           updatePendingBar();
@@ -716,11 +770,11 @@
 
     const requests = entries.map(async e => {
       if (e.kind === 'budget') {
-        /* Reverse mbr(): input shows monthly rate, but Airtable stores by period */
+        /* PATCH base budget record (Budget/mo column only) */
         const bud    = budgets.find(b => b.id === e.id);
         const period = bud ? (bud.period || 'Monthly') : 'Monthly';
         let saveAmount = Math.round(e.newVal);
-        if (period === 'Annual')   saveAmount = Math.round(e.newVal * 12);
+        if (period === 'Annual')      saveAmount = Math.round(e.newVal * 12);
         else if (period === '3x-year') saveAmount = Math.round((e.newVal * 12) / 3);
         else if (period === '6x-year') saveAmount = Math.round((e.newVal * 12) / 6);
 
@@ -731,21 +785,59 @@
           body: JSON.stringify({ amount: saveAmount })
         });
         if (!r.ok) throw new Error('Budget PATCH failed: ' + r.status + ' for ' + e.label);
-      } else {
-        const r = await fetch('/api/transactions', {
+
+      } else if (e.kind === 'budget-month') {
+        /* POST new single-month override budget record (L150) */
+        const bud = budgets.find(b => b.id === e.id);
+        const [y, m] = e.monthKey.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        const r = await fetch('/api/budgets', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            budget_id:   e.id,
-            amount:      e.newVal,
-            date:        e.monthKey + '-01',
-            type:        e.dataType,
-            description: 'mass update by owner',
-            source:      'Manual'
+            label:       bud?.label,
+            category_id: lid(bud?.category_id),
+            amount:      Math.round(e.newVal),
+            period:      'Monthly',
+            start_date:  e.monthKey + '-01',
+            end_date:    e.monthKey + '-' + String(lastDay).padStart(2, '0'),
+            active:      true
           })
         });
-        if (!r.ok) throw new Error('Transaction POST failed: ' + r.status + ' for ' + e.label);
+        if (!r.ok) throw new Error('Budget override POST failed: ' + r.status + ' for ' + e.label);
+
+      } else {
+        /* Actual transaction — PATCH if existing tx found, else POST (L151) */
+        const existingTx = txData.find(t =>
+          lid(t.budget_id) === e.id &&
+          (t.date || '').slice(0, 7) === e.monthKey
+        );
+
+        if (existingTx) {
+          const r = await fetch('/api/transactions/' + existingTx.id, {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: e.newVal })
+          });
+          if (!r.ok) throw new Error('Transaction PATCH failed: ' + r.status + ' for ' + e.label);
+        } else {
+          const r = await fetch('/api/transactions', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              budget_id:   e.id,
+              amount:      e.newVal,
+              date:        e.monthKey + '-01',
+              type:        e.dataType,
+              description: 'mass update by owner',
+              source:      'Manual'
+            })
+          });
+          if (!r.ok) throw new Error('Transaction POST failed: ' + r.status + ' for ' + e.label);
+        }
       }
     });
 
@@ -801,7 +893,6 @@
 
   /* ── initFilters() ── */
   function initFilters() {
-    /* Helper: wire a toggle group */
     function wireGroup(containerId, dataAttr, getCurrentState, setState, onChanged) {
       const zone = el(containerId);
       if (!zone) return;
@@ -813,19 +904,16 @@
           onChanged();
         });
       });
-      /* Set initial active */
       const initBtn = zone.querySelector('[data-' + dataAttr + '="' + getCurrentState() + '"]');
       if (initBtn) initBtn.classList.add('active');
     }
 
-    /* Graph view */
     wireGroup('bud-graphview-toggle', 'gview',
       () => graphView,
       v => { graphView = v; },
       () => { const m = computeMaps(); renderChart(m); }
     );
 
-    /* Graph period */
     wireGroup('bud-graphperiod-toggle', 'gperiod',
       () => graphPeriod,
       v => { graphPeriod = v; },
@@ -833,7 +921,6 @@
         const customInput = el('bud-custom-start');
         if (customInput) customInput.style.display = graphPeriod === 'custom' ? '' : 'none';
         if (graphPeriod === 'custom') {
-          /* Need data that may predate rolling window — reload */
           loadAndRender().catch(console.error);
         } else {
           const m = computeMaps(); renderChart(m); renderGrid(m); renderStats(m);
@@ -841,7 +928,6 @@
       }
     );
 
-    /* Custom start month input */
     const customInput = el('bud-custom-start');
     if (customInput) {
       customInput.style.display = 'none';
@@ -851,39 +937,33 @@
       });
     }
 
-    /* Graph data */
     wireGroup('bud-graphdata-toggle', 'gdata',
       () => graphData,
       v => { graphData = v; },
       () => { const m = computeMaps(); renderChart(m); }
     );
 
-    /* Display view */
     wireGroup('bud-dispview-toggle', 'dview',
       () => dispView,
       v => { dispView = v; },
       () => { const m = computeMaps(); renderGrid(m); }
     );
 
-    /* Data type */
     wireGroup('bud-datatype-toggle', 'dtype',
       () => dataType,
       v => { dataType = v; },
       () => { const m = computeMaps(); renderGrid(m); }
     );
 
-    /* Edit mode button */
     const editBtn = el('bud-edit-btn');
     if (editBtn) editBtn.addEventListener('click', toggleEditMode);
 
-    /* Save / discard buttons */
     const saveBtn    = el('bud-save-changes-btn');
     const discardBtn = el('bud-discard-btn');
     if (saveBtn)    saveBtn.addEventListener('click', () => saveBatchChanges().catch(console.error));
     if (discardBtn) discardBtn.addEventListener('click', discardChanges);
 
-    /* Analysis toggle */
-    const analysisTog = el('bud-analysis-toggle');
+    const analysisTog  = el('bud-analysis-toggle');
     const analysisBody = el('bud-analysis-body');
     if (analysisTog && analysisBody) {
       analysisTog.style.cursor = 'pointer';
@@ -898,21 +978,25 @@
       });
     }
 
-    /* Init pending bar hidden */
     const bar = el('bud-pending-bar');
     if (bar) bar.style.display = 'none';
   }
 
   /* ── loadAndRender() ── */
   async function loadAndRender() {
-    let start = isoMonth(11);
-    if (graphPeriod === 'custom' && customStart) {
-      const customStartDate = customStart + '-01';
-      if (customStartDate < start) start = customStartDate;
+    /* FY: always fetch from Jan 1 of current year to ensure Jan is included (L153) */
+    let start;
+    if (graphPeriod === 'fy') {
+      start = new Date().getFullYear() + '-01-01';
+    } else if (graphPeriod === 'custom' && customStart) {
+      start = customStart + '-01';
+    } else {
+      start = isoMonth(11);
     }
+
     const [txR, bR, cR, lR] = await Promise.allSettled([
       apiFetch('/api/transactions?start=' + start),
-      apiFetch('/api/budgets'),
+      apiFetch('/api/budgets?all=true'),
       apiFetch('/api/categories'),
       apiFetch('/api/liabilities?all=true')
     ]);
