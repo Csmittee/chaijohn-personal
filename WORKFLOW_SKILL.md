@@ -1,5 +1,5 @@
 # 🎯 WORKFLOW SKILL — Chaijohn OS
-> Version 2.0 — 2026-06-02
+> Version 3.0 — 2026-06-04
 > Universal operating model for Chat + CC sessions.
 > Copy this file to every project root as `WORKFLOW_SKILL.md`.
 
@@ -35,12 +35,16 @@ This saves 5–7 wasted messages per session.
 - Diagnoses before acting — never guesses
 - Writes CC prompts, updates handoff docs
 - Does NOT write to the repo
+- Think of CC as Chat but with ability to read and write every live file —
+  Chat provides direction and problem framing, CC owns verification and solution
 
 ### 🤖 CC (Claude Code)
 - Reads all files fresh from repo before writing anything
 - Writes complete replacement files — never patches or diffs
 - Commits with descriptive messages, merges to main before ending session
 - Archives prompt + updates RULES.md + PROJECT_STATE.md after every fix
+- Is NOT bound by Chat's suggested solution — CC verifies the real cause
+  from live files and fixes it the best way CC judges
 
 ---
 
@@ -53,7 +57,7 @@ Chat reads repo → diagnoses → writes CC_PROMPT → owner pushes to repo root
         ↓
 Owner runs CC: "Read CLAUDE.md, RULES.md, PROJECT_STATE.md. Then execute: [prompt filename]"
         ↓
-CC reads fresh → fixes → commits → archives prompt → updates docs → merges to main
+CC reads fresh → verifies cause → fixes → commits → archives prompt → updates docs → merges to main
         ↓
 Owner QAs live site → reports back to Chat (screenshot or pass/fail list)
         ↓
@@ -64,12 +68,82 @@ Chat reviews → next prompt or done
 
 ## CHAT RULES — NON-NEGOTIABLE
 
-1. **Never guess** — if a file is needed to diagnose, request it via project knowledge search. Do not theorize from partial information.
-2. **Never use project folder files as source of truth for live code** — always treat repo (GitHub sync) as the actual state. Project knowledge may lag.
-3. **Read before diagnosing** — check CLAUDE.md + RULES.md + the specific injector/API file before forming any opinion on a bug.
-4. **One CC prompt per session goal** — batch all related fixes into one prompt. Never write one-fix-per-prompt for related issues.
-5. **Never re-explain project history in CC prompts** — CC reads CLAUDE.md + RULES.md. Prompts contain only: objective, files to read, exact fixes, commit order.
-6. **Do not trust your own memory for field names, table names, or API shapes** — always read RULES.md first. All confirmed facts live there.
+1. **Never guess** — if a file is needed to diagnose, request it via project knowledge search.
+2. **Sync before critical diagnosis** — when verifying a root cause or a repeat issue,
+   ask owner to confirm GitHub sync is refreshed so project knowledge reflects live files.
+   Never diagnose a repeat bug from stale snapshot data.
+3. **Read before diagnosing** — check CLAUDE.md + RULES.md + the specific injector/API
+   file before forming any opinion on a bug.
+4. **One CC prompt per session goal** — batch all related fixes into one prompt.
+5. **Never re-explain project history in CC prompts** — CC reads CLAUDE.md + RULES.md.
+6. **Do not trust your own memory for field names, table names, or API shapes** —
+   always read RULES.md first. All confirmed facts live there.
+7. **Permanent behaviour = permanent rule** — if a fix or behaviour must survive every
+   future CC session, it must be written into RULES.md, not just the CC prompt body.
+   Prompts are one-session instructions. RULES.md is permanent memory.
+
+---
+
+## HOW CHAT WRITES A CC PROMPT
+
+### Prompt structure — lean by default
+
+CC is stronger than Chat at reading live files. Chat's job is to frame the problem,
+not prescribe the solution. Overly detailed solutions constrain CC's thinking and
+cause blind execution of wrong fixes.
+
+**Default prompt structure:**
+
+```markdown
+## PROBLEM N — [short name]
+
+**Observed:** [what the owner saw — exact behaviour]
+
+**Suggested cause:** [Chat's hypothesis from project knowledge snapshot —
+CC must verify this against the live file before acting]
+
+**Required outcome:** [what must be true after the fix]
+```
+
+This gives CC:
+- The symptom to reproduce
+- A starting hypothesis to verify (not blindly follow)
+- A clear success definition
+
+**When to add more detail:** Only when Chat has confirmed the cause from
+a fresh sync AND the fix is unambiguous (e.g. a wrong string value, a missing
+route in an array). In that case Chat may include a specific code change.
+Even then — mark it clearly as "confirmed fix, not a suggestion."
+
+### Permanent rules section — always include
+
+Every CC prompt that changes a behaviour that must persist must include:
+
+```markdown
+## PERMANENT RULES — add to RULES.md
+
+L[next number]  [rule text — one compact line per rule]
+```
+
+CC must write these to RULES.md as part of the mandatory post-fix steps.
+If a behaviour has been requested more than once and keeps reverting —
+it was never in RULES.md. Add it now.
+
+### RULES.md file management
+
+- All new rules go to the TOP of RULES.md (newest first)
+- If RULES.md exceeds ~150 lines of active rules, split into:
+  - `RULES.md` — most recent ~80 rules (what CC needs for current work)
+  - `RULES-archive.md` — older rules (reference only, CC does not read unless asked)
+- CC prompt intro must specify which file to read:
+  ```
+  2. RULES.md — compact lessons (required always)
+  ```
+  If split has occurred, add:
+  ```
+  2a. RULES.md — current rules (required)
+  2b. RULES-archive.md — only if working on a legacy module
+  ```
 
 ---
 
@@ -77,119 +151,48 @@ Chat reviews → next prompt or done
 
 When owner reports QA results (screenshots or pass/fail):
 
-1. Map each failure to a file + root cause — do not guess, read the file if needed
-2. Group all fixes by file — one CC prompt covers all related files
-3. State the root cause clearly before writing the fix spec
-4. Include a confirmation checklist in the prompt matching exactly what owner reported
+1. If it is a repeat issue (same bug came back) — request a GitHub sync refresh
+   before diagnosing. The previous fix may not have landed in RULES.md.
+2. Map each failure to a file + suggested cause — read the file if needed
+3. Group all fixes by file — one CC prompt covers all related files
+4. Include a checklist in the prompt matching exactly what owner reported
 
 **QA report format to ask for if not provided:**
 ```
-Module → Feature: ✅ pass / ❌ fail / ⚠️ partial
+Feature: ✅ pass / ❌ fail / ⚠️ partial
 Notes: [what was seen]
 ```
 
 ---
 
-## HOW TO WRITE A CC PROMPT
-
-### Naming
-```
-CC_PROMPT_[phaseCode]-[objective].md
-```
-Examples:
-- `CC_PROMPT_bugfix-m24-empty-panel.md`
-- `CC_PROMPT_feat9E-hard-assets.md`
-- `CC_PROMPT_qa-batch3-sales-projects.md`
-
-Phase codes: `bugfix` · `feat[phase]` · `qa` · `chore` · `hotfix`
-
-### File location
-- **Before CC runs:** repo root
-- **After CC runs:** `docs/prompts/` stamped `✅ COMPLETE — [date] — [summary]`
-
-### Required prompt structure
-
-```markdown
-# CC_PROMPT_[name].md
-> [one line objective]
-
-## CC INTRO
-[paste the standard CC intro block — see below]
-
-## READ FIRST (before touching any file)
-[list every file CC must read fresh — be specific]
-
-## CONFIRMED FACTS
-[data confirmed from RULES.md or owner QA — no assumptions]
-
-## BUG / TASK [N] — [short name]
-**Root cause:** [confirmed, not guessed]
-**File:** [exact path]
-**Fix:** [exact change — code block if needed]
-
-## DO NOT TOUCH
-[list files CC must not modify]
-
-## AFTER ALL FIXES — MANDATORY
-1. Archive this prompt → docs/prompts/ stamped ✅ COMPLETE
-2. Append new lessons to RULES.md (next L-number)
-3. Update PROJECT_STATE.md current state
-4. Commit docs: `docs: update after [prompt name]`
-
-## COMMIT ORDER
-[list commits in order — one per file group]
-Branch: [branch name]
-Merge to main after owner confirms: [checklist]
-```
-
-### Standard CC intro block (paste into every prompt)
-```
-New session. Ignore all previous context from other projects.
-
-You are working on CHAIJOHN OS at:
-https://github.com/Csmittee/chaijohn-personal
-
-Before doing anything else, read:
-1. CLAUDE.md        — project brief, stack, 6 rules (required always)
-2. RULES.md         — compact lessons L001–L083+ (required always)
-3. PROJECT_STATE.md — phases, roadmap, file inventory (required for build sessions)
-
-Do NOT read masterseed.md or lessons_learned.md — they are archived.
-Then read and execute: [prompt filename]
-```
-
----
-
-## CC GOLDEN RULES (what CC follows — Chat enforces these in prompts)
+## CC GOLDEN RULES (Chat enforces these in every prompt)
 
 | Rule | What it means |
 |---|---|
-| Read fresh | Read every source file from repo before writing. Never rely on prompt description of file contents. |
-| Complete files only | Full replacement. No diffs, no patches, no "add this function". |
-| No shared bundles | One injector per panel. Never put panel logic in a shared file. |
+| Read fresh | Read every source file from repo before writing. Never rely on prompt description. |
+| Verify before fix | Chat's suggested cause is a hypothesis. CC confirms from live file before acting. |
+| Complete files only | Full replacement. No diffs, no patches. |
+| No shared bundles | One injector per panel. |
 | No React / No Tailwind | Pure CSS vars + vanilla JS only. |
-| Explicit color on light buttons | `color:#0a0a10` always when background is var(--yellow) or white. |
-| Panel display via CSS class | Never `panel.style.cssText = 'display:flex'`. Use `#panel-xxx.active { display:flex }` via ensureStyles(). |
-| Route guard first | `if (e.detail !== 'route-name') return;` as FIRST line of panelactivated handler. |
-| External Airtable = Meta API first | Any base other than chaijohn-core: call Meta API to verify field names before writing code. (L077) |
-| API shape | `/api/projects` returns `{ records: [] }` pre-flattened. Use `data.records \|\| []`. Never re-spread `r.fields`. (L082) |
-| Archive + document | After every fix: move prompt → docs/prompts/, append RULES.md, update PROJECT_STATE.md, commit docs separately. |
+| Explicit color on light buttons | `color:#0a0a10` when background is var(--yellow). |
+| Panel display via CSS class | Never inline `style.display`. Use `#panel-xxx.active { display:flex }` via injected style block. |
+| Route guard first | `if (e.detail !== 'route-name') return;` as first line of panelactivated handler. |
+| Archive + document | After every fix: move prompt → docs/prompts/, append RULES.md, update PROJECT_STATE.md. |
+| Permanent = RULES.md | Any behaviour that must survive next session goes into RULES.md. Not just the prompt. |
 
 ---
 
-## REPO DOC STRUCTURE (what lives where)
+## REPO DOC STRUCTURE
 
 | File | Purpose | Who reads it |
 |---|---|---|
-| `CLAUDE.md` | Project brief, stack, 6 rules, key files | CC — every session |
-| `RULES.md` | All lessons L001–L083+, newest at top | CC — every session |
+| `CLAUDE.md` | Project brief, stack, constraints | CC — every session |
+| `RULES.md` | All lessons L001+, newest at top | CC — every session |
+| `RULES-archive.md` | Old rules if split triggered | CC — only if asked |
 | `PROJECT_STATE.md` | Phase status, roadmap, file inventory | CC — build sessions |
 | `WORKFLOW_SKILL.md` | This file — operating model | Chat + Owner |
-| `docs/prompts/` | Archived CC prompts stamped ✅ COMPLETE | Reference only |
+| `docs/prompts/` | Archived CC prompts stamped ✅ | Reference only |
 | `docs/archive/` | Old masterseed + lessons_learned | Do not read |
-
-**masterseed.md and lessons_learned.md are ARCHIVED** — do not update them.
-All new lessons go to RULES.md. All new state goes to PROJECT_STATE.md.
 
 ---
 
@@ -197,29 +200,27 @@ All new lessons go to RULES.md. All new state goes to PROJECT_STATE.md.
 
 Before closing any Chat session that involved fixes:
 
-1. **Confirm CC merged to main** — check GitHub, last commit should be on main
-2. **Save updated handoff** — Chat will provide `CHAT_HANDOFF_[date].md`
-3. **Keep this file in Claude project folder** — WORKFLOW_SKILL.md must stay synced
+1. **Confirm CC merged to main** — check GitHub, last commit on main
+2. **Save updated handoff** — Chat provides `CHAT_HANDOFF_[date].md`
+3. **Next session** — paste handoff + confirm sync checkbox ON
 
-Handoff doc format (Chat generates this at session end):
-```markdown
-# CHAT HANDOFF — [date]
+---
 
-## WHAT WAS DONE
-[bullets of fixes merged]
+## PANEL HEADER INTEGRITY RULE (L147)
 
-## CURRENT STATE ✅
-[confirmed working modules]
+Every injector that calls `p.innerHTML = renderPanel()` replaces the entire
+panel div including any header defined in index.html.
 
-## CURRENT BUGS 🔴/🟡
-[table: bug | file | fix | status]
+**Rule:** If an injector uses `p.innerHTML` to render the full panel:
+- The panel header (title + subtitle) MUST be included inside `renderPanel()`
+- Never assume the header survives in index.html after an injector runs
+- When reviewing any injector, always confirm the header is present in its output
 
-## CC PROMPT READY
-[filename if prompt written, or NONE]
-
-## NEXT SESSION CHECKLIST
-[owner actions + QA items outstanding]
-
-## KEY RULES TO CARRY
-[any L-numbers or facts critical for next session]
+**Audit command CC can run:**
+```bash
+grep -l "p.innerHTML\|panel.innerHTML" public/assets/js/*.injector.js
 ```
+Then for each hit — confirm that injector's renderPanel() includes a header block.
+
+This rule applies to ALL injectors, present and future.
+Add to RULES.md as L147.
