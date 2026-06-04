@@ -8,6 +8,7 @@
 
   let initialized = false;
   let plChart = null;
+  let plCFChart = null;
   let _activeTab = 'revenue';
   let _activeOutput = 'pl';
   let _activePeriod = '12mo';
@@ -32,9 +33,10 @@
   let _currentVersions = [];
   let _savedVersion = 0;
   let _projects = [];
-  let _sidebarW = 280;
+  let _sidebarW = 300;
   let _selectedProjectId = '';
   let _selectedProjectName = '';
+  let _scalarInputs = {};
   let _revInputs = { start_period: '', input_mode: 'Units × price', units_mo: '', sale_price: '', revenue_mo: '', probability: '70', growth_mode: 'Conservative' };
 
   function panel() { return document.getElementById('panel-pl-generator'); }
@@ -250,8 +252,13 @@
 
   // ── Input collection ─────────────────────────────────────────
   function getInputs() {
-    function v(id, def) { const el = $(id); return el ? el.value : (def !== undefined ? def : ''); }
-    function rv(id, key, def) { const el = $(id); return el ? el.value : (_revInputs[key] || def || ''); }
+    function v(id, def) {
+      const el = $(id);
+      if (el) return el.value;
+      const key = id.replace(/^plg-/, '').replace(/-/g, '_');
+      return key in _scalarInputs ? _scalarInputs[key] : (def !== undefined ? def : '');
+    }
+    function rv(id, key, def) { const el = $(id); return el ? el.value : (_revInputs[key] || _scalarInputs[key] || def || ''); }
     return {
       project_id: v('plg-project-sel', ''),
       start_period: rv('plg-start-period', 'start_period', ''),
@@ -307,7 +314,7 @@
   }
 
   function lbl(text, extra) {
-    return `<div style="font-size:0.65rem;color:var(--text-dim);margin-bottom:2px${extra ? ';' + extra : ''}">${text}</div>`;
+    return `<div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:2px${extra ? ';' + extra : ''}">${text}</div>`;
   }
 
   function secHdr(text) {
@@ -589,7 +596,6 @@
   function renderBSTable(result) {
     if (!result || !result.bs) return `<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.78rem">Click "Generate" to compute</div>`;
     return result.bs.map(snap => {
-      const balanced = Math.abs(snap.totalAssets - (snap.totalLiab + snap.totalEquity)) < 1;
       return `
       <div style="margin-bottom:1rem;padding:0.5rem;background:var(--bg-card);border-radius:var(--radius)">
         <div style="font-size:0.65rem;font-weight:700;color:var(--text-dim);letter-spacing:0.04em;margin-bottom:0.4rem">PERIOD ${snap.period}</div>
@@ -615,9 +621,13 @@
             </div>
           </div>
         </div>
-        <div style="font-size:0.68rem;color:${balanced ? 'var(--text-dim)' : '#ef4444'};margin-top:0.4rem">
-          ${balanced ? 'Assets = Liabilities + Equity · ✓ balanced' : '⚠ imbalance ' + fmt(Math.abs(snap.totalAssets - snap.totalLiab - snap.totalEquity))}
-        </div>
+        ${(() => {
+          const diff = snap.totalAssets - snap.totalLiab - snap.totalEquity;
+          const balanced = Math.abs(diff) < 1;
+          let msg = 'Assets = Liabilities + Equity · ✓ balanced';
+          if (!balanced) msg = diff > 0 ? `⚠ Assets overstated by ${fmt(diff)} — check asset inputs` : `⚠ Liab+Equity overstated by ${fmt(Math.abs(diff))} — check funding/equity inputs`;
+          return `<div style="font-size:0.68rem;color:${balanced ? 'var(--text-dim)' : '#ef4444'};margin-top:0.4rem">${msg}</div>`;
+        })()}
       </div>`;
     }).join('');
   }
@@ -801,7 +811,7 @@
       </div>
 
       <div id="plg-chart-area" style="padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0">
-        ${_computed ? `<canvas id="plg-chart" height="120"></canvas>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
+        ${_computed ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&amp;L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
       </div>
 
       <div style="display:flex;flex:1;overflow:hidden;min-height:0" id="plg-body">
@@ -870,6 +880,46 @@
         }
       });
     } catch (err) { console.error('[pl-gen] chart:', err); }
+  }
+
+  // ── CF Chart rendering ────────────────────────────────────────
+  function renderCFChart(result, period) {
+    const canvas = document.getElementById('plg-cf-chart');
+    if (!canvas || !result) return;
+    if (plCFChart) { plCFChart.destroy(); plCFChart = null; }
+    const cf = result.cf;
+    const is12 = period !== '5yr';
+    let labels, inflows, outflows;
+    if (is12) {
+      const data = cf.slice(0, 12);
+      labels = data.map(p => 'M' + p.m);
+      inflows = data.map(p => p.inflow);
+      outflows = data.map(p => p.outflow);
+    } else {
+      labels = ['Y1', 'Y2', 'Y3', 'Y4', 'Y5'];
+      inflows = [1, 2, 3, 4, 5].map(yr => cf.slice((yr - 1) * 12, yr * 12).reduce((s, p) => s + p.inflow, 0));
+      outflows = [1, 2, 3, 4, 5].map(yr => cf.slice((yr - 1) * 12, yr * 12).reduce((s, p) => s + p.outflow, 0));
+    }
+    try {
+      plCFChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Inflow', data: inflows, backgroundColor: '#3b82f688', barPercentage: 0.7 },
+            { label: 'Outflow', data: outflows, backgroundColor: '#ef444488', barPercentage: 0.7 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { font: { size: 10 }, color: '#888' } } },
+          scales: {
+            x: { ticks: { font: { size: 9 }, color: '#888', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { ticks: { font: { size: 9 }, color: '#888' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+          }
+        }
+      });
+    } catch (err) { console.error('[pl-gen] cf-chart:', err); }
   }
 
   // ── Save ──────────────────────────────────────────────────────
@@ -1016,10 +1066,12 @@
     _selectedProjectId = ''; _selectedProjectName = '';
     const p = panel(); if (!p) return;
     p.innerHTML = renderPanel();
+    wireResizer();
   }
 
   function clearFormData() {
     _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
+    _scalarInputs = {};
     _revInputs = { start_period: '', input_mode: 'Units × price', units_mo: '', sale_price: '', revenue_mo: '', probability: '70', growth_mode: 'Conservative' };
     _semiItems = [
       { desc: 'Office staff', amt: '', freq: 'Monthly' },
@@ -1044,6 +1096,7 @@
         // No saved model for this project — blank slate but keep project identity
         clearFormData();
         p.innerHTML = renderPanel();
+        wireResizer();
         const newSel = $('plg-project-sel');
         if (newSel) newSel.value = projectId;
         return;
@@ -1058,7 +1111,8 @@
         if (saved.inputs.fixed_items) _fixedItems = saved.inputs.fixed_items;
         if (saved.inputs.asset_items) _assetItems = saved.inputs.asset_items;
         if (saved.inputs.fund_items)  _fundItems  = saved.inputs.fund_items;
-        // Restore revenue inputs into module var so they survive tab switches
+        // Restore ALL scalar inputs so getInputs() works regardless of which tab is active
+        _scalarInputs = { ...(saved.inputs || {}) };
         _revInputs = {
           start_period: saved.inputs.start_period || '',
           input_mode: saved.inputs.input_mode || 'Units × price',
@@ -1070,15 +1124,55 @@
         };
       }
       p.innerHTML = renderPanel(saved.inputs);
+      wireResizer();
       const newSel = $('plg-project-sel');
       if (newSel) newSel.value = projectId;
-      if (_computed && _computed.pl) renderChart(_computed, _activePeriod);
+      if (_computed && _computed.pl) {
+        const chartArea = $('plg-chart-area');
+        if (chartArea) {
+          chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
+        }
+        renderChart(_computed, _activePeriod);
+        renderCFChart(_computed, _activePeriod);
+      }
     } catch {
       clearFormData();
       p.innerHTML = renderPanel();
+      wireResizer();
       const newSel = $('plg-project-sel');
       if (newSel) newSel.value = projectId;
     }
+  }
+
+  function wireResizer() {
+    const p = panel(); if (!p) return;
+    const rsz = p.querySelector('#plg-resizer');
+    if (!rsz) return;
+    let dragging = false;
+    const onDrag = ev => {
+      if (!dragging) return;
+      const sidebar = p.querySelector('#plg-sidebar');
+      if (!sidebar) return;
+      const panelRect = p.getBoundingClientRect();
+      const newW = Math.min(480, Math.max(220, ev.clientX - panelRect.left));
+      _sidebarW = newW;
+      sidebar.style.width = newW + 'px';
+      sidebar.style.minWidth = newW + 'px';
+      sidebar.style.flexShrink = '0';
+    };
+    rsz.addEventListener('mousedown', ev => {
+      dragging = true;
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('mouseup', () => {
+        dragging = false;
+        document.body.style.cursor = '';
+        document.removeEventListener('mousemove', onDrag);
+      }, { once: true });
+      ev.preventDefault();
+    });
+    rsz.addEventListener('mouseover', () => { rsz.style.background = 'var(--yellow)'; });
+    rsz.addEventListener('mouseout', () => { if (!dragging) rsz.style.background = 'transparent'; });
   }
 
   function generate(periods) {
@@ -1087,11 +1181,11 @@
     _activePeriod = periods === 12 ? '12mo' : '5yr';
     rebuildKPIs();
 
-    // Update chart area
     const chartArea = $('plg-chart-area');
     if (chartArea) {
-      chartArea.innerHTML = `<canvas id="plg-chart" height="120"></canvas>`;
+      chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
       renderChart(_computed, _activePeriod);
+      renderCFChart(_computed, _activePeriod);
     }
 
     rebuildOutput();
@@ -1105,6 +1199,7 @@
     initialized = true;
 
     p.innerHTML = renderPanel();
+    wireResizer();
 
     loadProjects();
 
@@ -1113,36 +1208,6 @@
       const s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
       document.head.appendChild(s);
-    }
-
-    // Sidebar resizer drag
-    const rsz = p.querySelector('#plg-resizer');
-    if (rsz) {
-      let dragging = false;
-      const onDrag = ev => {
-        if (!dragging) return;
-        const sidebar = p.querySelector('#plg-sidebar');
-        if (!sidebar) return;
-        const panelRect = p.getBoundingClientRect();
-        const newW = Math.min(480, Math.max(220, ev.clientX - panelRect.left));
-        _sidebarW = newW;
-        sidebar.style.width = newW + 'px';
-        sidebar.style.minWidth = newW + 'px';
-        sidebar.style.flexShrink = '0';
-      };
-      rsz.addEventListener('mousedown', ev => {
-        dragging = true;
-        document.body.style.cursor = 'col-resize';
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', () => {
-          dragging = false;
-          document.body.style.cursor = '';
-          document.removeEventListener('mousemove', onDrag);
-        }, { once: true });
-        ev.preventDefault();
-      });
-      rsz.addEventListener('mouseover', () => { rsz.style.background = 'var(--yellow)'; });
-      rsz.addEventListener('mouseout', () => { if (!dragging) rsz.style.background = 'transparent'; });
     }
 
     // Delegated events
@@ -1177,6 +1242,7 @@
           _computed = computePL(si, periods);
           rebuildKPIs();
           renderChart(_computed, _activePeriod);
+          renderCFChart(_computed, _activePeriod);
         }
         rebuildOutputHeader();
         rebuildOutput();
@@ -1251,8 +1317,16 @@
             if (saved.inputs.fund_items) _fundItems = saved.inputs.fund_items;
           }
           p.innerHTML = renderPanel(saved.inputs);
+          wireResizer();
           loadProjects();
-          if (_computed && _computed.pl) renderChart(_computed, _activePeriod);
+          if (_computed && _computed.pl) {
+            const chartArea = $('plg-chart-area');
+            if (chartArea) {
+              chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
+            }
+            renderChart(_computed, _activePeriod);
+            renderCFChart(_computed, _activePeriod);
+          }
         } catch { alert('Failed to load model'); }
         return;
       }
@@ -1289,7 +1363,11 @@
         if (projectId) { loadProjectModel(projectId); } else { resetForm(); loadProjects(); }
         return;
       }
-      // Sync revenue inputs to module var on every change
+      // Sync ALL scalar inputs on every change
+      if (e.target.id) {
+        const key = e.target.id.replace(/^plg-/, '').replace(/-/g, '_');
+        _scalarInputs[key] = e.target.value;
+      }
       const revFieldMap = { 'plg-start-period':'start_period','plg-input-mode':'input_mode','plg-units-mo':'units_mo','plg-sale-price':'sale_price','plg-revenue-mo':'revenue_mo','plg-probability':'probability','plg-growth-mode':'growth_mode' };
       if (revFieldMap[e.target.id]) { _revInputs[revFieldMap[e.target.id]] = e.target.value; }
 
@@ -1337,8 +1415,12 @@
       }
     });
 
-    // Sync revenue fields to _revInputs on every keystroke
+    // Sync ALL scalar inputs to module vars on every keystroke
     p.addEventListener('input', (e) => {
+      if (e.target.id) {
+        const key = e.target.id.replace(/^plg-/, '').replace(/-/g, '_');
+        _scalarInputs[key] = e.target.value;
+      }
       const revFieldMap = { 'plg-start-period':'start_period','plg-units-mo':'units_mo','plg-sale-price':'sale_price','plg-revenue-mo':'revenue_mo','plg-probability':'probability' };
       if (revFieldMap[e.target.id]) { _revInputs[revFieldMap[e.target.id]] = e.target.value; }
       // Auto-compute revenue from units × price
