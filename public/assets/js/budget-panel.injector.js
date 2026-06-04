@@ -753,9 +753,14 @@
               ? (maps2.earnByBudgetMonth[id]  || {})
               : (maps2.spendByBudgetMonth[id] || {});
             const oldVal = byMo[monthKey] || 0;
-            pendingChanges['actual:' + id + ':' + monthKey] = {
-              kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype
-            };
+            /* Skip if value unchanged or zero (API rejects amount=0 on POST) */
+            if (newVal === oldVal || (newVal === 0 && !oldVal)) {
+              delete pendingChanges['actual:' + id + ':' + monthKey];
+            } else {
+              pendingChanges['actual:' + id + ':' + monthKey] = {
+                kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype
+              };
+            }
           }
 
           updatePendingBar();
@@ -832,6 +837,7 @@
         );
 
         if (existingTx) {
+          if (e.newVal === 0) return; /* zero clears handled by not saving */
           const r = await fetch('/api/transactions/' + existingTx.id, {
             method: 'PATCH',
             credentials: 'same-origin',
@@ -840,6 +846,7 @@
           });
           if (!r.ok) throw new Error('Transaction PATCH failed: ' + r.status + ' for ' + e.label);
         } else {
+          if (!e.newVal) return; /* skip zero/falsy — API rejects amount=0 */
           const r = await fetch('/api/transactions', {
             method: 'POST',
             credentials: 'same-origin',
