@@ -1,4 +1,5 @@
 # CC_PROMPT_chore-doc-transformation.md
+> ✅ COMPLETE — chore/doc-transformation — 2026-06-04 — Rules split into domain files
 > Reorganise the documentation system — split RULES.md into universal + domain files,
 > introduce .claude/rules/ structure, update all doc pointers.
 > No UI files. No API files. No injector files. Docs only.

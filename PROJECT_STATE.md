@@ -128,6 +128,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | optim/kv-cache | KV cache on all heavy GETs (categories/budgets/liabilities/transactions/projects/sales), bust counter for tx, ~80% Airtable reduction, RULES L130–L132 | ✅ COMPLETE |
 | hotfix/pl-nav | Add 'pl-gen' to ROUTES array in index.html — P&L Generator nav was falling back to dashboard because route was unrecognised | ✅ COMPLETE |
 | fix/pl-generator-core | Full P&L Generator fix: rename route/panel to pl-generator, fix panelactivated listener, type=text inputs (no spinners), project selector auto-load KV, resetForm/loadProjectModel, resizer with getBoundingClientRect, RULES L133-L135 | ✅ COMPLETE |
+| chore/doc-transformation | Rules system split: RULES.md universal only, .claude/rules/ domain files × 8, RULES-archive.md, L148 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
@@ -231,13 +232,24 @@ Every CC session must preserve:
 
 ```
 /                                         ← repo root (keep clean)
-├── CLAUDE.md                             ✅ primary CC entry point (30 lines)
-├── RULES.md                              ✅ compact one-liner rules (L001–L060j)
+├── CLAUDE.md                             ✅ index + stack + 5 rules + domain rule map
+├── RULES.md                              ✅ universal rules only (~20 rules, newest first)
+├── RULES-archive.md                      ✅ archived L001–L059b (pre-9C, read-only)
 ├── PROJECT_STATE.md                      ✅ this file — phases + roadmap + inventory
 ├── WORKFLOW_SKILL.md                     ✅ operating model reference
 ├── README.md                             ✅
 ├── wrangler.toml                         ✅
 ├── package.json                          ✅
+└── .claude/
+    └── rules/
+        ├── RULES-workflow.md             ✅ CC workflow discipline rules
+        ├── RULES-dom.md                  ✅ panel init, route guard, input type rules
+        ├── RULES-data.md                 ✅ transaction model, API shapes, Airtable patterns
+        ├── RULES-cashflow.md             ✅ M2.1 specific rules
+        ├── RULES-sales.md                ✅ M2.2, sales, presale, business base rules
+        ├── RULES-projects.md             ✅ M3.4, M2.4, project lifecycle rules
+        ├── RULES-budget.md               ✅ M2.5 budget matrix and meter rules
+        └── RULES-plgen.md                ✅ M4.4 P&L Generator rules (L120–L145)
 ├── docs/
 │   ├── archive/
 │   │   ├── masterseed_archived_2026-05-28.md     ✅ archived
