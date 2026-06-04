@@ -130,6 +130,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | fix/pl-generator-core | Full P&L Generator fix: rename route/panel to pl-generator, fix panelactivated listener, type=text inputs (no spinners), project selector auto-load KV, resetForm/loadProjectModel, resizer with getBoundingClientRect, RULES L133-L135 | ✅ COMPLETE |
 | fix/budget-panel | Budget grid: Jan visibility, dedup actual save, per-month override priority, earn read-only, L149–L153 | ✅ COMPLETE |
 | chore/doc-transformation | Rules system split: RULES.md universal only, .claude/rules/ domain files × 8, RULES-archive.md, L148 | ✅ COMPLETE |
+| feat/datetime-bar | Global datetime display in top bar (datetime.injector.js), auto-timezone, updates every minute | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
@@ -274,6 +275,7 @@ Every CC session must preserve:
             ├── expenses.injector.js      ✅
             ├── liabilities-panel.injector.js ✅
             ├── budget-panel.injector.js  ✅ 9E-R2 — 12-mo matrix, GAP rows, edit mode
+            ├── datetime.injector.js      ✅ — top bar clock, auto-timezone, 1-min tick
             ├── ideas-panel.injector.js   ✅ 9E-R2 — KPI strip, resizable list, Write/AI toggle
             ├── projects.injector.js      ✅ 9C — M3.4 Project Assets (#panel-proj-assets, route: proj-assets)
             ├── project-finance.injector.js ✅ 9C-rewire — M2.4 Finance Projects (#panel-projects, route: projects)
