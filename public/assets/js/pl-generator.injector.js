@@ -746,8 +746,8 @@
           ${['revenue', 'costs', 'assets', 'funding'].map(t => tabBtn(t, t.charAt(0).toUpperCase() + t.slice(1), _activeTab === t)).join('')}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);flex-shrink:0">
-          <button id="plg-gen-12" style="font-size:0.75rem;padding:0.3rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-family:inherit">12 months</button>
-          <button id="plg-gen-5y" style="font-size:0.75rem;padding:0.3rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-weight:700;font-family:inherit">5 years</button>
+          <button id="plg-gen-12" style="font-size:0.75rem;padding:0.3rem;border:1px solid var(--border);border-radius:var(--radius);background:${_activePeriod === '12mo' ? 'var(--yellow)' : 'transparent'};color:${_activePeriod === '12mo' ? '#0a0a10' : 'var(--text)'};cursor:pointer;font-weight:${_activePeriod === '12mo' ? '700' : 'normal'};font-family:inherit">12 months</button>
+          <button id="plg-gen-5y" style="font-size:0.75rem;padding:0.3rem;border:1px solid var(--border);border-radius:var(--radius);background:${_activePeriod === '5yr' ? 'var(--yellow)' : 'transparent'};color:${_activePeriod === '5yr' ? '#0a0a10' : 'var(--text)'};cursor:pointer;font-weight:${_activePeriod === '5yr' ? '700' : 'normal'};font-family:inherit">5 years</button>
         </div>
         <div id="plg-sidebar-body" style="flex:1;overflow-y:auto;padding:0.4rem 0.75rem 1rem">
           ${_activeTab === 'revenue' ? renderRevTab(si)
@@ -810,8 +810,8 @@
         ${renderKPIs(_computed ? _computed.kpis : null)}
       </div>
 
-      <div id="plg-chart-area" style="padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;overflow-y:hidden">
-        ${_computed ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;min-width:520px"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&amp;L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
+      <div id="plg-chart-area" style="padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden">
+        ${_computed ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&amp;L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
       </div>
 
       <div style="display:flex;flex:1;overflow:hidden;min-height:0" id="plg-body">
@@ -1130,7 +1130,7 @@
       if (_computed && _computed.pl) {
         const chartArea = $('plg-chart-area');
         if (chartArea) {
-          chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;min-width:520px"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
+          chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
         }
         renderChart(_computed, _activePeriod);
         renderCFChart(_computed, _activePeriod);
@@ -1175,16 +1175,23 @@
     rsz.addEventListener('mouseout', () => { if (!dragging) rsz.style.background = 'transparent'; });
   }
 
+  function updateGenButtons() {
+    const b12 = $('plg-gen-12'), b5y = $('plg-gen-5y');
+    if (b12) { b12.style.background = _activePeriod === '12mo' ? 'var(--yellow)' : 'transparent'; b12.style.color = _activePeriod === '12mo' ? '#0a0a10' : 'var(--text)'; b12.style.fontWeight = _activePeriod === '12mo' ? '700' : 'normal'; }
+    if (b5y) { b5y.style.background = _activePeriod === '5yr' ? 'var(--yellow)' : 'transparent'; b5y.style.color = _activePeriod === '5yr' ? '#0a0a10' : 'var(--text)'; b5y.style.fontWeight = _activePeriod === '5yr' ? '700' : 'normal'; }
+  }
+
   function generate(periods) {
     const si = getInputs();
     _computed = computePL(si, periods);
     _activePeriod = periods === 12 ? '12mo' : '5yr';
     rebuildKPIs();
     rebuildOutputHeader();
+    updateGenButtons();
 
     const chartArea = $('plg-chart-area');
     if (chartArea) {
-      chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;min-width:520px"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
+      chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
       renderChart(_computed, _activePeriod);
       renderCFChart(_computed, _activePeriod);
     }
@@ -1246,6 +1253,7 @@
           renderCFChart(_computed, _activePeriod);
         }
         rebuildOutputHeader();
+        updateGenButtons();
         rebuildOutput();
         return;
       }
@@ -1323,7 +1331,7 @@
           if (_computed && _computed.pl) {
             const chartArea = $('plg-chart-area');
             if (chartArea) {
-              chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;min-width:520px"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
+              chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
             }
             renderChart(_computed, _activePeriod);
             renderCFChart(_computed, _activePeriod);
