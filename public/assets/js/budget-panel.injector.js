@@ -883,7 +883,7 @@
 
     pendingChanges = {};
     updatePendingBar();
-    await loadAndRender();
+    await loadAndRender(true); /* refresh=true bypasses KV cache after save */
   }
 
   /* ── discardChanges() ── */
@@ -1009,7 +1009,7 @@
   }
 
   /* ── loadAndRender() ── */
-  async function loadAndRender() {
+  async function loadAndRender(refresh) {
     /* FY: always fetch from Jan 1 of current year to ensure Jan is included (L153) */
     let start;
     if (graphPeriod === 'fy') {
@@ -1020,9 +1020,10 @@
       start = isoMonth(11);
     }
 
+    const txUrl = '/api/transactions?start=' + start + '&limit=500' + (refresh ? '&refresh=1' : '');
     const [txR, bR, cR, lR] = await Promise.allSettled([
-      apiFetch('/api/transactions?start=' + start + '&limit=500'),
-      apiFetch('/api/budgets?all=true'),
+      apiFetch(txUrl),
+      apiFetch('/api/budgets?all=true' + (refresh ? '&refresh=1' : '')),
       apiFetch('/api/categories'),
       apiFetch('/api/liabilities?all=true')
     ]);
