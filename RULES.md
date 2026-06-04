@@ -4,6 +4,11 @@
 
 ---
 
+L145  P&L Generator wireResizer(): sidebar resizer wiring must be extracted as a module-level
+      function and called after EVERY p.innerHTML = renderPanel() replacement — in init(),
+      loadProjectModel(), resetForm(), and archive load handler. Inline wiring in init() only
+      does NOT survive re-renders. The #plg-resizer element is replaced each time.
+
 L144  P&L 5yr chart: aggregate monthly pl[] into 5 yearly totals before rendering.
       Show 5 bars Y1–Y5. Never pass raw 60-month array to chart in 5yr mode.
 

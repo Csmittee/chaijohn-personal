@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-04 — fix/pl-generator-p1e complete — 4-margin P&L, 5yr chart Y1-Y5, BS/CF null guard, PDF landscape, RULES L143-L144 — revenue persistence, panel height, period toggle, RULES L141-L142 — tab highlight, panel bleed, generate buttons always visible, subtitle persistence fixed. RULES L136
+> Last updated: 2026-06-04 — fix/pl-generator-p1f complete — direct mat/labor persistence (_scalarInputs), resizer wireResizer() pattern, cashflow chart side-by-side P&L, BS imbalance direction, label font bump, root CC_PROMPT cleanup. RULES L145
 
 ---
 
