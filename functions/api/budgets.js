@@ -106,14 +106,22 @@ export async function onRequestPost(context) {
         filterByFormula: `{label}="${label.replace(/"/g, '\\"')}"`,
         maxRecords: 20
       });
-      const duplicate = existing.records.some(r => {
-        const existCatId  = linkedId(r.fields.category_id);
-        const existPeriod = r.fields.period || 'Monthly';
-        const newPeriod   = body.period || 'Monthly';
-        return existCatId === catId && existPeriod === newPeriod;
-      });
-      if (duplicate) {
-        return errorResponse('Budget label already exists for this item with the same period');
+      /* Single-month overrides (start_date === end_date month) bypass dedup — they coexist with the base record */
+      const isOverride = body.start_date && body.end_date &&
+        body.start_date.slice(0, 7) === body.end_date.slice(0, 7);
+      if (!isOverride) {
+        const duplicate = existing.records.some(r => {
+          const existCatId  = linkedId(r.fields.category_id);
+          const existPeriod = r.fields.period || 'Monthly';
+          const newPeriod   = body.period || 'Monthly';
+          /* Only block if neither record is a single-month override */
+          const rIsOverride = r.fields.start_date && r.fields.end_date &&
+            r.fields.start_date.slice(0, 7) === r.fields.end_date.slice(0, 7);
+          return existCatId === catId && existPeriod === newPeriod && !rIsOverride;
+        });
+        if (duplicate) {
+          return errorResponse('Budget label already exists for this item with the same period');
+        }
       }
     } catch { /* non-fatal */ }
   }

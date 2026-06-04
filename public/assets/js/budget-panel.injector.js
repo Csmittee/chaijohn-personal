@@ -320,8 +320,8 @@
       return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
-    /* Per-month totals */
-    const budgetPerMonth = monthKeys.map(() => expBudgets.reduce((s, b) => s + mbr(b), 0));
+    /* Per-month totals — use getBudgetAmountForMonth so overrides are reflected in chart */
+    const budgetPerMonth = monthKeys.map(ym => expBudgets.reduce((s, b) => s + getBudgetAmountForMonth(b.id, ym), 0));
     const actualPerMonth = monthKeys.map(ym => {
       return expBudgets.reduce((s, b) => {
         return s + ((spendByBudgetMonth[b.id] || {})[ym] || 0);
@@ -529,10 +529,10 @@
 
         const monthCells = monthKeys.map(ym => {
           const actual = byMonth[ym] || 0;
-          rowTotal += actual;
 
           if (dataType === 'bgact') {
             /* Variance: actual − budget, read-only */
+            rowTotal += actual;
             const v = actual - bAmt;
             const vc = v <= 0 ? 'color:var(--green);' : 'color:var(--red);';
             const vs = v >= 0 ? '+' : '';
@@ -541,6 +541,7 @@
           if (dataType === 'bg') {
             /* Per-month budget amount — uses most specific record (L149) */
             const moAmt = getBudgetAmountForMonth(b.id, ym);
+            rowTotal += moAmt;
             if (editMode) {
               /* data-cell-type="budget" → saveBatchChanges POSTs new override record (L150) */
               return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
@@ -551,6 +552,7 @@
             return `<td style="${numCell}">${fmt(moAmt)}</td>`;
           }
           /* data: actual, editable — data-cell-type="actual" → PATCH if exists (L151) */
+          rowTotal += actual;
           if (editMode) {
             return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
               style="width:72px;text-align:right;font-size:0.62rem;"
@@ -753,9 +755,14 @@
               ? (maps2.earnByBudgetMonth[id]  || {})
               : (maps2.spendByBudgetMonth[id] || {});
             const oldVal = byMo[monthKey] || 0;
-            pendingChanges['actual:' + id + ':' + monthKey] = {
-              kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype
-            };
+            /* Skip if value unchanged or zero (API rejects amount=0 on POST) */
+            if (newVal === oldVal || (newVal === 0 && !oldVal)) {
+              delete pendingChanges['actual:' + id + ':' + monthKey];
+            } else {
+              pendingChanges['actual:' + id + ':' + monthKey] = {
+                kind: 'actual', id, monthKey, newVal, label, oldVal, dataType: dtype
+              };
+            }
           }
 
           updatePendingBar();
@@ -832,6 +839,7 @@
         );
 
         if (existingTx) {
+          if (e.newVal === 0) return; /* zero clears handled by not saving */
           const r = await fetch('/api/transactions/' + existingTx.id, {
             method: 'PATCH',
             credentials: 'same-origin',
@@ -840,6 +848,7 @@
           });
           if (!r.ok) throw new Error('Transaction PATCH failed: ' + r.status + ' for ' + e.label);
         } else {
+          if (!e.newVal) return; /* skip zero/falsy — API rejects amount=0 */
           const r = await fetch('/api/transactions', {
             method: 'POST',
             credentials: 'same-origin',
@@ -1012,7 +1021,7 @@
     }
 
     const [txR, bR, cR, lR] = await Promise.allSettled([
-      apiFetch('/api/transactions?start=' + start),
+      apiFetch('/api/transactions?start=' + start + '&limit=500'),
       apiFetch('/api/budgets?all=true'),
       apiFetch('/api/categories'),
       apiFetch('/api/liabilities?all=true')
