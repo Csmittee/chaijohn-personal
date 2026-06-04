@@ -320,8 +320,8 @@
       return b.active !== false && cat?.type === 'Expense' && !isOverrideRecord(b);
     });
 
-    /* Per-month totals */
-    const budgetPerMonth = monthKeys.map(() => expBudgets.reduce((s, b) => s + mbr(b), 0));
+    /* Per-month totals — use getBudgetAmountForMonth so overrides are reflected in chart */
+    const budgetPerMonth = monthKeys.map(ym => expBudgets.reduce((s, b) => s + getBudgetAmountForMonth(b.id, ym), 0));
     const actualPerMonth = monthKeys.map(ym => {
       return expBudgets.reduce((s, b) => {
         return s + ((spendByBudgetMonth[b.id] || {})[ym] || 0);
@@ -529,10 +529,10 @@
 
         const monthCells = monthKeys.map(ym => {
           const actual = byMonth[ym] || 0;
-          rowTotal += actual;
 
           if (dataType === 'bgact') {
             /* Variance: actual − budget, read-only */
+            rowTotal += actual;
             const v = actual - bAmt;
             const vc = v <= 0 ? 'color:var(--green);' : 'color:var(--red);';
             const vs = v >= 0 ? '+' : '';
@@ -541,6 +541,7 @@
           if (dataType === 'bg') {
             /* Per-month budget amount — uses most specific record (L149) */
             const moAmt = getBudgetAmountForMonth(b.id, ym);
+            rowTotal += moAmt;
             if (editMode) {
               /* data-cell-type="budget" → saveBatchChanges POSTs new override record (L150) */
               return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
@@ -551,6 +552,7 @@
             return `<td style="${numCell}">${fmt(moAmt)}</td>`;
           }
           /* data: actual, editable — data-cell-type="actual" → PATCH if exists (L151) */
+          rowTotal += actual;
           if (editMode) {
             return `<td style="${numCell}"><input type="text" inputmode="numeric" pattern="[0-9.]*" class="bud-cell-input"
               style="width:72px;text-align:right;font-size:0.62rem;"
