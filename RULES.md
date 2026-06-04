@@ -4,6 +4,11 @@
 
 ---
 
+L136  P&L injector re-render pattern: any p.innerHTML = renderPanel() wipe will reset dynamic DOM state
+      (active tab styles, subtitle color, etc.). Store all dynamic state in module-level vars and read
+      them inside renderPanel() to reconstruct correct HTML on every re-render. Never rely on post-render
+      DOM patches for values that survive a full re-render.
+
 L135  P&L Generator KV storage — one model per project: Key = pl-generator:proj_{projectId} (overwrite on Save).
       Selecting a project in dropdown auto-loads KV model for that project if exists.
       No project selected: versioned key pl-generator:{timestamp}. PDF/ODS never save to KV — export only.

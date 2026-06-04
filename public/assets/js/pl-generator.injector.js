@@ -33,6 +33,8 @@
   let _savedVersion = 0;
   let _projects = [];
   let _sidebarW = 280;
+  let _selectedProjectId = '';
+  let _selectedProjectName = '';
 
   function panel() { return document.getElementById('panel-pl-generator'); }
   function $ (id) { return document.getElementById(id); }
@@ -503,10 +505,6 @@
         <div style="font-size:0.62rem;color:var(--text-dim);margin-top:0.2rem">Appears as header in PDF export</div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border)">
-        <button id="plg-gen-12" style="font-size:0.75rem;padding:0.35rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-family:inherit">12 months</button>
-        <button id="plg-gen-5y" style="font-size:0.75rem;padding:0.35rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-weight:700;font-family:inherit">5 years</button>
-      </div>
     `;
   }
 
@@ -724,6 +722,10 @@
         <div style="display:flex;border-bottom:1px solid var(--border)">
           ${['revenue', 'costs', 'assets', 'funding'].map(t => tabBtn(t, t.charAt(0).toUpperCase() + t.slice(1), _activeTab === t)).join('')}
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);flex-shrink:0">
+          <button id="plg-gen-12" style="font-size:0.75rem;padding:0.3rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer;font-family:inherit">12 months</button>
+          <button id="plg-gen-5y" style="font-size:0.75rem;padding:0.3rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-weight:700;font-family:inherit">5 years</button>
+        </div>
         <div id="plg-sidebar-body" style="flex:1;overflow-y:auto;padding:0.4rem 0.75rem 1rem">
           ${_activeTab === 'revenue' ? renderRevTab(si)
             : _activeTab === 'costs' ? renderCostsTab(si)
@@ -752,6 +754,7 @@
     return `
       <style>
         input[type=text] { -webkit-appearance:none; appearance:none; }
+        #panel-pl-generator.active { display:flex; flex-direction:column; overflow:hidden; }
         @media print {
           body > *:not(#main) { display:none !important; }
           #main > *:not(#panel-pl-generator) { display:none !important; }
@@ -770,7 +773,7 @@
       <div id="plg-header" style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <div>
           <div style="font-size:0.95rem;font-weight:700">P&amp;L Generator</div>
-          <div id="plg-subtitle" style="font-size:0.72rem;color:var(--text-dim)">// financial modelling · 12-month · 5-year</div>
+          <div id="plg-subtitle" style="font-size:0.72rem;color:${_selectedProjectId ? 'var(--yellow)' : 'var(--text-dim)'}">${_selectedProjectId ? `// ${_selectedProjectName}` : '// financial modelling · 12-month · 5-year'}</div>
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center">
           <select id="plg-project-sel" style="font-size:0.72rem;padding:0.2rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">${projectOpts}</select>
@@ -951,6 +954,14 @@
       : _activeTab === 'costs' ? renderCostsTab(si)
       : _activeTab === 'assets' ? renderAssetsTab(si)
       : renderFundingTab(si);
+    const p = panel();
+    if (p) {
+      p.querySelectorAll('[data-plg-tab]').forEach(btn => {
+        const active = btn.dataset.plgTab === _activeTab;
+        btn.style.color = active ? 'var(--text)' : 'var(--text-dim)';
+        btn.style.borderBottom = active ? '2px solid var(--yellow)' : '2px solid transparent';
+      });
+    }
   }
 
   function rebuildOutput() {
@@ -969,6 +980,7 @@
 
   function resetForm() {
     _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
+    _selectedProjectId = ''; _selectedProjectName = '';
     _semiItems = [
       { desc: 'Office staff', amt: '', freq: 'Monthly' },
       { desc: 'Packaging', amt: '', freq: 'Monthly' },
@@ -1038,9 +1050,6 @@
     if (!p) return;
     initialized = true;
 
-    p.style.display = 'flex';
-    p.style.flexDirection = 'column';
-    p.style.overflow = 'hidden';
     p.innerHTML = renderPanel();
 
     loadProjects();
@@ -1267,11 +1276,8 @@
       if (e.target.id === 'plg-project-sel') {
         const projectId = e.target.value;
         const projectName = e.target.options[e.target.selectedIndex].text;
-        const sub = p.querySelector('#plg-subtitle');
-        if (sub) {
-          sub.textContent = projectId ? `// ${projectName}` : '// financial modelling · 12-month · 5-year';
-          sub.style.color = projectId ? 'var(--yellow)' : 'var(--text-dim)';
-        }
+        _selectedProjectId = projectId;
+        _selectedProjectName = projectId ? projectName : '';
         if (projectId) { loadProjectModel(projectId); } else { resetForm(); loadProjects(); }
         return;
       }

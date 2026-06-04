@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-03 — optim/kv-cache complete — KV cache layer on all heavy GETs, ~80% Airtable call reduction on warm cache, RULES L130–L132
+> Last updated: 2026-06-04 — fix/pl-generator-p1b complete — tab highlight, panel bleed, generate buttons always visible, subtitle persistence fixed. RULES L136
 
 ---
 
