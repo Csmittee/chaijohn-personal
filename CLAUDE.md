@@ -39,5 +39,16 @@ Short version:
 - source field = Airtable singleSelect (owner manages options)
 
 ## Read next
-- `RULES.md` — compact lessons (required before every task)
-- `PROJECT_STATE.md` — phases, roadmap, file inventory (required for Build Mode only)
+- `RULES.md` — universal rules (required every session)
+- `.claude/rules/RULES-[domain].md` — load ONLY the file matching your task:
+  | Working on | Load |
+  |---|---|
+  | M2.1 Cashflow | RULES-cashflow.md |
+  | M2.2 Sales | RULES-sales.md |
+  | M2.5 Budget | RULES-budget.md |
+  | M2.4 / M3.4 Projects | RULES-projects.md |
+  | M4.4 P&L Generator | RULES-plgen.md |
+  | Any data/API/Airtable | RULES-data.md |
+  | Workflow / docs only | RULES-workflow.md |
+  | Legacy pre-9C module | RULES-archive.md |
+- `PROJECT_STATE.md` — phases + roadmap (required for build sessions)

@@ -55,7 +55,7 @@ Owner describes goal or QA result
         ↓
 Chat reads repo → diagnoses → writes CC_PROMPT → owner pushes to repo root
         ↓
-Owner runs CC: "Read CLAUDE.md, RULES.md, PROJECT_STATE.md. Then execute: [prompt filename]"
+Owner runs CC: "Read CLAUDE.md, RULES.md, .claude/rules/RULES-[domain].md, PROJECT_STATE.md. Then execute: [prompt filename]"
         ↓
 CC reads fresh → verifies cause → fixes → commits → archives prompt → updates docs → merges to main
         ↓
@@ -129,21 +129,29 @@ CC must write these to RULES.md as part of the mandatory post-fix steps.
 If a behaviour has been requested more than once and keeps reverting —
 it was never in RULES.md. Add it now.
 
+### Standard CC intro block (paste into every prompt)
+```
+New session. Ignore all previous context from other projects.
+
+You are working on CHAIJOHN OS at:
+https://github.com/Csmittee/chaijohn-personal
+
+Before doing anything else, read:
+1. CLAUDE.md
+2. RULES.md                              — universal rules (always)
+3. .claude/rules/RULES-[domain].md      — replace [domain] with the relevant file for this task
+4. PROJECT_STATE.md                      — required for build sessions; skip for hotfix-only sessions
+
+Do NOT read RULES-archive.md unless explicitly told to.
+Do NOT read anything in docs/archive/.
+Then read and execute: [prompt filename]
+```
+
 ### RULES.md file management
 
-- All new rules go to the TOP of RULES.md (newest first)
-- If RULES.md exceeds ~150 lines of active rules, split into:
-  - `RULES.md` — most recent ~80 rules (what CC needs for current work)
-  - `RULES-archive.md` — older rules (reference only, CC does not read unless asked)
-- CC prompt intro must specify which file to read:
-  ```
-  2. RULES.md — compact lessons (required always)
-  ```
-  If split has occurred, add:
-  ```
-  2a. RULES.md — current rules (required)
-  2b. RULES-archive.md — only if working on a legacy module
-  ```
+- All new universal rules go to the TOP of RULES.md (newest first)
+- Domain-specific rules go to the matching `.claude/rules/RULES-[domain].md` file
+- `RULES-archive.md` — pre-9C rules, CC reads only when explicitly instructed
 
 ---
 
@@ -187,8 +195,9 @@ Notes: [what was seen]
 | File | Purpose | Who reads it |
 |---|---|---|
 | `CLAUDE.md` | Project brief, stack, constraints | CC — every session |
-| `RULES.md` | All lessons L001+, newest at top | CC — every session |
-| `RULES-archive.md` | Old rules if split triggered | CC — only if asked |
+| `RULES.md` | Universal rules only (~20 rules, newest at top) | CC — every session |
+| `.claude/rules/RULES-[domain].md` | Domain-specific rules per module | CC — only when working on that module |
+| `RULES-archive.md` | Archived rules L001–L060j | CC — only when working on legacy module |
 | `PROJECT_STATE.md` | Phase status, roadmap, file inventory | CC — build sessions |
 | `WORKFLOW_SKILL.md` | This file — operating model | Chat + Owner |
 | `docs/prompts/` | Archived CC prompts stamped ✅ | Reference only |
