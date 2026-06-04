@@ -95,7 +95,11 @@
     const activeCount = assets.filter(a => a.status !== 'Sold' && a.status !== 'Disposed').length;
 
     panel.innerHTML = `
-      <div style="flex-shrink:0;padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:0.65rem;flex-wrap:wrap;align-items:center">
+      <div class="panel-header" style="flex-shrink:0;padding:0.75rem 1rem 0">
+        <div class="panel-title">Hard Assets</div>
+        <div class="panel-subtitle">// property · vehicles · physical</div>
+      </div>
+      <div style="flex-shrink:0;padding:0.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:0.65rem;flex-wrap:wrap;align-items:center">
         ${strip('Assets', activeCount, '')}
         ${strip('Total Value', fmt(totalVal), '')}
         ${strip('Sold (All Time)', fmt(soldVal), '')}

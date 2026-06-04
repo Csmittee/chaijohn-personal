@@ -1398,8 +1398,8 @@
     if (!panel) return;
     panel.innerHTML = `
       <div class="panel-header">
-        <div class="panel-title">Projects</div>
-        <div class="panel-subtitle">// active · pipeline · archive</div>
+        <div class="panel-title">Project Assets</div>
+        <div class="panel-subtitle">// digital · IP · tools</div>
       </div>
       <div id="proj-stats" class="stat-strip" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem"></div>
       <div id="proj-filter-bar" style="margin-bottom:0.75rem"></div>

@@ -98,7 +98,11 @@
 
     panel.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-        <div id="pf-strip" style="flex-shrink:0;padding:0.75rem 1rem;border-bottom:1px solid var(--border);
+        <div class="panel-header" style="flex-shrink:0;padding:0.75rem 1rem 0">
+          <div class="panel-title">Projects</div>
+          <div class="panel-subtitle">// active · pipeline · archive</div>
+        </div>
+        <div id="pf-strip" style="flex-shrink:0;padding:0.5rem 1rem;border-bottom:1px solid var(--border);
           display:flex;gap:0.75rem;flex-wrap:wrap">
           ${bubbleHtml('Pipeline', pipelineCount, 'projects')}
           ${bubbleHtml('Total CAPEX', fmt(totalCapex), '')}

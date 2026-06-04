@@ -32,6 +32,10 @@
     const panel = el('panel-sales');
     if (!panel) return;
     panel.innerHTML = `
+      <div class="panel-header" style="flex-shrink:0;padding:0.75rem 1rem 0">
+        <div class="panel-title">Sales</div>
+        <div class="panel-subtitle">// income · clients · pipeline</div>
+      </div>
       <div class="sales-sticky" style="flex-shrink:0">
         <!-- Summary strip -->
         <div id="sales-strip" style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.75rem 1rem 0;"></div>
