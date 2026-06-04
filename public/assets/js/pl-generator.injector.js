@@ -777,8 +777,6 @@
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center">
           <select id="plg-project-sel" style="font-size:0.72rem;padding:0.2rem 0.4rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">${projectOpts}</select>
-          <button id="plg-archive-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text-dim);cursor:pointer">📂 Archive</button>
-          <button id="plg-new-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-weight:700">+ New model</button>
         </div>
       </div>
 
@@ -796,11 +794,8 @@
         ${output}
       </div>
 
-      <div id="plg-save-bar" style="padding:0.5rem 1rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:0.5rem;flex-shrink:0;background:var(--bg-raised)">
-        <input id="plg-model-name" type="text" placeholder="Model name" value="${esc(si.model_name || '')}" style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);flex:1;min-width:0">
-        <input id="plg-version-note" type="text" placeholder="Version note (e.g. conservative)" value="${esc(si.version_note || '')}" style="font-size:0.78rem;padding:0.25rem 0.45rem;background:var(--bg-page);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);flex:1;min-width:0">
-        <div id="plg-version-badge" style="font-size:0.62rem;background:var(--bg-card);border:1px solid var(--border);padding:0.15rem 0.4rem;border-radius:3px;white-space:nowrap">v${_savedVersion + 1}</div>
-        <button id="plg-save-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem;border:none;border-radius:var(--radius);background:var(--yellow);color:#0a0a10;cursor:pointer;font-weight:700;white-space:nowrap">Save</button>
+      <div id="plg-save-bar" style="padding:0.3rem 1rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:0.5rem;flex-shrink:0;background:var(--bg-raised)">
+        <button id="plg-save-btn" ${_selectedProjectId ? '' : 'disabled'} style="font-size:0.72rem;padding:0.25rem 0.75rem;border:none;border-radius:var(--radius);background:${_selectedProjectId ? 'var(--yellow)' : 'var(--bg-card)'};color:${_selectedProjectId ? '#0a0a10' : 'var(--text-dim)'};cursor:${_selectedProjectId ? 'pointer' : 'default'};font-weight:700;white-space:nowrap">Save</button>
         <button id="plg-ods-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer">ODS</button>
         <button id="plg-pdf-btn" style="font-size:0.72rem;padding:0.25rem 0.6rem;border:1px solid var(--border);border-radius:var(--radius);background:transparent;color:var(--text);cursor:pointer">PDF</button>
         <div id="plg-save-status" style="font-size:0.68rem;color:#22c55e;display:none;white-space:nowrap"></div>
@@ -847,13 +842,12 @@
 
   // ── Save ──────────────────────────────────────────────────────
   async function save() {
+    if (!_selectedProjectId) return;
     const si = getInputs();
-    const projectId = ($('plg-project-sel') || {}).value || '';
-    const id = projectId ? `proj_${projectId}` : `pl_${Date.now()}`;
-    const version = 'v' + (_savedVersion + 1);
     const record = {
-      id, version,
-      name: si.model_name || 'Unnamed model',
+      id: `proj_${_selectedProjectId}`,
+      version: 'v' + (_savedVersion + 1),
+      name: _selectedProjectName || _selectedProjectId,
       created_at: new Date().toISOString(),
       review_note: si.review_note || '',
       period: _activePeriod,
@@ -864,10 +858,8 @@
       const r = await fetch('/api/pl-generator', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(record) });
       if (!r.ok) throw new Error(r.status);
       _savedVersion++;
-      const badge = $('plg-version-badge');
       const status = $('plg-save-status');
-      if (badge) badge.textContent = 'v' + (_savedVersion + 1);
-      if (status) { status.style.display = ''; status.textContent = `✓ Saved as v${_savedVersion}`; setTimeout(() => { if (status) status.style.display = 'none'; }, 3000); }
+      if (status) { status.style.display = ''; status.style.color = '#22c55e'; status.textContent = `✓ Saved`; setTimeout(() => { if (status) status.style.display = 'none'; }, 3000); }
     } catch (err) {
       const status = $('plg-save-status');
       if (status) { status.style.display = ''; status.style.color = '#ef4444'; status.textContent = 'Save failed'; setTimeout(() => { if (status) status.style.display = 'none'; }, 3000); }
@@ -901,7 +893,7 @@
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bsRows), 'Balance Sheet');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfRows), 'Cashflow');
 
-    const name = (si.model_name || 'pl-model').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+    const name = (_selectedProjectName || 'pl-model').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
     XLSX.writeFile(wb, `${name}-v${_savedVersion || 1}.ods`, { bookType: 'ods' });
   }
 
@@ -912,7 +904,7 @@
     const title = $('plg-print-title');
     const meta = $('plg-print-meta');
     const noteEl = $('plg-print-note');
-    if (title) title.textContent = (si.model_name || 'Unnamed model') + ' — v' + (_savedVersion || 1);
+    if (title) title.textContent = (_selectedProjectName || 'P&L Model') + ' — v' + (_savedVersion || 1);
     if (meta) meta.textContent = `Generated ${new Date().toLocaleDateString()} · ${_activePeriod}`;
     if (noteEl) { noteEl.textContent = si.review_note || ''; noteEl.style.display = si.review_note ? '' : 'none'; }
     if (hdr) hdr.style.display = 'block';
@@ -979,8 +971,14 @@
   }
 
   function resetForm() {
-    _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
+    clearFormData();
     _selectedProjectId = ''; _selectedProjectName = '';
+    const p = panel(); if (!p) return;
+    p.innerHTML = renderPanel();
+  }
+
+  function clearFormData() {
+    _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
     _semiItems = [
       { desc: 'Office staff', amt: '', freq: 'Monthly' },
       { desc: 'Packaging', amt: '', freq: 'Monthly' },
@@ -994,19 +992,20 @@
     ];
     _assetItems = [];
     _fundItems = [{ src: 'Owner equity', amt: '', type: 'Equity' }, { src: 'Bank loan', amt: '', type: 'Loan' }];
-    const pSel = $('plg-project-sel');
-    const currentProject = pSel ? pSel.value : '';
-    const p = panel(); if (!p) return;
-    p.innerHTML = renderPanel();
-    const newSel = $('plg-project-sel');
-    if (newSel && currentProject) newSel.value = currentProject;
   }
 
   async function loadProjectModel(projectId) {
     const p = panel(); if (!p) return;
     try {
       const r = await fetch(`/api/pl-generator/proj_${projectId}`, { credentials: 'same-origin' });
-      if (!r.ok) { resetForm(); return; }
+      if (!r.ok) {
+        // No saved model for this project — blank slate but keep project identity
+        clearFormData();
+        p.innerHTML = renderPanel();
+        const newSel = $('plg-project-sel');
+        if (newSel) newSel.value = projectId;
+        return;
+      }
       const saved = await r.json();
       _computed = saved.outputs || null;
       _activePeriod = saved.period || '12mo';
@@ -1018,13 +1017,16 @@
         if (saved.inputs.asset_items) _assetItems = saved.inputs.asset_items;
         if (saved.inputs.fund_items)  _fundItems  = saved.inputs.fund_items;
       }
-      const pSel = $('plg-project-sel');
-      const currentProject = pSel ? pSel.value : '';
       p.innerHTML = renderPanel(saved.inputs);
       const newSel = $('plg-project-sel');
-      if (newSel && currentProject) newSel.value = currentProject;
+      if (newSel) newSel.value = projectId;
       if (_computed && _computed.pl) renderChart(_computed, _activePeriod);
-    } catch { resetForm(); }
+    } catch {
+      clearFormData();
+      p.innerHTML = renderPanel();
+      const newSel = $('plg-project-sel');
+      if (newSel) newSel.value = projectId;
+    }
   }
 
   function generate(periods) {
@@ -1179,42 +1181,6 @@
       const fundDel = e.target.closest('[data-fund-del]');
       if (fundDel) { const si = getInputs(); _fundItems.splice(+fundDel.dataset.fundDel, 1); rebuildSidebar(si); return; }
 
-      // Header buttons
-      const newBtn = e.target.closest('#plg-new-btn');
-      if (newBtn) { resetForm(); loadProjects(); return; }
-
-      const arcBtn = e.target.closest('#plg-archive-btn');
-      if (arcBtn) {
-        _archiveView = true;
-        await loadArchive();
-        const body = $('plg-body');
-        if (body) { body.style.display = 'none'; }
-        const kpi = $('plg-kpi-strip');
-        if (kpi) kpi.style.display = 'none';
-        const chart = $('plg-chart-area');
-        if (chart) chart.style.display = 'none';
-        const save = $('plg-save-bar');
-        if (save) save.style.display = 'none';
-        const hdr = $('plg-header');
-        if (hdr) hdr.insertAdjacentHTML('afterend', renderArchive());
-        return;
-      }
-
-      const arcBack = e.target.closest('#plg-archive-back');
-      if (arcBack) {
-        _archiveView = false;
-        const arcEl = $('plg-archive');
-        if (arcEl) arcEl.remove();
-        const body = $('plg-body');
-        if (body) body.style.display = '';
-        const kpi = $('plg-kpi-strip');
-        if (kpi) kpi.style.display = '';
-        const chart = $('plg-chart-area');
-        if (chart) chart.style.display = '';
-        const save = $('plg-save-bar');
-        if (save) save.style.display = '';
-        return;
-      }
 
       // Archive filter
       const arcFilter = e.target.closest('[data-arc-filter]');
