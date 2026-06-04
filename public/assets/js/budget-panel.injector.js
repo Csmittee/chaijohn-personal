@@ -1019,7 +1019,7 @@
     }
 
     const [txR, bR, cR, lR] = await Promise.allSettled([
-      apiFetch('/api/transactions?start=' + start),
+      apiFetch('/api/transactions?start=' + start + '&limit=500'),
       apiFetch('/api/budgets?all=true'),
       apiFetch('/api/categories'),
       apiFetch('/api/liabilities?all=true')
