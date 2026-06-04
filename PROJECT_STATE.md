@@ -128,6 +128,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | optim/kv-cache | KV cache on all heavy GETs (categories/budgets/liabilities/transactions/projects/sales), bust counter for tx, ~80% Airtable reduction, RULES L130–L132 | ✅ COMPLETE |
 | hotfix/pl-nav | Add 'pl-gen' to ROUTES array in index.html — P&L Generator nav was falling back to dashboard because route was unrecognised | ✅ COMPLETE |
 | fix/pl-generator-core | Full P&L Generator fix: rename route/panel to pl-generator, fix panelactivated listener, type=text inputs (no spinners), project selector auto-load KV, resetForm/loadProjectModel, resizer with getBoundingClientRect, RULES L133-L135 | ✅ COMPLETE |
+| fix/budget-panel | Budget grid: Jan visibility, dedup actual save, per-month override priority, earn read-only, L149–L153 | ✅ COMPLETE |
 | chore/doc-transformation | Rules system split: RULES.md universal only, .claude/rules/ domain files × 8, RULES-archive.md, L148 | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
