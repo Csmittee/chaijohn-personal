@@ -729,7 +729,8 @@
           const monthKey = input.dataset.month;
           const cellType = input.dataset.cellType; // 'budget' | 'actual'
           const dtype    = input.dataset.dtype;
-          const newVal   = Number(input.value);
+          const rawVal   = input.value.replace(/[^0-9.]/g, '');
+          const newVal   = rawVal === '' ? 0 : Number(rawVal);
 
           const bud   = budgets.find(b => b.id === id);
           const label = bud ? (bud.label || id) : id;
@@ -787,25 +788,41 @@
         if (!r.ok) throw new Error('Budget PATCH failed: ' + r.status + ' for ' + e.label);
 
       } else if (e.kind === 'budget-month') {
-        /* POST new single-month override budget record (L150) */
+        /* PATCH existing override if found, else POST new (L150) */
         const bud = budgets.find(b => b.id === e.id);
+        const existingOverride = budgets.find(b =>
+          isOverrideRecord(b) &&
+          b.label === bud?.label &&
+          lid(b.category_id) === lid(bud?.category_id) &&
+          b.start_date?.slice(0, 7) === e.monthKey
+        );
         const [y, m] = e.monthKey.split('-').map(Number);
         const lastDay = new Date(y, m, 0).getDate();
-        const r = await fetch('/api/budgets', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            label:       bud?.label,
-            category_id: lid(bud?.category_id),
-            amount:      Math.round(e.newVal),
-            period:      'Monthly',
-            start_date:  e.monthKey + '-01',
-            end_date:    e.monthKey + '-' + String(lastDay).padStart(2, '0'),
-            active:      true
-          })
-        });
-        if (!r.ok) throw new Error('Budget override POST failed: ' + r.status + ' for ' + e.label);
+        let r;
+        if (existingOverride) {
+          r = await fetch('/api/budgets/' + existingOverride.id, {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: Math.round(e.newVal) })
+          });
+        } else {
+          r = await fetch('/api/budgets', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              label:       bud?.label,
+              category_id: lid(bud?.category_id),
+              amount:      Math.round(e.newVal),
+              period:      'Monthly',
+              start_date:  e.monthKey + '-01',
+              end_date:    e.monthKey + '-' + String(lastDay).padStart(2, '0'),
+              active:      true
+            })
+          });
+        }
+        if (!r.ok) throw new Error('Budget override save failed: ' + r.status + ' for ' + e.label);
 
       } else {
         /* Actual transaction — PATCH if existing tx found, else POST (L151) */
