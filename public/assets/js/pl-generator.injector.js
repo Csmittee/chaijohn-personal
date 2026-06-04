@@ -811,7 +811,7 @@
       </div>
 
       <div id="plg-chart-area" style="padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0">
-        ${_computed ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&amp;L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
+        ${_computed ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&amp;L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>` : `<div style="height:80px;border:1px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--text-dim)">Generate to see chart</div>`}
       </div>
 
       <div style="display:flex;flex:1;overflow:hidden;min-height:0" id="plg-body">
@@ -1130,7 +1130,7 @@
       if (_computed && _computed.pl) {
         const chartArea = $('plg-chart-area');
         if (chartArea) {
-          chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
+          chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
         }
         renderChart(_computed, _activePeriod);
         renderCFChart(_computed, _activePeriod);
@@ -1183,7 +1183,7 @@
 
     const chartArea = $('plg-chart-area');
     if (chartArea) {
-      chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
+      chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
       renderChart(_computed, _activePeriod);
       renderCFChart(_computed, _activePeriod);
     }
@@ -1322,7 +1322,7 @@
           if (_computed && _computed.pl) {
             const chartArea = $('plg-chart-area');
             if (chartArea) {
-              chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><canvas id="plg-chart" height="132"></canvas></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><canvas id="plg-cf-chart" height="132"></canvas></div></div>`;
+              chartArea.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem"><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">P&L</div><div style="position:relative;height:132px"><canvas id="plg-chart"></canvas></div></div><div><div style="font-size:0.6rem;color:var(--text-dim);margin-bottom:2px">Cash Flow</div><div style="position:relative;height:132px"><canvas id="plg-cf-chart"></canvas></div></div></div>`;
             }
             renderChart(_computed, _activePeriod);
             renderCFChart(_computed, _activePeriod);
