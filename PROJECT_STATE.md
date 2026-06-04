@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-04 — fix/pl-generator-p1b complete — tab highlight, panel bleed, generate buttons always visible, subtitle persistence fixed. RULES L136
+> Last updated: 2026-06-04 — fix/pl-generator-p1d complete — revenue persistence, panel height, period toggle, RULES L141-L142 — tab highlight, panel bleed, generate buttons always visible, subtitle persistence fixed. RULES L136
 
 ---
 

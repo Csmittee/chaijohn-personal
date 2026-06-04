@@ -4,6 +4,15 @@
 
 ---
 
+L142  P&L Generator period toggle (12mo/5yr): use rebuildOutputHeader() after _activePeriod changes.
+      Same rule as L136 — active state lives in module var, button styles reconstructed from it.
+      Never rely on post-click querySelectorAll style patches alone; they fail when DOM is rebuilt.
+
+L141  P&L Generator Revenue tab: all revenue input values (units_mo, sale_price, revenue_mo,
+      probability, growth_mode, start_period, input_mode) must be mirrored into _revInputs module
+      var on every input/change event. getInputs() reads _revInputs when DOM element is absent
+      (Revenue tab not active). Never rely on DOM-only state for save.
+
 L136  P&L injector re-render pattern: any p.innerHTML = renderPanel() wipe will reset dynamic DOM state
       (active tab styles, subtitle color, etc.). Store all dynamic state in module-level vars and read
       them inside renderPanel() to reconstruct correct HTML on every re-render. Never rely on post-render

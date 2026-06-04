@@ -35,6 +35,7 @@
   let _sidebarW = 280;
   let _selectedProjectId = '';
   let _selectedProjectName = '';
+  let _revInputs = { start_period: '', input_mode: 'Units × price', units_mo: '', sale_price: '', revenue_mo: '', probability: '70', growth_mode: 'Conservative' };
 
   function panel() { return document.getElementById('panel-pl-generator'); }
   function $ (id) { return document.getElementById(id); }
@@ -242,18 +243,17 @@
 
   // ── Input collection ─────────────────────────────────────────
   function getInputs() {
-    function v(id, def) { const el = $(id); return el ? el.value : (def || ''); }
+    function v(id, def) { const el = $(id); return el ? el.value : (def !== undefined ? def : ''); }
+    function rv(id, key, def) { const el = $(id); return el ? el.value : (_revInputs[key] || def || ''); }
     return {
-      model_name: v('plg-model-name', ''),
-      version_note: v('plg-version-note', ''),
       project_id: v('plg-project-sel', ''),
-      start_period: v('plg-start-period', ''),
-      input_mode: v('plg-input-mode', 'units'),
-      units_mo: v('plg-units-mo', '0'),
-      sale_price: v('plg-sale-price', '0'),
-      revenue_mo: v('plg-revenue-mo', '0'),
-      probability: v('plg-probability', '70'),
-      growth_mode: v('plg-growth-mode', 'Conservative'),
+      start_period: rv('plg-start-period', 'start_period', ''),
+      input_mode: rv('plg-input-mode', 'input_mode', 'units'),
+      units_mo: rv('plg-units-mo', 'units_mo', '0'),
+      sale_price: rv('plg-sale-price', 'sale_price', '0'),
+      revenue_mo: rv('plg-revenue-mo', 'revenue_mo', '0'),
+      probability: rv('plg-probability', 'probability', '70'),
+      growth_mode: rv('plg-growth-mode', 'growth_mode', 'Conservative'),
       direct_mat: v('plg-direct-mat', '0'),
       labor_cost: v('plg-labor-cost', '0'),
       freight_in: v('plg-freight-in', ''),
@@ -736,7 +736,7 @@
 
     const output = `
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
-        <div style="display:flex;border-bottom:1px solid var(--border)">
+        <div id="plg-output-header" style="display:flex;border-bottom:1px solid var(--border)">
           ${['pl', 'bs', 'cf'].map(t => outTabBtn(t, t === 'pl' ? 'P&L' : t === 'bs' ? 'Balance Sheet' : 'Cashflow', _activeOutput === t)).join('')}
           <div style="margin-left:auto;padding:0.2rem 0.5rem;display:flex;gap:0.3rem;align-items:center">
             ${['12mo', '5yr'].map(p => `<button data-plg-period="${p}" style="font-size:0.68rem;padding:0.2rem 0.45rem;border:1px solid var(--border);border-radius:var(--radius);background:${_activePeriod === p ? 'var(--bg-card)' : 'transparent'};color:var(--text);cursor:pointer">${p}</button>`).join('')}
@@ -754,7 +754,7 @@
     return `
       <style>
         input[type=text] { -webkit-appearance:none; appearance:none; }
-        #panel-pl-generator.active { display:flex; flex-direction:column; overflow:hidden; }
+        #panel-pl-generator.active { display:flex; flex-direction:column; overflow:hidden; height:calc(100vh - 3rem); }
         @media print {
           body > *:not(#main) { display:none !important; }
           #main > *:not(#panel-pl-generator) { display:none !important; }
@@ -956,6 +956,15 @@
     }
   }
 
+  function rebuildOutputHeader() {
+    const hdr = $('plg-output-header');
+    if (!hdr) return;
+    hdr.innerHTML = ['pl', 'bs', 'cf'].map(t => outTabBtn(t, t === 'pl' ? 'P&L' : t === 'bs' ? 'Balance Sheet' : 'Cashflow', _activeOutput === t)).join('')
+      + `<div style="margin-left:auto;padding:0.2rem 0.5rem;display:flex;gap:0.3rem;align-items:center">`
+      + ['12mo', '5yr'].map(p => `<button data-plg-period="${p}" style="font-size:0.68rem;padding:0.2rem 0.45rem;border:1px solid var(--border);border-radius:var(--radius);background:${_activePeriod === p ? 'var(--bg-card)' : 'transparent'};color:var(--text);cursor:pointer">${p}</button>`).join('')
+      + `</div>`;
+  }
+
   function rebuildOutput() {
     const body = $('plg-output-body');
     if (!body) return;
@@ -979,6 +988,7 @@
 
   function clearFormData() {
     _computed = null; _activePeriod = '12mo'; _savedVersion = 0; _varItems = [];
+    _revInputs = { start_period: '', input_mode: 'Units × price', units_mo: '', sale_price: '', revenue_mo: '', probability: '70', growth_mode: 'Conservative' };
     _semiItems = [
       { desc: 'Office staff', amt: '', freq: 'Monthly' },
       { desc: 'Packaging', amt: '', freq: 'Monthly' },
@@ -1016,6 +1026,16 @@
         if (saved.inputs.fixed_items) _fixedItems = saved.inputs.fixed_items;
         if (saved.inputs.asset_items) _assetItems = saved.inputs.asset_items;
         if (saved.inputs.fund_items)  _fundItems  = saved.inputs.fund_items;
+        // Restore revenue inputs into module var so they survive tab switches
+        _revInputs = {
+          start_period: saved.inputs.start_period || '',
+          input_mode: saved.inputs.input_mode || 'Units × price',
+          units_mo: saved.inputs.units_mo || '',
+          sale_price: saved.inputs.sale_price || '',
+          revenue_mo: saved.inputs.revenue_mo || '',
+          probability: saved.inputs.probability || '70',
+          growth_mode: saved.inputs.growth_mode || 'Conservative'
+        };
       }
       p.innerHTML = renderPanel(saved.inputs);
       const newSel = $('plg-project-sel');
@@ -1110,16 +1130,8 @@
       const outBtn = e.target.closest('[data-plg-out]');
       if (outBtn) {
         _activeOutput = outBtn.dataset.plgOut;
+        rebuildOutputHeader();
         rebuildOutput();
-        const outArea = $('plg-output-body');
-        if (outArea) {
-          const tabs = p.querySelectorAll('[data-plg-out]');
-          tabs.forEach(b => {
-            const active = b.dataset.plgOut === _activeOutput;
-            b.style.color = active ? 'var(--text)' : 'var(--text-dim)';
-            b.style.borderBottom = active ? '2px solid var(--yellow)' : '2px solid transparent';
-          });
-        }
         return;
       }
 
@@ -1134,10 +1146,8 @@
           rebuildKPIs();
           renderChart(_computed, _activePeriod);
         }
+        rebuildOutputHeader();
         rebuildOutput();
-        p.querySelectorAll('[data-plg-period]').forEach(b => {
-          b.style.background = b.dataset.plgPeriod === _activePeriod ? 'var(--bg-card)' : 'transparent';
-        });
         return;
       }
 
@@ -1247,18 +1257,14 @@
         if (projectId) { loadProjectModel(projectId); } else { resetForm(); loadProjects(); }
         return;
       }
+      // Sync revenue inputs to module var on every change
+      const revFieldMap = { 'plg-start-period':'start_period','plg-input-mode':'input_mode','plg-units-mo':'units_mo','plg-sale-price':'sale_price','plg-revenue-mo':'revenue_mo','plg-probability':'probability','plg-growth-mode':'growth_mode' };
+      if (revFieldMap[e.target.id]) { _revInputs[revFieldMap[e.target.id]] = e.target.value; }
+
       // Input mode change — rebuild revenue tab
       if (e.target.id === 'plg-input-mode') {
         const si = getInputs();
         rebuildSidebar(si);
-        return;
-      }
-      // Auto-compute revenue from units × price
-      if (e.target.id === 'plg-units-mo' || e.target.id === 'plg-sale-price') {
-        const u = Number(($('plg-units-mo') || {}).value) || 0;
-        const pr = Number(($('plg-sale-price') || {}).value) || 0;
-        const revEl = $('plg-revenue-mo');
-        if (revEl && revEl.readOnly) revEl.value = u * pr;
         return;
       }
       // Inline list updates — read from inputs into module vars
@@ -1296,6 +1302,19 @@
         _archiveSearch = e.target.value;
         const arcEl = $('plg-archive');
         if (arcEl) arcEl.outerHTML = renderArchive();
+      }
+    });
+
+    // Sync revenue fields to _revInputs on every keystroke
+    p.addEventListener('input', (e) => {
+      const revFieldMap = { 'plg-start-period':'start_period','plg-units-mo':'units_mo','plg-sale-price':'sale_price','plg-revenue-mo':'revenue_mo','plg-probability':'probability' };
+      if (revFieldMap[e.target.id]) { _revInputs[revFieldMap[e.target.id]] = e.target.value; }
+      // Auto-compute revenue from units × price
+      if (e.target.id === 'plg-units-mo' || e.target.id === 'plg-sale-price') {
+        const u = Number(($('plg-units-mo') || {}).value) || 0;
+        const pr = Number(($('plg-sale-price') || {}).value) || 0;
+        const revEl = $('plg-revenue-mo');
+        if (revEl && revEl.readOnly) { revEl.value = u * pr; _revInputs.revenue_mo = String(u * pr); }
       }
     });
   }
