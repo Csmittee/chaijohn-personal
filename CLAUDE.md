@@ -25,6 +25,9 @@ Check `panel-xxx.classList.contains('active')` at IIFE parse time for direct has
 5. Read all relevant source files fresh from repo before writing anything
 6. For ANY external Airtable base (not chaijohn-core): call Meta API to verify
    field names BEFORE writing code. Never assume from prompt specs. See L077.
+7. PANEL HEADERS: Every injector owns its own header. If p.innerHTML is used,
+the header must be inside renderPanel(). index.html panel headers are
+overwritten on injector init — do not rely on them.
 
 ## TRANSACTION MODEL
 See RULES.md L099–L106 for the full canonical model.
