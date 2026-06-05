@@ -22,8 +22,10 @@
   let transform    = { x: 0, y: 0, scale: 1 };
   let simulation   = null;
   let initialized  = false;
-  let dragNode     = null;        // node being individually dragged
-  let dragOffset   = { x: 0, y: 0 };
+  let dragNode        = null;     // node being individually dragged
+  let dragOffset      = { x: 0, y: 0 };
+  let dragMoved       = false;   // true only after mouse moves > 3px
+  let dragStartClient = { x: 0, y: 0 };
 
   // ── Node appearance ───────────────────────────────────────────────────────
   const NODE_COLORS = {
@@ -622,14 +624,13 @@
       const hit  = nodeAt(cx, cy);
 
       if (hit) {
-        // Start individual node drag
+        // Prepare for potential node drag — do NOT pin yet, wait for movement
         const wx = (cx - transform.x) / transform.scale;
         const wy = (cy - transform.y) / transform.scale;
-        dragNode   = hit;
-        dragOffset = { x: hit.x - wx, y: hit.y - wy };
-        hit.pinned = true;
-        hit.vx = 0; hit.vy = 0;
-        c.style.cursor = 'grabbing';
+        dragNode        = hit;
+        dragOffset      = { x: hit.x - wx, y: hit.y - wy };
+        dragMoved       = false;
+        dragStartClient = { x: e.clientX, y: e.clientY };
         e.stopPropagation();
       } else {
         // Start canvas pan
@@ -643,14 +644,24 @@
       const cy   = e.clientY - rect.top;
 
       if (dragNode) {
-        // Move pinned node
-        const wx = (cx - transform.x) / transform.scale;
-        const wy = (cy - transform.y) / transform.scale;
-        dragNode.x  = wx + dragOffset.x;
-        dragNode.y  = wy + dragOffset.y;
-        dragNode.vx = 0; dragNode.vy = 0;
-        hideTooltip();
-        renderCanvas();
+        // Commit to drag only after moving > 3px
+        const dxC = e.clientX - dragStartClient.x;
+        const dyC = e.clientY - dragStartClient.y;
+        if (!dragMoved && (Math.abs(dxC) > 3 || Math.abs(dyC) > 3)) {
+          dragMoved        = true;
+          dragNode.pinned  = true;
+          dragNode.vx      = 0; dragNode.vy = 0;
+          c.style.cursor   = 'grabbing';
+        }
+        if (dragMoved) {
+          const wx = (cx - transform.x) / transform.scale;
+          const wy = (cy - transform.y) / transform.scale;
+          dragNode.x  = wx + dragOffset.x;
+          dragNode.y  = wy + dragOffset.y;
+          dragNode.vx = 0; dragNode.vy = 0;
+          hideTooltip();
+          renderCanvas();
+        }
         return;
       }
 
@@ -675,8 +686,34 @@
 
     c.addEventListener('mouseup', e => {
       if (dragNode) {
-        dragNode = null;
+        const node     = dragNode;
+        const wasDragged = dragMoved;
+        dragNode  = null;
+        dragMoved = false;
         c.style.cursor = 'grab';
+
+        if (!wasDragged) {
+          // Treat as click/double-click — no movement occurred
+          const rect = c.getBoundingClientRect();
+          const cx   = e.clientX - rect.left, cy = e.clientY - rect.top;
+          const now  = Date.now();
+          if (now - lastClick < 350) {
+            // Double-click: unpin if pinned, else open edit modal
+            if (node.pinned) {
+              node.pinned = false;
+              renderCanvas();
+              renderDetail();
+            } else {
+              openEditModal(node);
+            }
+          } else {
+            // Single click: select/deselect
+            selectedNode = selectedNode?.id === node.id ? null : node;
+            renderCanvas();
+            renderDetail();
+          }
+          lastClick = now;
+        }
         return;
       }
 
@@ -686,16 +723,8 @@
         const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
         const hit = nodeAt(cx, cy);
         const now = Date.now();
-        if (hit && now - lastClick < 350) {
-          // Double-click: unpin if pinned, else open edit modal
-          if (hit.pinned) {
-            hit.pinned = false;
-            renderCanvas();
-            renderDetail();
-          } else {
-            openEditModal(hit);
-          }
-        } else if (hit) {
+        if (hit) {
+          // Shouldn't reach here normally (node hits handled above) but guard anyway
           selectedNode = selectedNode?.id === hit.id ? null : hit;
           renderCanvas();
           renderDetail();
