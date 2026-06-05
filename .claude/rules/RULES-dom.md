@@ -77,5 +77,19 @@ L160  Type B done = daily hit only. Stored as JSON date array in hit_log field (
       PATCH body for Type B hit: { hit_log: JSON.stringify(log), done_at: todayStr }
       period_end field is date type. hit_log is multilineText type in Airtable.
 
+L161  Mind Map panel (M4.1): route=mindmap, panel=#panel-mindmap, injector=mindmap.injector.js.
+      Force-directed graph rendered on Canvas 2D. Pan = drag canvas. Zoom = wheel.
+      Node click = select (show detail panel). Node double-click = open edit modal.
+      Canvas events wired once via root._mmWired flag. Never re-wire on re-render.
+
+L162  Mind Map simulation: 300 ticks at init (runSimulation). Forces: repulsion -800/dist²,
+      attraction spring toward edge peers, center gravity 0.003. Velocity dampen 0.85.
+      Positions stored in node.x / node.y — mutated in place. Never reset positions on filter
+      change — preserve layout. Re-run simulation only on node/edge add.
+
+L163  Mind Map seed: SEED_NODES + SEED_EDGES seeded only when nodes.length === 0 after first
+      loadData(). labelToId map built during seed to resolve edge IDs. Seeding is one-time
+      per empty Airtable state. Never re-seed if records exist.
+
 L025  Chart.js view toggle: store mode in module-level var, render function branches on mode, destroy/recreate chart each render
 L016  Chart.js v4 inline plugins: use top-level `plugins:[]` array in config — do NOT use `Chart.register()` for one-off plugins
