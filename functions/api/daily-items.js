@@ -72,6 +72,7 @@ export async function onRequestPost(context) {
   if (body.budget_id)                 fields.budget_id      = body.budget_id;
   if (body.schedule_time)             fields.schedule_time  = body.schedule_time;
   if (body.schedule_type)             fields.schedule_type  = body.schedule_type;
+  if (body.end_time)                   fields.end_time       = body.end_time;
   if (body.project_task_id)           fields.project_task_id = body.project_task_id;
   if (body.project_id)                fields.project_id     = body.project_id;
   if (body.project_name)              fields.project_name   = body.project_name;
