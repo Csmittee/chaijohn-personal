@@ -48,9 +48,12 @@ export async function onRequestGet(context) {
 
   if (existing[TABLE]) {
     const tableId = existing[TABLE];
-    // Add end_time field if not present (F4 — safe to call multiple times, 422 = already exists)
-    const added = await addFieldIfMissing(key, tableId, { name: 'end_time', type: 'singleLineText' });
-    return jsonResponse({ status: 'exists', tableId, field_added: added });
+    const results = await Promise.all([
+      addFieldIfMissing(key, tableId, { name: 'end_time',   type: 'singleLineText' }),
+      addFieldIfMissing(key, tableId, { name: 'period_end', type: 'date', options: { dateFormat: { name: 'iso' } } }),
+      addFieldIfMissing(key, tableId, { name: 'hit_log',    type: 'multilineText' })
+    ]);
+    return jsonResponse({ status: 'exists', tableId, fields_added: results });
   }
 
   const result = await createTable(key, {
@@ -67,6 +70,8 @@ export async function onRequestGet(context) {
       { name: 'budget_id',        type: 'singleLineText' },
       { name: 'schedule_time',    type: 'singleLineText' },
       { name: 'end_time',         type: 'singleLineText' },
+      { name: 'period_end',       type: 'date',          options: { dateFormat: { name: 'iso' } } },
+      { name: 'hit_log',          type: 'multilineText' },
       { name: 'schedule_type',    type: 'singleSelect',  options: { choices: [{ name: 'Routine' }, { name: 'General' }] } },
       { name: 'source',           type: 'singleSelect',  options: { choices: [{ name: 'manual' }, { name: 'project' }] } },
       { name: 'project_task_id',  type: 'singleLineText' },
