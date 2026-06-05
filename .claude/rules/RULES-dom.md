@@ -51,6 +51,31 @@ L155  DailyItems done=true on BuyPay: POST to Transactions with description='boo
 L154  Time Management panel: route=timemanagement, panel=#panel-timemanagement,
       injector=timemanagement.injector.js. DailyItems table stores all personal tasks.
       Project tasks are injected on load — never duplicated (check project_task_id first).
+      Routine types — two completely separate types:
+      Type A = Flow Routine: pane=Schedule, schedule_type=Routine, NO date.
+               Shows in Flow strip only. No done button. Not measured. Not in KPI.
+               Created from ⚙ Routine modal only. End time optional.
+      Type B = Period Schedule: pane=Schedule, date set, period_end set.
+               Shows in Schedule pane AND Flow strip. Done = daily hit logged in hit_log.
+               KPI Schedule Hit counts Type B hits for today from hit_log field.
+
+L159  Schedule entry validation — 4 valid states only:
+      (1) date only = all-day event
+      (2) start_time + date = instance
+      (3) start_time + end_time + date = instance with duration
+      (4) start_time + date + period_end = Type B period schedule
+      Invalid (block save with inline error):
+        start_time without date → "Start time requires a date"
+        period_end without date → "End date requires a start date"
+        period_end < date       → "End date must be after start date"
+        period_end without start_time → "Period schedule requires a start time"
+
+L160  Type B done = daily hit only. Stored as JSON date array in hit_log field (multilineText).
+      Double-click safe: check log includes today before appending.
+      Client resets daily: isTodayDone() checks hit_log for Type B, item.done for all others.
+      done field is NOT set on Type B items — only hit_log and done_at are updated.
+      PATCH body for Type B hit: { hit_log: JSON.stringify(log), done_at: todayStr }
+      period_end field is date type. hit_log is multilineText type in Airtable.
 
 L025  Chart.js view toggle: store mode in module-level var, render function branches on mode, destroy/recreate chart each render
 L016  Chart.js v4 inline plugins: use top-level `plugins:[]` array in config — do NOT use `Chart.register()` for one-off plugins
