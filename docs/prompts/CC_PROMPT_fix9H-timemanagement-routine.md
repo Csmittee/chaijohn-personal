@@ -1,3 +1,8 @@
+✅ COMPLETE — 2026-06-05
+Summary: Executed on branch fix/timemanagement-routine. Fixed B3 (KPI Schedule Hit — null date + period_end support) and B4 (project tasks today chip + DO lane hide toggle). Redesigned routine system into Type A (Flow Routine — no date, flow strip only) and Type B (Period Schedule — date + period_end, measured, hit_log). Added schedule entry validation (4 valid states), markTypeBDone() with hit_log, isTodayDone(), time conflict detection (amber blink), 60s refresh loop, project task inline attribute editor. Updated RULES-dom.md L154 + added L159, L160.
+
+---
+
 # CC_PROMPT_fix9H-timemanagement-routine.md
 > Branch: fix/timemanagement-routine
 > File to modify: public/assets/js/timemanagement.injector.js ONLY
