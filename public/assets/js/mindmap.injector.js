@@ -22,6 +22,8 @@
   let transform    = { x: 0, y: 0, scale: 1 };
   let simulation   = null;
   let initialized  = false;
+  let dragNode     = null;        // node being individually dragged
+  let dragOffset   = { x: 0, y: 0 };
 
   // ── Node appearance ───────────────────────────────────────────────────────
   const NODE_COLORS = {
@@ -88,6 +90,7 @@
       .mm-hint { position: absolute; bottom: 0.5rem; left: 0.5rem; font-family: var(--font-mono); font-size: 0.6rem; color: rgba(255,255,255,0.2); pointer-events: none; }
       .mm-del-btn { background: none; border: 1px solid var(--red); color: var(--red); border-radius: var(--radius); font-size: 0.72rem; padding: 0.25rem 0.6rem; cursor: pointer; }
       .mm-del-btn:hover { background: rgba(239,68,68,0.1); }
+      .mm-tooltip { position: absolute; background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0.2rem 0.5rem; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim); pointer-events: none; white-space: nowrap; z-index: 10; display: none; max-width: 260px; white-space: normal; line-height: 1.35; }
       @media (max-width: 700px) { .mm-detail { display: none !important; } }
     `;
     document.head.appendChild(s);
@@ -272,7 +275,7 @@
     for (let t = 0; t < ticks; t++) {
       const alpha = 1 - t / ticks;
 
-      // Repulsion between all pairs — increased for better spread
+      // Repulsion — skip velocity on pinned nodes
       for (let i = 0; i < visibleNodes.length; i++) {
         for (let j = i + 1; j < visibleNodes.length; j++) {
           const a = visibleNodes[i], b = visibleNodes[j];
@@ -280,38 +283,45 @@
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const force = (-12000 / (dist * dist)) * alpha;
           const fx = (dx / dist) * force, fy = (dy / dist) * force;
-          a.vx += fx; a.vy += fy;
-          b.vx -= fx; b.vy -= fy;
+          if (!a.pinned) { a.vx += fx; a.vy += fy; }
+          if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
         }
       }
 
-      // Attraction along edges
+      // Attraction along edges — skip pinned
       for (const e of visibleEdges) {
         const a = nodeMap[e.from_id], b = nodeMap[e.to_id];
         if (!a || !b) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const str  = (e.strength || 2) * 0.04 * alpha;
-        a.vx += (dx / dist) * str * dist * 0.01;
-        a.vy += (dy / dist) * str * dist * 0.01;
-        b.vx -= (dx / dist) * str * dist * 0.01;
-        b.vy -= (dy / dist) * str * dist * 0.01;
+        if (!a.pinned) { a.vx += (dx / dist) * str * dist * 0.01; a.vy += (dy / dist) * str * dist * 0.01; }
+        if (!b.pinned) { b.vx -= (dx / dist) * str * dist * 0.01; b.vy -= (dy / dist) * str * dist * 0.01; }
       }
 
-      // Center gravity — slightly stronger for tighter cluster
+      // Center gravity — skip pinned
       for (const n of visibleNodes) {
+        if (n.pinned) continue;
         n.vx += (W / 2 - n.x) * 0.004 * alpha;
         n.vy += (H / 2 - n.y) * 0.004 * alpha;
       }
 
-      // Apply velocity + dampen (more damping = less jitter) + clamp
+      // Apply velocity — skip pinned
       for (const n of visibleNodes) {
+        if (n.pinned) continue;
         n.vx *= 0.78; n.vy *= 0.78;
         n.x  += n.vx; n.y  += n.vy;
         n.x   = Math.max(pad, Math.min(W - pad, n.x));
         n.y   = Math.max(pad, Math.min(H - pad, n.y));
       }
     }
+  }
+
+  // ── Connected node IDs (all edges, not just visible) ──────────────────────
+  function getEdgeConnectedIds() {
+    const ids = new Set();
+    edges.forEach(e => { ids.add(e.from_id); ids.add(e.to_id); });
+    return ids;
   }
 
   // ── Render canvas ─────────────────────────────────────────────────────────
@@ -341,10 +351,11 @@
     ctx.translate(transform.x, transform.y);
     ctx.scale(transform.scale, transform.scale);
 
-    const visNodes     = getVisibleNodes();
-    const visNodeIds   = new Set(visNodes.map(n => n.id));
-    const visEdges     = getVisibleEdges(visNodeIds);
-    const nodeMap      = Object.fromEntries(visNodes.map(n => [n.id, n]));
+    const visNodes        = getVisibleNodes();
+    const visNodeIds      = new Set(visNodes.map(n => n.id));
+    const visEdges        = getVisibleEdges(visNodeIds);
+    const nodeMap         = Object.fromEntries(visNodes.map(n => [n.id, n]));
+    const edgeConnectedIds = getEdgeConnectedIds();
 
     // Connected node IDs for selected node
     const connectedIds = new Set();
@@ -383,12 +394,13 @@
     // Draw nodes
     for (const n of visNodes) {
       if (n.x == null) continue;
-      const baseR   = NODE_RADIUS[n.node_type] || 13;
-      const r       = baseR + (n.id === selectedNode?.id ? 4 : 0);
-      const color   = NODE_COLORS[n.node_type] || '#6b7280';
-      const isDimmed = selectedNode && n.id !== selectedNode.id && !connectedIds.has(n.id);
+      const baseR         = NODE_RADIUS[n.node_type] || 13;
+      const r             = baseR + (n.id === selectedNode?.id ? 4 : 0);
+      const color         = NODE_COLORS[n.node_type] || '#6b7280';
+      const isDimmed      = selectedNode && n.id !== selectedNode.id && !connectedIds.has(n.id);
+      const isDisconnected = !edgeConnectedIds.has(n.id);
 
-      ctx.globalAlpha = isDimmed ? 0.2 : 1;
+      ctx.globalAlpha = isDimmed ? 0.2 : (isDisconnected ? 0.7 : 1);
 
       // Shadow glow for selected
       if (n.id === selectedNode?.id) {
@@ -403,6 +415,17 @@
 
       ctx.shadowBlur = 0;
 
+      // Dashed ring for disconnected nodes
+      if (isDisconnected) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
       // White ring for selected
       if (n.id === selectedNode?.id) {
         ctx.beginPath();
@@ -412,14 +435,24 @@
         ctx.stroke();
       }
 
+      // Pin indicator — yellow dot at top-right
+      if (n.pinned) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(n.x + r * 0.7, n.y - r * 0.7, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#f5c518';
+        ctx.fill();
+      }
+
       // Label: show when baseR >= 13 OR node is selected/connected; truncate to 12 chars
       const isHighlightedNode = n.id === selectedNode?.id || connectedIds.has(n.id);
       const showLabel = baseR >= 13 || isHighlightedNode;
       if (showLabel) {
         const label    = (n.label || '').slice(0, 12);
         const fontSize = Math.max(8, baseR * 0.55);
+        ctx.globalAlpha = isDimmed ? 0.15 : (isDisconnected ? 0.55 : 0.75);
         ctx.font      = `${fontSize}px sans-serif`;
-        ctx.fillStyle = isDimmed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.75)';
+        ctx.fillStyle = 'rgba(255,255,255,1)';
         ctx.textAlign = 'center';
         ctx.fillText(label, n.x, n.y + r + fontSize + 2);
       }
@@ -434,7 +467,6 @@
     const c = canvas();
     if (!c) return;
     const wrap = c.parentElement;
-    // Set explicit height on wrapper so canvas fills viewport properly
     const h = getCanvasHeight();
     wrap.style.height = h + 'px';
     c.width  = wrap.clientWidth  || 800;
@@ -462,8 +494,9 @@
       return `<li class="mm-conn-item" data-nav-node="${other.id}">${dot}<span style="flex:1">${other.label}</span><span class="mm-conn-type">${dir} ${e.edge_type}</span></li>`;
     }).filter(Boolean).join('');
 
-    const color  = NODE_COLORS[selectedNode.node_type] || '#6b7280';
+    const color   = NODE_COLORS[selectedNode.node_type] || '#6b7280';
     const stColor = selectedNode.status === 'Active' ? 'var(--green)' : selectedNode.status === 'Idea' ? 'var(--yellow)' : 'var(--text-dim)';
+    const pinNote = selectedNode.pinned ? '<div style="font-family:var(--font-mono);font-size:0.62rem;color:#f5c518">📌 Pinned — double-click to unpin</div>' : '';
 
     detail.innerHTML = `
       <div class="mm-detail-label">${selectedNode.label || '—'}</div>
@@ -471,6 +504,7 @@
         <span class="mm-badge" style="background:${color}20;color:${color}">${selectedNode.node_type || '—'}</span>
         <span class="mm-badge" style="background:transparent;border:1px solid ${stColor};color:${stColor}">${selectedNode.status || '—'}</span>
       </div>
+      ${pinNote}
       ${selectedNode.description ? `<div class="mm-detail-desc">${selectedNode.description}</div>` : ''}
       ${selectedNode.tags ? `<div class="mm-detail-tags">🏷 ${selectedNode.tags}</div>` : ''}
       ${selectedNode.context ? `<div class="mm-detail-ctx">${selectedNode.context}</div>` : ''}
@@ -488,6 +522,20 @@
     if (el) el.textContent = msg;
   }
 
+  // ── Tooltip helper ────────────────────────────────────────────────────────
+  function showTooltip(x, y, msg) {
+    const tt = document.getElementById('mm-tooltip');
+    if (!tt) return;
+    tt.textContent = msg;
+    tt.style.left    = (x + 14) + 'px';
+    tt.style.top     = (y - 10) + 'px';
+    tt.style.display = 'block';
+  }
+  function hideTooltip() {
+    const tt = document.getElementById('mm-tooltip');
+    if (tt) tt.style.display = 'none';
+  }
+
   // ── Main render ───────────────────────────────────────────────────────────
   function renderAll() {
     const visNodes = getVisibleNodes();
@@ -499,11 +547,6 @@
     renderDetail();
     updatePills();
     setStatus(`${visNodes.length} nodes · ${visEdges.length} edges`);
-  }
-
-  function softRender() {
-    renderCanvas();
-    renderDetail();
   }
 
   function updatePills() {
@@ -538,7 +581,8 @@
       <div class="mm-body">
         <div class="mm-canvas-wrap" id="mm-canvas-wrap">
           <canvas id="mm-canvas"></canvas>
-          <div class="mm-hint">Drag to pan · Scroll to zoom · Click node to inspect</div>
+          <div class="mm-hint">Drag nodes · Pan canvas · Scroll to zoom · Dbl-click to edit</div>
+          <div class="mm-tooltip" id="mm-tooltip"></div>
         </div>
         <div class="mm-detail" id="mm-detail"></div>
       </div>
@@ -572,19 +616,70 @@
     let drag = null, lastClick = 0;
 
     c.addEventListener('mousedown', e => {
-      drag = { startX: e.clientX, startY: e.clientY, tx: transform.x, ty: transform.y, moved: false };
+      const rect = c.getBoundingClientRect();
+      const cx   = e.clientX - rect.left;
+      const cy   = e.clientY - rect.top;
+      const hit  = nodeAt(cx, cy);
+
+      if (hit) {
+        // Start individual node drag
+        const wx = (cx - transform.x) / transform.scale;
+        const wy = (cy - transform.y) / transform.scale;
+        dragNode   = hit;
+        dragOffset = { x: hit.x - wx, y: hit.y - wy };
+        hit.pinned = true;
+        hit.vx = 0; hit.vy = 0;
+        c.style.cursor = 'grabbing';
+        e.stopPropagation();
+      } else {
+        // Start canvas pan
+        drag = { startX: e.clientX, startY: e.clientY, tx: transform.x, ty: transform.y, moved: false };
+      }
     });
 
     c.addEventListener('mousemove', e => {
-      if (!drag) return;
-      const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
-      transform.x = drag.tx + dx;
-      transform.y = drag.ty + dy;
-      renderCanvas();
+      const rect = c.getBoundingClientRect();
+      const cx   = e.clientX - rect.left;
+      const cy   = e.clientY - rect.top;
+
+      if (dragNode) {
+        // Move pinned node
+        const wx = (cx - transform.x) / transform.scale;
+        const wy = (cy - transform.y) / transform.scale;
+        dragNode.x  = wx + dragOffset.x;
+        dragNode.y  = wy + dragOffset.y;
+        dragNode.vx = 0; dragNode.vy = 0;
+        hideTooltip();
+        renderCanvas();
+        return;
+      }
+
+      if (drag) {
+        const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+        transform.x = drag.tx + dx;
+        transform.y = drag.ty + dy;
+        hideTooltip();
+        renderCanvas();
+        return;
+      }
+
+      // Tooltip for disconnected nodes on hover
+      const hovered = nodeAt(cx, cy);
+      if (hovered && !getEdgeConnectedIds().has(hovered.id)) {
+        showTooltip(cx, cy, 'No connections yet — use Add Connection to link this node');
+      } else {
+        hideTooltip();
+      }
     });
 
     c.addEventListener('mouseup', e => {
+      if (dragNode) {
+        dragNode = null;
+        c.style.cursor = 'grab';
+        return;
+      }
+
       if (!drag) return;
       if (!drag.moved) {
         const rect = c.getBoundingClientRect();
@@ -592,8 +687,14 @@
         const hit = nodeAt(cx, cy);
         const now = Date.now();
         if (hit && now - lastClick < 350) {
-          // Double click → edit
-          openEditModal(hit);
+          // Double-click: unpin if pinned, else open edit modal
+          if (hit.pinned) {
+            hit.pinned = false;
+            renderCanvas();
+            renderDetail();
+          } else {
+            openEditModal(hit);
+          }
         } else if (hit) {
           selectedNode = selectedNode?.id === hit.id ? null : hit;
           renderCanvas();
@@ -607,6 +708,8 @@
       }
       drag = null;
     });
+
+    c.addEventListener('mouseleave', () => { hideTooltip(); });
 
     c.addEventListener('wheel', e => {
       e.preventDefault();
