@@ -95,3 +95,76 @@ When 60+ nodes render, labels collide. Fix:
 - [ ] Pan and zoom still work correctly after resize fix
 
 Merge to main after quick owner visual check.
+
+---
+
+## Fix 4 — Draggable nodes
+
+Nodes must be individually draggable. When dragged, they pin in place.
+Other nodes continue to repel/attract around the pinned node.
+
+Add to module state:
+```javascript
+let dragNode = null;      // node being dragged
+let dragOffset = { x: 0, y: 0 };
+```
+
+Mouse/touch events on canvas:
+
+```javascript
+canvas.addEventListener('mousedown', e => {
+  const { x, y } = toWorld(e);
+  const hit = nodes.find(n => Math.hypot(n.x - x, n.y - y) < n.r + 6);
+  if (hit) {
+    dragNode = hit;
+    dragOffset = { x: hit.x - x, y: hit.y - y };
+    hit.pinned = true;   // mark as pinned
+    hit.vx = 0; hit.vy = 0;
+    canvas.style.cursor = 'grabbing';
+    e.stopPropagation();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!dragNode) return;
+  const { x, y } = toWorld(e);
+  dragNode.x = x + dragOffset.x;
+  dragNode.y = y + dragOffset.y;
+  dragNode.vx = 0; dragNode.vy = 0;
+  draw();
+});
+
+canvas.addEventListener('mouseup', () => {
+  dragNode = null;
+  canvas.style.cursor = 'grab';
+});
+```
+
+In simulation tick — pinned nodes skip force calculation:
+```javascript
+// In tick():
+nodes.forEach(n => {
+  if (n.pinned) return;  // skip — user placed this node
+  // ... apply forces normally
+});
+```
+
+Pinned node visual indicator: small 📌 dot (2px yellow circle) at top-right of node.
+
+Double-click node → if pinned, unpin it (remove pin, let simulation move it again).
+If not pinned → open edit/detail as before.
+
+Pinned positions are session-only for now (resets on reload).
+Future: save positions to MindMapNodes via PATCH on `pos_x`, `pos_y` fields.
+
+---
+
+## Fix 5 — Disconnected nodes visual hint
+
+Nodes with zero edges render with:
+- Dashed border ring: `setLineDash([3,3])` circle stroke around the node
+- Slightly lower opacity: 0.7 instead of full
+- Tooltip on hover adds text: "No connections yet — use Add Connection to link this node"
+
+This makes it clear they are valid nodes waiting for edges, not errors.
+
