@@ -237,28 +237,23 @@
     setStatus('');
   }
 
+  // ── Canvas height ─────────────────────────────────────────────────────────
+  function getCanvasHeight() {
+    return Math.max(500, window.innerHeight - 180);
+  }
+
   // ── Force simulation ──────────────────────────────────────────────────────
   function initPositions(w, h, visibleNodes) {
-    // Group by type for initial cluster layout
-    const typeGroups = {};
-    visibleNodes.forEach(n => {
-      const t = n.node_type || 'Idea';
-      if (!typeGroups[t]) typeGroups[t] = [];
-      typeGroups[t].push(n);
-    });
-    const types = Object.keys(typeGroups);
-    types.forEach((type, ti) => {
-      const angle = (ti / types.length) * Math.PI * 2;
-      const cx    = w / 2 + Math.cos(angle) * (w * 0.28);
-      const cy    = h / 2 + Math.sin(angle) * (h * 0.28);
-      typeGroups[type].forEach((n, i) => {
-        if (n.x !== undefined) return; // keep existing position
-        const a2 = (i / typeGroups[type].length) * Math.PI * 2;
-        const r2 = 30 + typeGroups[type].length * 6;
-        n.x  = cx + Math.cos(a2) * r2 + (Math.random() - 0.5) * 20;
-        n.y  = cy + Math.sin(a2) * r2 + (Math.random() - 0.5) * 20;
-        n.vx = 0; n.vy = 0;
-      });
+    // Single circle layout — even distribution, preserves existing positions
+    const cx     = w / 2;
+    const cy     = h / 2;
+    const radius = Math.min(w, h) * 0.35;
+    visibleNodes.forEach((n, i) => {
+      if (n.x !== undefined) return; // keep existing position
+      const angle = (2 * Math.PI * i) / visibleNodes.length;
+      n.x  = cx + radius * Math.cos(angle);
+      n.y  = cy + radius * Math.sin(angle);
+      n.vx = 0; n.vy = 0;
     });
   }
 
@@ -267,7 +262,7 @@
     const c = canvas();
     if (!c) return;
     const W = c.offsetWidth || 800;
-    const H = c.offsetHeight || 600;
+    const H = c.offsetHeight || getCanvasHeight();
 
     initPositions(W, H, visibleNodes);
 
@@ -277,13 +272,13 @@
     for (let t = 0; t < ticks; t++) {
       const alpha = 1 - t / ticks;
 
-      // Repulsion between all pairs
+      // Repulsion between all pairs — increased for better spread
       for (let i = 0; i < visibleNodes.length; i++) {
         for (let j = i + 1; j < visibleNodes.length; j++) {
           const a = visibleNodes[i], b = visibleNodes[j];
           const dx = b.x - a.x, dy = b.y - a.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (-800 / (dist * dist)) * alpha;
+          const force = (-12000 / (dist * dist)) * alpha;
           const fx = (dx / dist) * force, fy = (dy / dist) * force;
           a.vx += fx; a.vy += fy;
           b.vx -= fx; b.vy -= fy;
@@ -303,15 +298,15 @@
         b.vy -= (dy / dist) * str * dist * 0.01;
       }
 
-      // Center gravity
+      // Center gravity — slightly stronger for tighter cluster
       for (const n of visibleNodes) {
-        n.vx += (W / 2 - n.x) * 0.002 * alpha;
-        n.vy += (H / 2 - n.y) * 0.002 * alpha;
+        n.vx += (W / 2 - n.x) * 0.004 * alpha;
+        n.vy += (H / 2 - n.y) * 0.004 * alpha;
       }
 
-      // Apply velocity + dampen + clamp
+      // Apply velocity + dampen (more damping = less jitter) + clamp
       for (const n of visibleNodes) {
-        n.vx *= 0.85; n.vy *= 0.85;
+        n.vx *= 0.78; n.vy *= 0.78;
         n.x  += n.vx; n.y  += n.vy;
         n.x   = Math.max(pad, Math.min(W - pad, n.x));
         n.y   = Math.max(pad, Math.min(H - pad, n.y));
@@ -388,8 +383,9 @@
     // Draw nodes
     for (const n of visNodes) {
       if (n.x == null) continue;
-      const r     = (NODE_RADIUS[n.node_type] || 13) + (n.id === selectedNode?.id ? 4 : 0);
-      const color = NODE_COLORS[n.node_type] || '#6b7280';
+      const baseR   = NODE_RADIUS[n.node_type] || 13;
+      const r       = baseR + (n.id === selectedNode?.id ? 4 : 0);
+      const color   = NODE_COLORS[n.node_type] || '#6b7280';
       const isDimmed = selectedNode && n.id !== selectedNode.id && !connectedIds.has(n.id);
 
       ctx.globalAlpha = isDimmed ? 0.2 : 1;
@@ -416,12 +412,17 @@
         ctx.stroke();
       }
 
-      // Label
-      const label = (n.label || '').slice(0, 14);
-      ctx.font      = `${isDimmed ? 9 : 10}px sans-serif`;
-      ctx.fillStyle = isDimmed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.75)';
-      ctx.textAlign = 'center';
-      ctx.fillText(label, n.x, n.y + r + 12);
+      // Label: show when baseR >= 13 OR node is selected/connected; truncate to 12 chars
+      const isHighlightedNode = n.id === selectedNode?.id || connectedIds.has(n.id);
+      const showLabel = baseR >= 13 || isHighlightedNode;
+      if (showLabel) {
+        const label    = (n.label || '').slice(0, 12);
+        const fontSize = Math.max(8, baseR * 0.55);
+        ctx.font      = `${fontSize}px sans-serif`;
+        ctx.fillStyle = isDimmed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.75)';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, n.x, n.y + r + fontSize + 2);
+      }
 
       ctx.globalAlpha = 1;
     }
@@ -433,8 +434,11 @@
     const c = canvas();
     if (!c) return;
     const wrap = c.parentElement;
-    c.width  = wrap.offsetWidth  || 800;
-    c.height = wrap.offsetHeight || 600;
+    // Set explicit height on wrapper so canvas fills viewport properly
+    const h = getCanvasHeight();
+    wrap.style.height = h + 'px';
+    c.width  = wrap.clientWidth  || 800;
+    c.height = h;
   }
 
   // ── Detail panel ──────────────────────────────────────────────────────────
@@ -490,7 +494,7 @@
     const visIds   = new Set(visNodes.map(n => n.id));
     const visEdges = getVisibleEdges(visIds);
     resizeCanvas();
-    runSimulation(visNodes, visEdges, 300);
+    runSimulation(visNodes, visEdges, 500);
     renderCanvas();
     renderDetail();
     updatePills();
@@ -630,7 +634,14 @@
     }, { passive: true });
     c.addEventListener('touchend', () => { touch0 = null; });
 
-    window.addEventListener('resize', () => { resizeCanvas(); renderCanvas(); });
+    window.addEventListener('resize', () => {
+      const wrap = c.parentElement;
+      const h = getCanvasHeight();
+      wrap.style.height = h + 'px';
+      c.width  = wrap.clientWidth || 800;
+      c.height = h;
+      renderCanvas();
+    });
   }
 
   function wirePanelEvents() {
