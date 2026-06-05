@@ -131,7 +131,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | fix/budget-panel | Budget grid: Jan visibility, dedup actual save, per-month override priority, earn read-only, L149–L153 | ✅ COMPLETE |
 | chore/doc-transformation | Rules system split: RULES.md universal only, .claude/rules/ domain files × 8, RULES-archive.md, L148 | ✅ COMPLETE |
 | feat/datetime-bar | Global datetime display in top bar (datetime.injector.js), auto-timezone, updates every minute | ✅ COMPLETE |
-| Fix 9F | M4.3 Time Management — Today view fed by project tasks due today | ⬜ SCHEDULED |
+| Fix 9F | M4.3 Time Management — DailyItems table, 4-pane board, flow strip, calendar, project task injection | ✅ COMPLETE |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
 | Fix 9I | M4.1 AI Advisor upgrade — full system context, balance sheet awareness | ⬜ SCHEDULED |
@@ -287,6 +287,7 @@ Every CC session must preserve:
             ├── collection.injector.js    ✅
             ├── ai.injector.js            ✅
             ├── pl-generator.injector.js  ✅ M4.4 — P&L Generator (standalone, CHAIJOHN_KV, computePL engine)
+            ├── timemanagement.injector.js ✅ M4.3 — Time Management (DailyItems, flow strip, calendar, 4 panes)
             └── dashboard.injector.js     ✅ retired from shell, kept for reference
 functions/
 ├── _middleware.js                        ✅
@@ -320,7 +321,10 @@ functions/
     ├── hard-assets.js                    ✅ P2 — GET list + POST create (HardAssets table)
     ├── hard-assets/[id].js               ✅ P2 — GET detail + PATCH + DELETE (soft → status=Disposed)
     ├── pl-generator.js                   ✅ M4.4 — GET list (KV prefix pl-generator:) + POST save
-    └── pl-generator/[id].js              ✅ M4.4 — GET single version + DELETE
+    ├── pl-generator/[id].js              ✅ M4.4 — GET single version + DELETE
+    ├── daily-items.js                    ✅ M4.3 — GET list + POST create (DailyItems table)
+    ├── daily-items/[id].js               ✅ M4.3 — PATCH (done action, BuyPay booking, project task sync) + DELETE
+    └── setup/daily-items-schema.js       ✅ M4.3 — GET creates DailyItems table via Airtable Meta API (call once)
 ```
 
 ---
@@ -348,6 +352,7 @@ functions/
 | ProjectTasks | title, project_id→Projects, phase_id→ProjectPhases, phase_code, assigned_to, finish_by, measure, status, priority, notes, depends_on_project_id→Projects, dependency_active |
 | ProjectResources | item, project_id→Projects, time_needed, cost, status |
 | HardAssets | name, category (Property/Vehicle/Equipment/Other), purchase_date, purchase_price, current_value, location, notes, status (Active/Sold/Disposed), sold_price, sold_date, image_url |
+| DailyItems | title, pane (Do/Follow/BuyPay/Schedule), amount, force, high_impact, done, done_at, date, budget_id, schedule_time, schedule_type (Routine/General), source (manual/project), project_task_id, project_id, project_name, booked |
 
 **Category groups (seeded):**
 Loan / Family / Basic Living / Car / Service / Personal / Basic IT / Bus IT / Business / Per-earn / Bus-earn / Investment

@@ -19,5 +19,21 @@ L041  Per-panel IIFE injectors: lazy init via `panelactivated` event — never i
 L040  Sidebar always-dark: re-declare dark token values on `#sidebar` directly — never hardcode colors, use token override
 L039  Sidebar shell auth: inline script handles full auth lifecycle — do NOT load auth.js; call `/api/auth/check` on load, show overlay by default
 
+L157  high_impact items blink red (tm-blink animation) until done=true.
+      They accumulate across days — never filter out overdue high_impact items.
+      They appear in Flow strip regardless of schedule_time.
+
+L156  Project task injection: done on DailyItem with source=project → also PATCH
+      /api/project-tasks/{project_task_id} with status=Done.
+      Delete on DailyItem with source=project → delete DailyItem only, never touch project task.
+
+L155  DailyItems done=true on BuyPay: POST to Transactions with description='book from task',
+      date=today (override any target date), source=Manual, budget_id from item.budget_id.
+      Set booked=true on DailyItems record after successful booking.
+
+L154  Time Management panel: route=timemanagement, panel=#panel-timemanagement,
+      injector=timemanagement.injector.js. DailyItems table stores all personal tasks.
+      Project tasks are injected on load — never duplicated (check project_task_id first).
+
 L025  Chart.js view toggle: store mode in module-level var, render function branches on mode, destroy/recreate chart each render
 L016  Chart.js v4 inline plugins: use top-level `plugins:[]` array in config — do NOT use `Chart.register()` for one-off plugins
