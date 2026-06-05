@@ -30,14 +30,27 @@ async function createTable(apiKey, def) {
   return { status: 'created', name: def.name, id: data.id };
 }
 
+// Add a field to an existing table — 422 means already exists (treat as ok)
+async function addFieldIfMissing(apiKey, tableId, fieldDef) {
+  const res = await fetch(`${META}/${BASE_ID}/tables/${tableId}/fields`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(fieldDef)
+  });
+  return res.status === 422 || res.ok;
+}
+
 export async function onRequestGet(context) {
   const { env } = context;
   const key     = env.AIRTABLE_API_KEY;
 
-  // Check if table already exists
   const existing = await getTableIds(key);
+
   if (existing[TABLE]) {
-    return jsonResponse({ status: 'exists', tableId: existing[TABLE] });
+    const tableId = existing[TABLE];
+    // Add end_time field if not present (F4 — safe to call multiple times, 422 = already exists)
+    const added = await addFieldIfMissing(key, tableId, { name: 'end_time', type: 'singleLineText' });
+    return jsonResponse({ status: 'exists', tableId, field_added: added });
   }
 
   const result = await createTable(key, {
@@ -53,6 +66,7 @@ export async function onRequestGet(context) {
       { name: 'date',             type: 'date',          options: { dateFormat: { name: 'iso' } } },
       { name: 'budget_id',        type: 'singleLineText' },
       { name: 'schedule_time',    type: 'singleLineText' },
+      { name: 'end_time',         type: 'singleLineText' },
       { name: 'schedule_type',    type: 'singleSelect',  options: { choices: [{ name: 'Routine' }, { name: 'General' }] } },
       { name: 'source',           type: 'singleSelect',  options: { choices: [{ name: 'manual' }, { name: 'project' }] } },
       { name: 'project_task_id',  type: 'singleLineText' },
