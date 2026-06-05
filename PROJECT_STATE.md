@@ -206,6 +206,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Business ID Status fields set to Active ✅
 - ProjectPhases table created via schema endpoint ✅
 - Duplicate Ploikong records deleted ✅
+- DailyItems table created via GET /api/setup/daily-items-schema ✅ (tableId: tblYpLTUbDxjjcXRu)
 
 **Remaining owner actions:**
 - Add project_id (Single line text) field to Transactions table in Airtable
