@@ -1,3 +1,8 @@
+✅ COMPLETE — 2026-06-05
+Summary: Executed on branch feat/mindmap. Built M4.1 Mind Map panel — Canvas 2D force-directed graph with pan/zoom, node CRUD modals, edge management, type/search filters. 5 new API endpoints (mindmap-nodes GET/POST, mindmap-nodes/:id PATCH/DELETE with cascade, mindmap-edges GET/POST, mindmap-edges/:id DELETE, setup/mindmap-schema). 60 seed nodes + 35 edges seeded once on empty Airtable state. Agent memory layer comment block in injector. RULES-dom.md updated with L161–L163. PR #83 created. Owner action required: call GET /api/setup/mindmap-schema once after deploy.
+
+---
+
 # CC_PROMPT_fix9I-mindmap.md
 > Branch: feat/mindmap
 > New panel: M4.1 Mind Map (route: mindmap, panel: #panel-mindmap)

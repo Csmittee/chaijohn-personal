@@ -1,3 +1,8 @@
+✅ COMPLETE — 2026-06-05
+Summary: Executed on branch fix/timemanagement-fixes. Fixed B1 (DO IT strip), B2 (BuyPay cancel reload), B3 (KPI schedule hit null-date), B4 (project tasks today chip). Added F1 (project toggle), F2 (bidirectional project task done/delete sync), F3 (BuyPay dropdown unique labels + liabilities), F4 (schedule end_time), F5 (active routine blink yellow), F6 (BuyPay ghost recurring payments). Added RULES-dom.md L156 update + L158. Merged to main.
+
+---
+
 # CC_PROMPT_fix9G-timemanagement-fixes.md
 > Branch: fix/timemanagement-fixes
 > File to modify: public/assets/js/timemanagement.injector.js
