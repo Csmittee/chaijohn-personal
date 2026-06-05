@@ -19,13 +19,30 @@ L041  Per-panel IIFE injectors: lazy init via `panelactivated` event — never i
 L040  Sidebar always-dark: re-declare dark token values on `#sidebar` directly — never hardcode colors, use token override
 L039  Sidebar shell auth: inline script handles full auth lifecycle — do NOT load auth.js; call `/api/auth/check` on load, show overlay by default
 
+L158  BuyPay ghost items: auto-surfaced from Liabilities.payment_due_day and
+      Budgets.period_due_day within window (today-30d to today+21d). Ghost items
+      are never stored until owner clicks Book. Skip hides for session only.
+      Each ghost shows a period label: OVERDUE, DUE TODAY, DUE SOON, or UPCOMING.
+
 L157  high_impact items blink red (tm-blink animation) until done=true.
       They accumulate across days — never filter out overdue high_impact items.
       They appear in Flow strip regardless of schedule_time.
 
-L156  Project task injection: done on DailyItem with source=project → also PATCH
-      /api/project-tasks/{project_task_id} with status=Done.
-      Delete on DailyItem with source=project → delete DailyItem only, never touch project task.
+L156  Project task sync — bidirectional:
+      DONE: clicking done on DailyItem (source=project) → PATCH /api/project-tasks/{project_task_id}
+            status=Done. If project_task_id missing or PATCH 404s → skip silently (task was
+            deleted from project side). Done on ProjectTask side is handled by M3.4 injector —
+            TM panel does not listen for that direction.
+      DELETE: clicking delete on DailyItem (source=project) → DELETE /api/project-tasks/{project_task_id}
+              first, then DELETE /api/daily-items/{id}. If project DELETE fails → still delete
+              DailyItem (orphan cleanup). Confirm dialog: "Delete from both Time Management and
+              Project? This cannot be undone."
+      INJECTION: one-time per task. New tasks added to ProjectTasks auto-inject on next TM
+                 panel load. Already-injected tasks (project_task_id exists in items[]) are
+                 never re-injected.
+      FALLBACK: if a DailyItem with source=project has no matching project task (user deleted
+                from project panel without TM knowing) — it stays in DO list with a ⚠ icon
+                appended to title. Owner can manually delete it.
 
 L155  DailyItems done=true on BuyPay: POST to Transactions with description='book from task',
       date=today (override any target date), source=Manual, budget_id from item.budget_id.

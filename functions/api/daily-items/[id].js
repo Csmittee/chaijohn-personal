@@ -57,6 +57,7 @@ export async function onRequestPatch(context) {
   if (body.budget_id       !== undefined) fields.budget_id       = body.budget_id || null;
   if (body.schedule_time   !== undefined) fields.schedule_time   = body.schedule_time || null;
   if (body.schedule_type   !== undefined) fields.schedule_type   = body.schedule_type || null;
+  if (body.end_time        !== undefined) fields.end_time        = body.end_time || null;
   if (body.project_task_id !== undefined) fields.project_task_id = body.project_task_id || null;
   if (body.project_id      !== undefined) fields.project_id      = body.project_id || null;
   if (body.project_name    !== undefined) fields.project_name    = body.project_name || null;
