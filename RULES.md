@@ -24,7 +24,7 @@ L166  Dashboard business nodes: 4 nodes (i-Flex, Daje, Satu, Ploikong). Toggle a
 L165  Dashboard M1.0: circuit board compass layout — North=biz, West=M2.1 boundary
       (M2.2 top + M2.3 bottom), East=M3 assets, South=YOU liabilities. Counter-clockwise flow.
       SVG viewBox: 0 0 680 490. Pure vanilla JS, no Chart.js.
-
+L171 — CC file read: if github get_file_contents returns token exceeded error, skip that file immediately. Never retry or chunk-read. Use existing context and proceed.
 ---
 
 L148  Doc system: RULES.md = universal only. Domain rules live in .claude/rules/RULES-[domain].md.
