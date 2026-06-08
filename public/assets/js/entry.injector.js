@@ -257,6 +257,9 @@
           body: JSON.stringify(body)
         });
         showMsg('tx-msg', 'Saved!');
+        // Auto-write utility charge if budget matches electricity or water (L181)
+        const budget = allBudgets.find(b => b.id === selectedId);
+        if (budget) autoWriteUtilityCharge(budget.label, date, Number(amount)).catch(() => {});
         document.getElementById('tx-amount').value = '';
         document.getElementById('tx-description').value = '';
         document.getElementById('tx-note').value = '';
@@ -268,6 +271,42 @@
         showMsg('tx-msg', err.message, false);
       }
     });
+  }
+
+  /* ── Auto-write utility charge when electricity/water expense is booked (L181) ── */
+  async function autoWriteUtilityCharge(budgetLabel, date, amount) {
+    const lbl = (budgetLabel || '').toLowerCase();
+    let field = null;
+    if (lbl.includes('electric'))   field = 'electricity_charge';
+    else if (lbl.includes('water')) field = 'water_charge';
+    if (!field || amount <= 0) return;
+
+    const month = date.slice(0, 7) + '-01'; // YYYY-MM-01
+    const year  = date.slice(0, 4);
+
+    try {
+      const res = await fetch('/api/utilities?year=' + year, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      // Don't overwrite if a non-zero value already exists for this month
+      const existing = (data.records || []).find(r =>
+        (r.fields?.month || '').slice(0, 7) === date.slice(0, 7)
+      );
+      if (existing && Number(existing.fields?.[field] || 0) > 0) return;
+
+      await fetch('/api/utilities', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, [field]: amount })
+      });
+
+      // Append note to tx-msg if still visible
+      const msgEl = document.getElementById('tx-msg');
+      if (msgEl && msgEl.style.display !== 'none') {
+        msgEl.textContent = 'Saved! · ⚡ Utility charge auto-saved';
+      }
+    } catch { /* silent fail — never blocks save */ }
   }
 
   /* ── Cash In tab ── */

@@ -5,6 +5,12 @@
 
 ---
 
+L181 — Utility auto-charge: when a Transaction is saved with a budget label containing
+        "electric" or "water" → auto-write that amount to Utilities table for that month
+        (electricity_charge or water_charge). Never overwrite existing non-zero values.
+        Never auto-write units (kWh / litres). Always silent fail — never blocks transaction save.
+        Match is case-insensitive on budget label (not category name).
+
 L180 — Dashboard M3.4 project placement rule: if project record has business_id field set
         → render as solid active North circle (not East sub-node). business_id is set when
         owner clicks "launch" on a project. South entity circles are liability creators only.

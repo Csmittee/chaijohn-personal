@@ -1,4 +1,9 @@
 # CC_PROMPT_feat-utility-auto-charge.md
+> ✅ COMPLETE — feat-utility-auto-charge — 2026-06-08
+> Summary: entry.injector.js: autoWriteUtilityCharge() fires after expense save.
+> Matches budget label "electric"/"water" case-insensitive, GETs utilities for year,
+> skips if non-zero charge exists, POSTs only that charge field. Silent fail. RULES L181.
+
 > Auto-populate Utilities charge from Transaction entry
 > Branch: feat/utility-auto-charge
 
