@@ -81,6 +81,7 @@ Chat reviews → next prompt or done
 7. **Permanent behaviour = permanent rule** — if a fix or behaviour must survive every
    future CC session, it must be written into RULES.md, not just the CC prompt body.
    Prompts are one-session instructions. RULES.md is permanent memory.
+8. CC Prompt Code Policy — Chat must NEVER include sample code, function names, selector IDs, API shapes, or field names in CC prompts unless they come directly from confirmed project knowledge search results. Describe the problem and expected outcome only. CC has full repo visibility and will implement against real code. Chat-generated sample code risks introducing bugs from guessed values that contradict the actual codebase. This applies especially to prompts outside the main session context where there is less accumulated knowledge.   
 
 ---
 
