@@ -134,6 +134,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | Fix 9F | M4.3 Time Management — DailyItems table, 4-pane board, flow strip, calendar, project task injection | ✅ COMPLETE |
 | feat/dashboard-circuit | M1.0 Dashboard — circuit board compass layout (N=biz, W=cashflow, E=assets, S=liabilities), 5-cell KPI strip, animated blood flow traces, biz node toggles, liability south row, RULES L165-L170 | ✅ COMPLETE |
 | fix/dashboard-circuit-v2 | M1.0 Dashboard v2 visual rebuild — 900×680 viewBox, exact block midpoints, YOU hands, 4 meter cards, draggable North/South nodes (KV persist), expense 3-branch flows, liability 3-line summary, focus blink algorithm, sub-asset circles, RULES L172-L178 | ✅ COMPLETE |
+| fix/dashboard-circuit-v3 | M1.0 Dashboard v3 — redrawCircuit() drag architecture (all lines follow nodes), 900×700 viewBox, blocks vertically centered, sub-assets right of East boundary, meter cards match expenses injector CSS, overflow:visible, 8px+ text readability, RULES L172-L180 | ✅ COMPLETE |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
 | Fix 9I | M4.1 AI Advisor upgrade — full system context, balance sheet awareness | ⬜ SCHEDULED |
@@ -149,7 +150,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
 - M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
-- Dashboard M1.0 circuit v2: 900×680 SVG, exact midpoint YOU hands, 4 meter cards, draggable nodes (KV), expense 3-branch flows, focus blink labels, sub-asset circles ✅
+- Dashboard M1.0 circuit v3: 900×700 SVG, redrawCircuit() drag (lines follow nodes), blocks centered, sub-assets right of East, meter cards match expenses CSS, overflow:visible, 8px+ text ✅
 - Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
 - Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
 - Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅

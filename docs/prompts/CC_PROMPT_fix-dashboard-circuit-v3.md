@@ -1,4 +1,10 @@
 # CC_PROMPT_fix-dashboard-circuit-v3.md
+> ✅ COMPLETE — fix-dashboard-circuit-v3 — 2026-06-08
+> Summary: Full replacement of dash-overview.injector.js with redrawCircuit() architecture.
+> All SVG lines rebuilt on every drag frame — lines follow nodes. 900×700 viewBox, blocks
+> vertically centered, sub-assets right of East boundary, meter cards match expenses CSS,
+> overflow:visible on svg+container, 8px+ minimum text, RULES L172-L180.
+
 > M1.0 Dashboard — Circuit Board Visual Rebuild v3 (appearance + drag fix)
 > Branch: fix/dashboard-circuit-v3
 > Design locked from Chat session 2026-06-08
