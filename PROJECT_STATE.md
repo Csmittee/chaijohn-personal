@@ -1,5 +1,5 @@
 # PROJECT STATE — Chaijohn OS
-> Last updated: 2026-06-04 — fix/pl-generator-p1f complete — direct mat/labor persistence (_scalarInputs), resizer wireResizer() pattern, cashflow chart side-by-side P&L, BS imbalance direction, label font bump, root CC_PROMPT cleanup. RULES L145
+> Last updated: 2026-06-08 — feat/dashboard-circuit complete — M1.0 circuit board redesign, SVG compass layout, 5-cell KPI strip, animated blood flow. RULES L165-L170
 
 ---
 
@@ -132,6 +132,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | chore/doc-transformation | Rules system split: RULES.md universal only, .claude/rules/ domain files × 8, RULES-archive.md, L148 | ✅ COMPLETE |
 | feat/datetime-bar | Global datetime display in top bar (datetime.injector.js), auto-timezone, updates every minute | ✅ COMPLETE |
 | Fix 9F | M4.3 Time Management — DailyItems table, 4-pane board, flow strip, calendar, project task injection | ✅ COMPLETE |
+| feat/dashboard-circuit | M1.0 Dashboard — circuit board compass layout (N=biz, W=cashflow, E=assets, S=liabilities), 5-cell KPI strip, animated blood flow traces, biz node toggles, liability south row, RULES L165-L170 | ✅ COMPLETE |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
 | Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
 | Fix 9I | M4.1 AI Advisor upgrade — full system context, balance sheet awareness | ⬜ SCHEDULED |
@@ -147,7 +148,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - Schema: all 11 tables + seeded categories/liabilities/budgets
 - Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
 - M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
-- Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts + stat spans ✅
+- Dashboard M1.0 circuit: SVG compass (N=biz, W=cashflow, E=assets, S=liabilities), 5-cell KPI strip, animated blood flow traces, biz node toggles ✅
 - Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
 - Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
 - Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅
@@ -163,40 +164,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - M2.4 Finance Projects: budget cards + presale record cards compact inline-flex (multiple per row) ✅
 - M3.2 Collection: Sell creates Transaction with source=collection + category_id for M2.2 routing ✅
 
-**Next: CC_PROMPT_feat-sale-origins-and-hard-assets (P2 — new builds)**
-- Schema: all 11 tables + seeded categories/liabilities/budgets
-- Sidebar shell (9B): hash-routed panels, panelactivated lazy-init, entry drawer, Time Management placeholder
-- M2 panels: Cashflow 9B5 (DEF CON 5, simulation, 3 budget types) · Expenses · Liabilities · Budget (12-mo matrix, GAP rows) ✅
-- Dashboard overview: 4 stats + TODAY PRIORITY placeholder + 4 mini charts + stat spans ✅
-- Entry drawer: all 4 tabs, context-aware, pin-able, frosted glass ✅
-- Ideas panel: KPI strip, resizable list, Write/AI tab toggle, 3-dot pin-to-top ✅
-- Drop Zone: image/PDF + text/markdown support, AI extract, Approve → Airtable ✅
-- Collection panel: FAB centered, Sync button, gallery hover arrows, edit modal, KV cache ✅
-- AI panel: embedded in shell ✅
-- Diary (diary.html): list + editor + preview + AI modal + Memo type ✅
-- Sales panel (M2.2): dynamic lanes, AR tracking, cashflow injection, stacked bar chart + pareto, project forecast lanes, asset sales ✅
-- Finance Projects (M2.4): boundary cards, budget cards (Planned/Purchased/In use), presale cards, Send to Sales action ✅
-- Save project: isSubmitting guard (no duplicates), 409 name dedup, secondary auto-creates resilient to missing tables ✅
-- Sales panel (M2.2): panelactivated listener fixed — was listening on document with wrong event shape ✅
-- AI inquiry in Projects drawer: messages payload fixed ✅
-- Add resource/task rows: harvest-before-add (existing values preserved) ✅
-- Project Assets (M3.4): now correctly at #panel-proj-assets (route: proj-assets) ✅
-- Presale bridge: Entry → EARN → Pre-sale → project dropdown → source='presale' + project_id in Transactions ✅
-
-**Working after today's QA fixes:**
-- M3.4 Project Assets: panel renders, save guard working, row harvest working ✅
-- M2.2 Sales: panel renders, Business Airtable connecting, bus_id mapping fixed ✅
-- M2.4 Finance Projects: panel renders, correct empty state ✅
-- M3.4 Project Assets: panel unblocked (panel bleeding fixed) ✅
-- Sales filter buttons: text visible on active state (var(--yellow) + #0a0a10) ✅
-- Sales trend + pareto charts: both 220px, balanced layout (3fr 2fr) ✅
-- ProjectPhases: table created in Airtable ✅
-- AI inquiry: messages array fixed ✅
-
-**Working after batch2 QA fixes:**
-- M2.4 Finance Projects: boundary cards showing (records shape fix — was spreading r.fields on pre-flattened data) ✅
-- M3.4 Project Assets: phase bands + milestone diamond already implemented; var(--accent) → var(--yellow) on all buttons ✅
-- M2.2 Sales: Personal section always visible, Projects section always visible with empty state ✅
+**Next: Fix 9G — M4.2 Mind Map (Obsidian-style node graph)**
 
 **Still being fixed:**
 - None known
@@ -221,7 +189,7 @@ Every CC session must preserve:
 - PIN auth flow — index.html → verify → session cookie → dashboard
 - KV session handling — HttpOnly cookie, 7-day expiry
 - All 11 Airtable table structures — never rename fields CC didn't create
-- Dashboard T1/T2/T3 charts + Risk Simulator
+- Dashboard M1.0 circuit — SVG compass layout, KPI strip, animated traces, biz toggles
 - Drop Zone panel (fixed bottom-right, all pages)
 - Transaction create + read + inline edit
 - Blog push logic: publish_to_web=true + entry_type=Blog → business base Blogs table
@@ -236,7 +204,7 @@ Every CC session must preserve:
 ```
 /                                         ← repo root (keep clean)
 ├── CLAUDE.md                             ✅ index + stack + 5 rules + domain rule map
-├── RULES.md                              ✅ universal rules only (~20 rules, newest first)
+├── RULES.md                              ✅ universal rules only (L133-L170)
 ├── RULES-archive.md                      ✅ archived L001–L059b (pre-9C, read-only)
 ├── PROJECT_STATE.md                      ✅ this file — phases + roadmap + inventory
 ├── WORKFLOW_SKILL.md                     ✅ operating model reference
@@ -281,7 +249,7 @@ Every CC session must preserve:
             ├── projects.injector.js      ✅ 9C — M3.4 Project Assets (#panel-proj-assets, route: proj-assets)
             ├── project-finance.injector.js ✅ 9C-rewire — M2.4 Finance Projects (#panel-projects, route: projects)
             ├── sales.injector.js         ✅ 9D — dynamic lanes, AR tracking, cashflow injection, stacked chart + pareto
-            ├── dash-overview.injector.js ✅
+            ├── dash-overview.injector.js ✅ M1.0 — circuit board compass (N/W/E/S), KPI strip, animated traces
             ├── hard-assets.injector.js   ✅ P2 — M3.3 Hard Assets (#panel-hard-assets, route: hard-assets)
             ├── entry.injector.js         ✅ P2 — expense-only mode, Cash In tab (source=cash_in)
             ├── diary.injector.js         ✅
@@ -398,29 +366,21 @@ The Operational Dashboard (separate repo: Csmittee/chaijohn-central or similar) 
 
 ## ROADMAP
 
-**Now (QA):**
-- P2 complete — M3.3 Hard Assets, sale origins (Cash In, hard_asset_sale, inline presale), entry expense-only, focus view task row improvements, lane phase segments
-
-**Owner actions needed after P2:**
-- Create HardAssets table in Airtable (apphBGWfSPL45oSFd) with fields: name, category, purchase_date, purchase_price, current_value, location, notes, status, sold_price, sold_date, image_url
-- The 'Hard asset sale' category (Per-earn, Earn) and 'Pre-sale' category (Bus-earn, Earn) will be auto-created by the injectors at first panel activation
-
 **Next:**
-1. Fix 9F — M4.3 Time Management (today view from project tasks)
-2. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
-3. Fix 9H — M5 Life (personal timeline, vision goals)
-4. Fix 9I — M4.1 AI Advisor upgrade (full system context)
+1. Fix 9G — M4.2 Mind Map (Obsidian-style node graph)
+2. Fix 9H — M5 Life (personal timeline, vision goals)
+3. Fix 9I — M4.1 AI Advisor upgrade (full system context)
 
 **Long term:**
-8. M1.1 Dashboard — balance sheet (Net Worth = Assets − Liabilities), requires liability interest/principal split
-9. Collection full test + buyer tags + social share
-10. AI Advisor permanent memory + diary-as-context
+4. M1.1 Dashboard — balance sheet (Net Worth = Assets − Liabilities), requires liability interest/principal split
+5. Collection full test + buyer tags + social share
+6. AI Advisor permanent memory + diary-as-context
 
 ---
 
 ## CRITICAL RULES
 
-(All in CLAUDE.md rules 1–5 + RULES.md L001–L060j. No additional rules beyond those.)
+(All in CLAUDE.md rules 1–5 + RULES.md L133–L170. No additional rules beyond those.)
 
 **Environment vars (Cloudflare Pages dashboard):**
 - AIRTABLE_API_KEY (secret) · CLOUDINARY_API_KEY/SECRET (secrets) · ANTHROPIC_API_KEY (secret)
