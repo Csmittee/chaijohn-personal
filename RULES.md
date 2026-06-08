@@ -5,6 +5,28 @@
 
 ---
 
+L170  Dashboard asset leverage = market_value ÷ cost_basis shown as multiplier (X.Xx).
+      Not a percentage. House example: 7M ÷ 2.9M = 2.41×.
+
+L169  Dashboard South row: House, Car, Family/Friends, +slot. Family/Friends = amber dashed,
+      no-interest but visible obligation. New liabilities always added to South row.
+
+L168  Dashboard earn = Income transactions excluding LiabilityCreation source.
+      Total revenue is NOT the correct measure for KPI cell 1. Business revenue→profit
+      separation is a future task.
+
+L167  Dashboard KPI strip: 5 cells — Income sufficiency, Expense discipline, Liability load,
+      Asset leverage, Project conversion. Order and color locked. Do not reorder.
+
+L166  Dashboard business nodes: 4 nodes (i-Flex, Daje, Satu, Ploikong). Toggle active/inactive
+      in JS memory only — no Airtable write. Active state = animated earn trace to M2.2.
+
+L165  Dashboard M1.0: circuit board compass layout — North=biz, West=M2.1 boundary
+      (M2.2 top + M2.3 bottom), East=M3 assets, South=YOU liabilities. Counter-clockwise flow.
+      SVG viewBox: 0 0 680 490. Pure vanilla JS, no Chart.js.
+
+---
+
 L148  Doc system: RULES.md = universal only. Domain rules live in .claude/rules/RULES-[domain].md.
       CC loads CLAUDE.md + RULES.md every session. Loads domain file only when working on that module.
       RULES-archive.md = L001–L060j pre-9C rules — CC reads only when explicitly instructed.
