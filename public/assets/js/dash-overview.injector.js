@@ -145,20 +145,20 @@
   const BLK = {
     earn:  {x:40,  y:190, w:175, h:155},
     exp:   {x:40,  y:355, w:175, h:155},
-    asset: {x:685, y:190, w:175, h:155},
-    liab:  {x:685, y:355, w:175, h:155},
+    asset: {x:625, y:190, w:175, h:155},
+    liab:  {x:625, y:355, w:175, h:155},
   };
   /* Midpoints — computed once */
   const M = {
     earnR:  {x:215, y:267},   // Earn right edge mid (L173)
     expR:   {x:215, y:432},   // Expense right edge mid
-    assetL: {x:685, y:267},   // Asset left edge mid
-    liabL:  {x:685, y:432},   // Liability left edge mid
+    assetL: {x:625, y:267},   // Asset left edge mid
+    liabL:  {x:625, y:432},   // Liability left edge mid
     earnT:  {x:128, y:190},   // Earn top center
     expB:   {x:128, y:510},   // Expense bottom center
-    assetT: {x:773, y:190},   // Asset top center
-    assetR: {x:860, y:267},   // Asset right edge mid
-    liabB:  {x:773, y:510},   // Liability bottom center
+    assetT: {x:713, y:190},   // Asset top center
+    assetR: {x:800, y:267},   // Asset right edge mid
+    liabB:  {x:713, y:510},   // Liability bottom center
   };
 
   /* ── Build SVG inner content — pure, uses nodePos ── */
@@ -196,8 +196,8 @@
     /* boundary rects */
     o += `<rect x="30"  y="175" width="195" height="345" rx="5" fill="none" stroke="#1a4028" stroke-width="1" stroke-dasharray="5 4"/>`;
     o += `<text x="128" y="172" text-anchor="middle" fill="#22c55e" font-size="7" font-weight="700" font-family="monospace">WEST · M2.1 CASHFLOW</text>`;
-    o += `<rect x="675" y="175" width="195" height="345" rx="5" fill="none" stroke="#1a3a5c" stroke-width="1" stroke-dasharray="5 4"/>`;
-    o += `<text x="773" y="172" text-anchor="middle" fill="#3b82f6" font-size="7" font-weight="700" font-family="monospace">EAST · M3 BOUNDARY</text>`;
+    o += `<rect x="615" y="175" width="195" height="345" rx="5" fill="none" stroke="#1a3a5c" stroke-width="1" stroke-dasharray="5 4"/>`;
+    o += `<text x="713" y="172" text-anchor="middle" fill="#3b82f6" font-size="7" font-weight="700" font-family="monospace">EAST · M3 BOUNDARY</text>`;
 
     /* ── FLOW LINES — all endpoints use nodePos or fixed M constants ── */
 
@@ -230,7 +230,7 @@
 
     /* 7. Expense ③ Owner invest → Liability left-mid (orange, L176) */
     o += `<path d="M${M.expR.x} ${M.expR.y} C400 ${M.expR.y} 540 ${M.liabL.y} ${M.liabL.x} ${M.liabL.y}" fill="none" stroke="#f97316" stroke-width="1.3" class="dc-ff" style="--dur:2.0s"/>`;
-    o += `<text x="390" y="${M.expR.y-9}" text-anchor="middle" fill="#7c2d12" font-size="7" font-family="monospace">③ owner invest</text>`;
+    o += `<text x="420" y="${M.expR.y-9}" text-anchor="middle" fill="#7c2d12" font-size="7" font-family="monospace">③ owner invest</text>`;
 
     /* 8–10. South → Liability (L177) */
     const fn = nodePos.ff;
@@ -279,31 +279,31 @@
     /* Asset */
     o += `<g data-action="nav" data-route="hard-assets" style="cursor:pointer">
   <rect x="${BLK.asset.x}" y="${ay}" width="${BLK.asset.w}" height="${BLK.asset.h}" rx="5" fill="#04060d" stroke="#3b82f6" stroke-width="1.5"/>
-  <text x="773" y="${ay+18}"  text-anchor="middle" fill="#3b82f6" font-size="10" font-weight="700" font-family="monospace">TOTAL ASSETS</text>
-  <text x="773" y="${ay+58}"  text-anchor="middle" fill="#60a5fa" font-size="26" font-weight="700">${totalAssets>0?fmt(totalAssets):'—'}</text>
-  <text x="773" y="${ay+76}"  text-anchor="middle" fill="#3b82f6" font-size="9">market value · ${haLev} leverage</text>
-  <text x="773" y="${ay+92}"  text-anchor="middle" fill="#1e3a5f" font-size="8">← inject from right</text>
-  <text x="773" y="${ay+108}" text-anchor="middle" fill="#1e3a5f" font-size="8">● ● ●</text>
-  <text x="773" y="${ay+130}" text-anchor="middle" fill="#a78bfa" font-size="8" font-weight="700" class="hb-n">NET WORTH ${nwStr}</text>
+  <text x="713" y="${ay+18}"  text-anchor="middle" fill="#3b82f6" font-size="10" font-weight="700" font-family="monospace">TOTAL ASSETS</text>
+  <text x="713" y="${ay+58}"  text-anchor="middle" fill="#60a5fa" font-size="26" font-weight="700">${totalAssets>0?fmt(totalAssets):'—'}</text>
+  <text x="713" y="${ay+76}"  text-anchor="middle" fill="#3b82f6" font-size="9">market value · ${haLev} leverage</text>
+  <text x="713" y="${ay+92}"  text-anchor="middle" fill="#1e3a5f" font-size="8">← inject from right</text>
+  <text x="713" y="${ay+108}" text-anchor="middle" fill="#1e3a5f" font-size="8">● ● ●</text>
+  <text x="713" y="${ay+130}" text-anchor="middle" fill="#a78bfa" font-size="8" font-weight="700" class="hb-n">NET WORTH ${nwStr}</text>
 </g>`;
 
     /* Liability */
     o += `<g data-action="nav" data-route="liabilities" style="cursor:pointer">
   <rect x="${BLK.liab.x}" y="${ly}" width="${BLK.liab.w}" height="${BLK.liab.h}" rx="5" fill="#0d0404" stroke="#ef4444" stroke-width="2"/>
-  <text x="773" y="${ly+18}"  text-anchor="middle" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace">TOTAL LIABILITIES</text>
-  <text x="773" y="${ly+58}"  text-anchor="middle" fill="#f87171" font-size="26" font-weight="700">${liabBal>0?fmt(liabBal):'—'}</text>
-  <text x="773" y="${ly+76}"  text-anchor="middle" fill="#ef4444" font-size="9">all active debt</text>
-  <text x="700" y="${ly+96}"  fill="#9ca3af" font-size="8">① Bank: ${bankDebt>0?fmt(bankDebt):'฿0'}</text>
-  <text x="700" y="${ly+110}" fill="#9ca3af" font-size="8">② F/F: ${ffDebt>0?fmt(ffDebt):'฿0'}</text>
-  <text x="700" y="${ly+124}" fill="#9ca3af" font-size="8">③ Owner (proj): ฿0</text>
-  <text x="773" y="${ly+142}" text-anchor="middle" fill="#7f1d1d" font-size="8">● ● ●</text>
+  <text x="713" y="${ly+18}"  text-anchor="middle" fill="#ef4444" font-size="10" font-weight="700" font-family="monospace">TOTAL LIABILITIES</text>
+  <text x="713" y="${ly+58}"  text-anchor="middle" fill="#f87171" font-size="26" font-weight="700">${liabBal>0?fmt(liabBal):'—'}</text>
+  <text x="713" y="${ly+76}"  text-anchor="middle" fill="#ef4444" font-size="9">all active debt</text>
+  <text x="640" y="${ly+96}"  fill="#9ca3af" font-size="8">① Bank: ${bankDebt>0?fmt(bankDebt):'฿0'}</text>
+  <text x="640" y="${ly+110}" fill="#9ca3af" font-size="8">② F/F: ${ffDebt>0?fmt(ffDebt):'฿0'}</text>
+  <text x="640" y="${ly+124}" fill="#9ca3af" font-size="8">③ Owner (proj): ฿0</text>
+  <text x="713" y="${ly+142}" text-anchor="middle" fill="#7f1d1d" font-size="8">● ● ●</text>
 </g>`;
 
     /* ── YOU hands — 4 thick static lines (L173) ── */
     [[406,330, 215,267,'#22c55e'],
      [406,370, 215,432,'#ef4444'],
-     [494,330, 685,267,'#3b82f6'],
-     [494,370, 685,432,'#ef4444']].forEach(([x1,y1,x2,y2,c]) => {
+     [494,330, 625,267,'#3b82f6'],
+     [494,370, 625,432,'#ef4444']].forEach(([x1,y1,x2,y2,c]) => {
       o += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;
       o += `<circle cx="${x2}" cy="${y2}" r="5" fill="${c}"/>`;
     });
@@ -353,16 +353,17 @@
 
     /* ── Sub-asset circles — RIGHT of East boundary, draggable (L178) ── */
     const subDefs = [
-      {key:'m33',    label:'M3.3', sub:'Hard Assets', val:haMV>0?fmt(haMV):'—',     stroke:'#3b82f6', da:'',                    fill:'#04060d', tc:'#3b82f6', vc:'#60a5fa', route:'hard-assets'},
-      {key:'m32',    label:'M3.2', sub:'Collection',  val:collVal>0?fmt(collVal):'—',stroke:'#8b5cf6', da:'',                    fill:'#08050d', tc:'#8b5cf6', vc:'#a78bfa', route:'collection'},
-      {key:'m34',    label:'M3.4', sub:'Projects',    val:'launch→North',            stroke:'#06b6d4', da:'stroke-dasharray="4 3"',fill:'#040a0d', tc:'#06b6d4', vc:'#22d3ee', route:'proj-assets'},
-      {key:'mindmap',label:'Map',  sub:'MindMap',     val:'idea→M3.4',              stroke:'#374151', da:'stroke-dasharray="3 3"',fill:'#080808', tc:'#4b5563', vc:'#374151', route:'mindmap'},
+      {key:'m33',    label:'M3.3', sub:'Hard Assets', val:haMV>0?fmt(haMV):'—',     stroke:'#3b82f6', da:'',                     fill:'#04060d', tc:'#3b82f6', vc:'#60a5fa', route:'hard-assets', r:28, blink:false},
+      {key:'m32',    label:'M3.2', sub:'Collection',  val:collVal>0?fmt(collVal):'—',stroke:'#8b5cf6', da:'',                     fill:'#08050d', tc:'#8b5cf6', vc:'#a78bfa', route:'collection',  r:28, blink:false},
+      {key:'m34',    label:'M3.4', sub:'Projects',    val:'launch→North',            stroke:'#06b6d4', da:'stroke-dasharray="4 3"',fill:'#040a0d', tc:'#06b6d4', vc:'#22d3ee', route:'proj-assets', r:34, blink:false},
+      {key:'mindmap',label:'Map',  sub:'MindMap',     val:'idea→M3.4',              stroke:'#f59e0b', da:'stroke-dasharray="3 3"',fill:'#080808', tc:'#f59e0b', vc:'#f59e0b', route:'mindmap',     r:28, blink:true},
     ];
     subDefs.forEach(s => {
       const n = nodePos[s.key];
+      const lblFs = s.r > 28 ? 8 : 7;
       o += `<g class="dc-node" data-node="${s.key}" data-route="${s.route}">
-  <circle cx="${n.x}" cy="${n.y}" r="28" fill="${s.fill}" stroke="${s.stroke}" stroke-width="1.5" ${s.da}/>
-  <text x="${n.x}" y="${n.y-8}"  text-anchor="middle" fill="${s.tc}" font-size="7" font-weight="700">${s.label}</text>
+  <circle cx="${n.x}" cy="${n.y}" r="${s.r}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="1.5" ${s.da}${s.blink?' class="dc-bl"':''}/>
+  <text x="${n.x}" y="${n.y-8}"  text-anchor="middle" fill="${s.tc}" font-size="${lblFs}" font-weight="700">${s.label}</text>
   <text x="${n.x}" y="${n.y+4}"  text-anchor="middle" fill="${s.vc}" font-size="7">${s.sub}</text>
   <text x="${n.x}" y="${n.y+15}" text-anchor="middle" fill="${s.tc}" font-size="6">${s.val}</text>
 </g>`;
@@ -371,8 +372,8 @@
     /* ── Focus blink labels (L175) ── */
     const focusItems = [];
     if (earn < exp)                   focusItems.push({x:200,y:170,text:'⚡ EARN TOO SMALL',fill:'#ef4444'});
-    if (assetLev < 2.0)               focusItems.push({x:690,y:170,text:'⚡ BUILD ASSETS',  fill:'#f59e0b'});
-    if (liabBal > totalAssets*0.5)    focusItems.push({x:690,y:530,text:'⚡ DEBT HIGH',     fill:'#ef4444'});
+    if (assetLev < 2.0)               focusItems.push({x:630,y:170,text:'⚡ BUILD ASSETS',  fill:'#f59e0b'});
+    if (liabBal > totalAssets*0.5)    focusItems.push({x:630,y:530,text:'⚡ DEBT HIGH',     fill:'#ef4444'});
     if (earn>=exp && surplus>0)       focusItems.push({x:390,y:310,text:'✓ SURPLUS',        fill:'#22c55e'});
     focusItems.forEach(fi => {
       o += `<text x="${fi.x}" y="${fi.y}" text-anchor="middle" fill="${fi.fill}" font-size="8" font-family="monospace" class="dc-bl">${fi.text}</text>`;
