@@ -5,6 +5,42 @@
 
 ---
 
+L178 — Dashboard M3.4 project placement rule: if project record has business_id field set
+        → render as solid active North circle (not East sub-node). business_id is set when
+        owner clicks "launch" on a project. South entity circles are liability creators only.
+
+L177 — Dashboard liability block 3 summary lines (inside block, 7px):
+        ① Bank debt: sum creditor_type=Bank from liabilities API
+        ② F/F debt: sum creditor_type=Friend or Family from liabilities API
+        ③ Owner (projects): hardcoded ฿0 until owner invest tracking is built
+        These 3 lines replace any previous breakdown format.
+
+L176 — Dashboard expense 3 branches: ① life drain exits left (no marker destination),
+        ② interest lines go to HOUSE and CAR only — NO line to Family/Friends (zero interest),
+        ③ owner invest line (orange #f97316) goes to Total Liability block directly.
+        This is the correct expense flow model — never merge these into one line.
+
+L175 — Dashboard focus blink algorithm:
+        earn < expense → blink "⚡ EARN TOO SMALL" near Earn block
+        assetLeverage < 2.0 → blink "⚡ BUILD ASSETS" near Asset block
+        liabBal > totalAssets × 0.5 → blink "⚡ DEBT HIGH vs ASSET" near Liability block
+        earn >= expense AND surplus > 0 → blink "✓ SURPLUS POSITIVE" near YOU
+        Animation: opacity 1↔0.1, 1.4s ease-in-out infinite.
+
+L174 — Dashboard draggable nodes: North biz circles + South debt entity circles only.
+        Positions saved to CHAIJOHN_KV key: dashboard:node-positions as JSON delta objects.
+        Format: { nodeKey: { dx: number, dy: number } }. Load on init, save on pointerup.
+        If /api/kv endpoint absent → drag works in-session only, no error shown to user.
+
+L173 — Dashboard YOU hands: 4 thick static lines (stroke-width=3) from YOU to
+        exact vertical midpoint of each block. Midpoints: Earn=191, Expense=366,
+        Asset=191 (East), Liability=366 (East). Never eyeball — always compute.
+
+L172 — Dashboard circuit SVG viewBox fixed at 0 0 900 680. Do not change.
+        Earn/Asset blocks: y=108 h=165. Expense/Liability blocks: y=283 h=165.
+        YOU: cx=450 cy=330 r=46. South boundary: y=520 h=148.
+        These coordinates are the locked layout — never adjust without owner approval.
+
 L170  Dashboard asset leverage = market_value ÷ cost_basis shown as multiplier (X.Xx).
       Not a percentage. House example: 7M ÷ 2.9M = 2.41×.
 
