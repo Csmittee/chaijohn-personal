@@ -1,4 +1,7 @@
 # CC_PROMPT_hotfix-dashboard-flow-v2.md
+✅ COMPLETE — 2026-06-08
+Summary: 7 fixes applied to dash-overview.injector.js. YOU node draggable (added to DEFAULT_NODE_POS), grey curved bezier hands, YOU→MindMap dashed line, removed orange expense→liability line, removed YOU→House repay line, replaced earn→YOU with earn→asset (green) + earn→liability (cyan) lines, fixed KV position persistence race condition with _initInProgress guard.
+
 > Dashboard circuit — flow logic + YOU positioning fixes
 > Quick fix — commit directly to main, no branch needed
 

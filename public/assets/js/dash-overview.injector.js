@@ -11,6 +11,7 @@
   let _data              = null;
   let _dragState         = null;
   let _svgListenersWired = false;
+  let _initInProgress    = false;
 
   const KV_POS_KEY = 'dashboard:node-positions';
 
@@ -28,6 +29,7 @@
     m32:      { x: 855, y: 295 },
     m34:      { x: 855, y: 375 },
     mindmap:  { x: 855, y: 445 },
+    you:      { x: 450, y: 350 },
   };
 
   let nodePos = {};
@@ -213,8 +215,13 @@
       }
     });
 
-    /* 3. Earn right → YOU left */
-    o += `<path d="M${M.earnR.x} ${M.earnR.y} C295 ${M.earnR.y} 365 330 406 330" fill="none" stroke="#22c55e" stroke-width="1.5" class="dc-ff" style="--dur:1.8s"/>`;
+    /* 3a. Earn → Total Assets (FIX 6 Line A) */
+    o += `<path d="M${M.earnR.x} ${M.earnR.y} C340 ${M.earnR.y} 500 ${M.assetL.y} ${M.assetL.x} ${M.assetL.y}" fill="none" stroke="#22c55e" stroke-width="1.5" class="dc-ff" style="--dur:1.8s"/>`;
+    o += `<text x="420" y="${M.assetL.y-8}" text-anchor="middle" fill="#166534" font-size="7" font-family="monospace">earn → buy asset</text>`;
+
+    /* 3b. Earn → Total Liabilities (FIX 6 Line B) */
+    o += `<path d="M${M.earnR.x} ${M.earnR.y} C340 ${M.earnR.y} 500 ${M.liabL.y} ${M.liabL.x} ${M.liabL.y}" fill="none" stroke="#06b6d4" stroke-width="1.3" class="dc-ff" style="--dur:2.0s"/>`;
+    o += `<text x="420" y="${Math.round((M.earnR.y+M.liabL.y)/2)-6}" text-anchor="middle" fill="#155e75" font-size="7" font-family="monospace">earn → fund project</text>`;
 
     /* 4. Expense ① life drain exits bottom-left */
     o += `<path d="M${M.expB.x} ${M.expB.y} C${M.expB.x} 550 28 570 28 590" fill="none" stroke="#ef4444" stroke-width="1.5" class="dc-fr" style="--dur:1.0s"/>`;
@@ -228,20 +235,13 @@
     const cn = nodePos.car;
     o += `<path d="M${M.expB.x} ${M.expB.y} C165 545 ${cn.x} ${cn.y-65} ${cn.x} ${cn.y-32}" fill="none" stroke="#ef4444" stroke-width="1.2" class="dc-ff" style="--dur:1.5s"/>`;
 
-    /* 7. Expense ③ Owner invest → Liability left-mid (orange, L176) */
-    o += `<path d="M${M.expR.x} ${M.expR.y} C400 ${M.expR.y} 540 ${M.liabL.y} ${M.liabL.x} ${M.liabL.y}" fill="none" stroke="#f97316" stroke-width="1.3" class="dc-ff" style="--dur:2.0s"/>`;
-    o += `<text x="420" y="${M.expR.y-9}" text-anchor="middle" fill="#7c2d12" font-size="7" font-family="monospace">③ owner invest</text>`;
-
-    /* 8–10. South → Liability (L177) */
+    /* 7. South → Liability (L177) */
     const fn = nodePos.ff;
     o += `<path d="M${hn.x} ${hn.y-32} Q${M.liabB.x} ${M.liabB.y}    ${M.liabL.x} ${M.liabL.y}"     fill="none" stroke="#8b5cf6" stroke-width="1.5" class="dc-ff" style="--dur:2.0s"/>`;
     o += `<path d="M${cn.x} ${cn.y-32} Q${M.liabB.x} ${M.liabB.y+10} ${M.liabL.x} ${M.liabL.y+10}"  fill="none" stroke="#8b5cf6" stroke-width="1.3" class="dc-ff" style="--dur:2.2s"/>`;
     o += `<path d="M${fn.x} ${fn.y-32} Q${M.liabB.x} ${M.liabB.y+20} ${M.liabL.x} ${M.liabL.y+20}"  fill="none" stroke="#f59e0b" stroke-width="1.2" class="dc-ff" style="--dur:2.4s"/>`;
 
-    /* 11. YOU bottom → House repay (dashed purple) */
-    o += `<path d="M450 394 C450 485 ${hn.x} 485 ${hn.x} ${hn.y-32}" fill="none" stroke="#a78bfa" stroke-width="1.2" class="dc-rp"/>`;
-
-    /* 12. Sub-assets → Asset right edge */
+    /* 8. Sub-assets → Asset right edge */
     const mn33 = nodePos.m33, mn32 = nodePos.m32, mn34 = nodePos.m34, mnMM = nodePos.mindmap;
     o += `<path d="M${mn33.x-28} ${mn33.y} Q${M.assetR.x-15} ${mn33.y}    ${M.assetR.x} ${M.assetR.y}"     fill="none" stroke="#3b82f6" stroke-width="1.3" class="dc-ff" style="--dur:2.0s"/>`;
     o += `<path d="M${mn32.x-28} ${mn32.y} Q${M.assetR.x-15} ${mn32.y}    ${M.assetR.x} ${M.assetR.y+15}"  fill="none" stroke="#8b5cf6" stroke-width="1.3" class="dc-ff" style="--dur:2.3s"/>`;
@@ -299,20 +299,29 @@
   <text x="713" y="${ly+142}" text-anchor="middle" fill="#7f1d1d" font-size="8">● ● ●</text>
 </g>`;
 
-    /* ── YOU hands — 4 thick static lines (L173) ── */
-    [[406,330, 215,267,'#22c55e'],
-     [406,370, 215,432,'#ef4444'],
-     [494,330, 625,267,'#3b82f6'],
-     [494,370, 625,432,'#ef4444']].forEach(([x1,y1,x2,y2,c]) => {
-      o += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;
-      o += `<circle cx="${x2}" cy="${y2}" r="5" fill="${c}"/>`;
+    /* ── YOU hands — grey bezier curves from nodePos.you (FIX 2, L173) ── */
+    const yu = nodePos.you;
+    [
+      [yu.x-44, yu.y-20, M.earnR.x,  M.earnR.y],
+      [yu.x-44, yu.y+20, M.expR.x,   M.expR.y],
+      [yu.x+44, yu.y-20, M.assetL.x, M.assetL.y],
+      [yu.x+44, yu.y+20, M.liabL.x,  M.liabL.y],
+    ].forEach(([x1,y1,x2,y2]) => {
+      const cx = (x1+x2)/2;
+      o += `<path d="M${x1} ${y1} Q${cx} ${y1} ${x2} ${y2}" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round"/>`;
+      o += `<circle cx="${x2}" cy="${y2}" r="4" fill="#374151"/>`;
     });
 
-    /* ── YOU node ── */
-    o += `<circle cx="450" cy="350" r="54" fill="none" stroke="#4c1d95" stroke-width="1" stroke-dasharray="3 3" class="dc-bl"/>`;
-    o += `<circle cx="450" cy="350" r="44" fill="#08050f" stroke="#7c3aed" stroke-width="2"/>`;
-    o += `<text x="450" y="346" text-anchor="middle" fill="#a78bfa" font-size="16" font-weight="700">YOU</text>`;
-    o += `<text x="450" y="360" text-anchor="middle" fill="#4c1d95" font-size="7">command center</text>`;
+    /* ── YOU → MindMap chain line (FIX 3) ── */
+    o += `<path d="M${yu.x} ${yu.y-44} Q${yu.x+300} ${yu.y-100} ${mnMM.x-20} ${mnMM.y+14}" fill="none" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>`;
+
+    /* ── YOU node — draggable (FIX 1) ── */
+    o += `<g class="dc-node" data-node="you">
+  <circle cx="${yu.x}" cy="${yu.y}" r="54" fill="none" stroke="#4c1d95" stroke-width="1" stroke-dasharray="3 3" class="dc-bl"/>
+  <circle cx="${yu.x}" cy="${yu.y}" r="44" fill="#08050f" stroke="#7c3aed" stroke-width="2"/>
+  <text x="${yu.x}" y="${yu.y-4}" text-anchor="middle" fill="#a78bfa" font-size="16" font-weight="700">YOU</text>
+  <text x="${yu.x}" y="${yu.y+10}" text-anchor="middle" fill="#4c1d95" font-size="7">command center</text>
+</g>`;
 
     /* ── North circles — draggable ── */
     const northDefs = [
@@ -533,21 +542,23 @@ ${kpiHTML(d)}
     if (svg) wireDrag(svg);
   }
 
-  /* ── Init ── */
+  /* ── Init — loads KV positions BEFORE first render (FIX 7) ── */
   async function init() {
+    _initInProgress = true;
     ensureStyles();
     resetNodePos();
 
     const saved = await loadNodePositions();
     if (saved) {
       Object.keys(saved).forEach(k => {
-        if (nodePos[k] && saved[k]) {
+        if (nodePos[k] && saved[k] && DEFAULT_NODE_POS[k]) {
           nodePos[k].x = DEFAULT_NODE_POS[k].x + (saved[k].dx || 0);
           nodePos[k].y = DEFAULT_NODE_POS[k].y + (saved[k].dy || 0);
         }
       });
     }
 
+    _initInProgress = false;
     await loadAndRender();
   }
 
@@ -559,6 +570,7 @@ ${kpiHTML(d)}
       init().catch(console.error);
       return;
     }
+    if (_initInProgress) return; // init still awaiting KV — do not double-render with stale defaults
     _svgListenersWired = false;
     loadAndRender().catch(console.error);
   });
