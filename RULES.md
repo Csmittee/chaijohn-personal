@@ -5,6 +5,36 @@
 
 ---
 
+L186 — Utility billing month ≠ payment date: when auto-writing utility charges from a
+        Transaction, always use the billing month (which period the bill covers), NOT the
+        transaction date (when the owner paid). Bills are paid in arrears — paying June 5th
+        is usually for May's electricity. The entry form shows a "Utility billing month"
+        picker (defaults M-1) when electricity/water budget selected. Pass this date to
+        autoWriteUtilityCharge(), not the raw transaction date.
+
+L185 — SVG height="auto" is invalid: browsers reject it with "Expected length, auto".
+        When an SVG uses viewBox + width="100%", omit the height attribute entirely —
+        aspect ratio is controlled by viewBox. Never set height="auto" on SVG elements.
+
+L184 — Budget dropdown filter: never use expense_only=true on the /api/budgets call
+        from entry.injector.js. The expense_only filter requires category_type='Expense'
+        which is only present if the budget has a category_id AND the enrichment succeeded.
+        Budgets without a linked category are silently filtered out → empty dropdown.
+        Use active_only=true only. All budgets in this system are expense budgets.
+
+L183 — /api/kv endpoint is required for any front-end KV read/write: Worker bindings
+        (env.CHAIJOHN_KV) are only accessible server-side. Client-side injectors call
+        /api/kv?key=X (GET) and POST {key, value} via HTTP. The file
+        functions/api/kv.js must exist — without it every KV call 404s silently and
+        features that save layout positions, strategies, or node positions will reset
+        on every page load with no error shown.
+
+L182 — Airtable date field comparison: use DATESTR({field})='YYYY-MM-DD' NOT
+        {field}='YYYY-MM-DD'. Plain string equality on a Date-type field returns 0
+        records → upsert creates a duplicate row instead of updating. Always use
+        DATESTR() when filtering by date field value. GET-side formulas should use
+        date functions (YEAR, MONTH) or IS_SAME — never raw string match.
+
 L181 — Utility auto-charge: when a Transaction is saved with a budget label containing
         "electric" or "water" → auto-write that amount to Utilities table for that month
         (electricity_charge or water_charge). Never overwrite existing non-zero values.
