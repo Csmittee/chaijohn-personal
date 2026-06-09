@@ -491,7 +491,7 @@
 ${meterCards(d)}
 ${kpiHTML(d)}
 <div id="dash-svg-wrap">
-  <svg id="dashboard-svg" viewBox="0 0 900 700" width="100%" height="auto"
+  <svg id="dashboard-svg" viewBox="0 0 900 700" width="100%"
        style="overflow:visible;display:block;background:#060a10;border-radius:8px">
     <defs>
       <pattern id="pcbg3" width="20" height="20" patternUnits="userSpaceOnUse">
