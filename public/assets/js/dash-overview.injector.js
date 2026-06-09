@@ -312,8 +312,8 @@
       o += `<circle cx="${x2}" cy="${y2}" r="4" fill="#374151"/>`;
     });
 
-    /* ── YOU → MindMap chain line (FIX 3) ── */
-    o += `<path d="M${yu.x} ${yu.y-44} Q${yu.x+300} ${yu.y-100} ${mnMM.x-20} ${mnMM.y+14}" fill="none" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>`;
+    /* ── YOU → MindMap chain line — straight (FIX 3) ── */
+    o += `<line x1="${yu.x}" y1="${yu.y-44}" x2="${mnMM.x-20}" y2="${mnMM.y+14}" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3"/>`;
 
     /* ── YOU node — draggable (FIX 1) ── */
     o += `<g class="dc-node" data-node="you">
@@ -383,7 +383,6 @@
     if (earn < exp)                   focusItems.push({x:200,y:170,text:'⚡ EARN TOO SMALL',fill:'#ef4444'});
     if (assetLev < 2.0)               focusItems.push({x:630,y:170,text:'⚡ BUILD ASSETS',  fill:'#f59e0b'});
     if (liabBal > totalAssets*0.5)    focusItems.push({x:630,y:530,text:'⚡ DEBT HIGH',     fill:'#ef4444'});
-    if (earn>=exp && surplus>0)       focusItems.push({x:390,y:310,text:'✓ SURPLUS',        fill:'#22c55e'});
     focusItems.forEach(fi => {
       o += `<text x="${fi.x}" y="${fi.y}" text-anchor="middle" fill="${fi.fill}" font-size="8" font-family="monospace" class="dc-bl">${fi.text}</text>`;
     });
