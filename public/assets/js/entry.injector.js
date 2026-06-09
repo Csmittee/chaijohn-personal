@@ -790,7 +790,24 @@
         api(`/api/utilities?year=${now.getFullYear()}`),
         api('/api/utilities')
       ]);
-      const records = (yearRes.records || []).map(r => r.fields).slice(0, 12);
+      // Merge records sharing the same month (handles duplicate rows from pre-fix data)
+      const rawRecords = (yearRes.records || []).map(r => r.fields);
+      const monthMergeMap = {};
+      rawRecords.forEach(r => {
+        const mo = (r.month || '').slice(0, 7);
+        if (!monthMergeMap[mo]) {
+          monthMergeMap[mo] = { ...r };
+        } else {
+          const m = monthMergeMap[mo];
+          if (r.electricity_units)  m.electricity_units  = r.electricity_units;
+          if (r.electricity_charge) m.electricity_charge = r.electricity_charge;
+          if (r.water_units)        m.water_units        = r.water_units;
+          if (r.water_charge)       m.water_charge       = r.water_charge;
+          if (r.notes)   m.notes   = r.notes;
+          if (r.ft_note) m.ft_note = r.ft_note;
+        }
+      });
+      const records = Object.values(monthMergeMap).slice(0, 12);
       yoyAllRecords = (allRes.records || []).map(r => ({ id: r.id, ...r.fields }));
       lastUtilRecords = records;
 

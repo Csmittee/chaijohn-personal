@@ -62,11 +62,11 @@ export async function onRequestPost(context) {
   const { month } = body;
   if (!month) return errorResponse('month is required (format: YYYY-MM-01)');
 
-  // Upsert by month: check if record exists
+  // Upsert by month: check if record exists — use DATESTR() for Date field comparison
   let existingRecords;
   try {
     existingRecords = await listRecords(env.AIRTABLE_API_KEY, BASE_ID, TABLE, {
-      filterByFormula: `{month}='${month}'`,
+      filterByFormula: `DATESTR({month})='${month}'`,
       maxRecords: 1
     });
   } catch (err) {
