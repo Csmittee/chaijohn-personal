@@ -20,6 +20,7 @@
   let elecChart, waterChart, activeUtilChart = 'electricity', lastUtilRecords = [];
   let budgetActiveFilter = 'active';
   let activeDefcon       = null; // DEF CON 5 strategy from KV
+  let _txSaving          = false;
 
   function periodShort(p) {
     if (p === 'Monthly')  return 'mo';
@@ -84,10 +85,10 @@
     populateCategoryDropdowns();
   }
 
-  /* ── Budgets — G3: fetch expense budgets with category enrichment ── */
+  /* ── Budgets — load all active budgets (no expense_only filter — avoids empty dropdown when budgets lack category) ── */
   async function loadBudgets() {
     try {
-      const res = await api('/api/budgets?expense_only=true&active_only=true');
+      const res = await api('/api/budgets?active_only=true');
       allBudgets = (res.records || []).map(r => ({ id: r.id, ...r.fields }));
     } catch { allBudgets = []; }
   }
@@ -213,6 +214,43 @@
       </div>`;
   }
 
+  /* ── Utility billing month picker — shown when elec/water budget selected ── */
+  function injectUtilBillingMonthRow() {
+    if (document.getElementById('util-billing-month-row')) return;
+    const bar = document.getElementById('tx-budget-bar');
+    if (!bar) return;
+    const row = document.createElement('div');
+    row.id = 'util-billing-month-row';
+    row.style.cssText = 'display:none;padding:0.35rem 0 0.1rem';
+    row.innerHTML = `
+      <label style="font-size:0.82rem;color:var(--text-secondary);display:block;margin-bottom:0.2rem">
+        Utility billing month <span style="font-weight:400;color:#6b7280">(which month is this bill for?)</span>
+      </label>
+      <input type="month" id="util-billing-month"
+        style="width:100%;font-size:0.85rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);
+        border-radius:4px;background:var(--bg-input,#f9fafb)">
+      <div style="font-size:0.73rem;color:#9ca3af;margin-top:0.2rem">
+        Defaults to last month (bill is usually for prior month)
+      </div>`;
+    bar.parentNode.insertBefore(row, bar);
+  }
+
+  function updateUtilBillingMonthRow(budgetId) {
+    const row     = document.getElementById('util-billing-month-row');
+    const monthEl = document.getElementById('util-billing-month');
+    if (!row || !monthEl) return;
+    const budget  = allBudgets.find(b => b.id === budgetId);
+    const lbl     = (budget?.label || '').toLowerCase();
+    const isUtil  = lbl.includes('electric') || lbl.includes('water');
+    row.style.display = isUtil ? 'block' : 'none';
+    if (isUtil && !monthEl.value) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      monthEl.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    if (!isUtil) monthEl.value = '';
+  }
+
   /* ── Transactions ── */
   function initTransactionForm() {
     const today  = new Date().toISOString().split('T')[0];
@@ -222,15 +260,21 @@
     // Always expense mode — render budget dropdown
     renderBudgetSelect('tx-category', allBudgets);
 
-    // G3: budget bar on selection change
+    // Inject utility billing month row (appears when elec/water budget selected)
+    injectUtilBillingMonthRow();
+
+    // G3: budget bar + utility billing month on selection change
     document.getElementById('tx-category')?.addEventListener('change', () => {
       const selectedId = document.getElementById('tx-category')?.value;
       updateBudgetBar(selectedId || '');
+      updateUtilBillingMonthRow(selectedId || '');
     });
 
     ensureMsgEl('tx-msg', 'save-tx');
 
     document.getElementById('save-tx')?.addEventListener('click', async () => {
+      if (_txSaving) return;
+
       const amount      = document.getElementById('tx-amount')?.value;
       const selectedId  = document.getElementById('tx-category')?.value;
       const description = document.getElementById('tx-description')?.value || '';
@@ -242,6 +286,10 @@
 
       // G3: require budget for expense
       if (!selectedId) return alert('Please select a budget for this expense');
+
+      const saveBtn = document.getElementById('save-tx');
+      _txSaving = true;
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
       const body = {
         date, amount: Number(amount), type: 'Expense', description, entity, note,
@@ -256,24 +304,36 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+        // Use billing month override for utility charge if picker is visible
+        const billingMonthEl  = document.getElementById('util-billing-month');
+        const billingMonthRow = document.getElementById('util-billing-month-row');
+        const utilDate = (billingMonthRow?.style.display !== 'none' && billingMonthEl?.value)
+          ? billingMonthEl.value + '-01'
+          : date;
         showMsg('tx-msg', 'Saved!');
         // Auto-write utility charge if budget matches electricity or water (L181)
         const budget = allBudgets.find(b => b.id === selectedId);
-        if (budget) autoWriteUtilityCharge(budget.label, date, Number(amount)).catch(() => {});
+        if (budget) autoWriteUtilityCharge(budget.label, utilDate, Number(amount)).catch(() => {});
         document.getElementById('tx-amount').value = '';
         document.getElementById('tx-description').value = '';
         document.getElementById('tx-note').value = '';
+        if (billingMonthEl) billingMonthEl.value = '';
+        if (billingMonthRow) billingMonthRow.style.display = 'none';
         loadTransactions._refresh = true;
         loadTransactions();
         loadEntitySuggestions();
         updateBudgetBar(selectedId);
       } catch (err) {
         showMsg('tx-msg', err.message, false);
+      } finally {
+        _txSaving = false;
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Transaction'; }
       }
     });
   }
 
   /* ── Auto-write utility charge when electricity/water expense is booked (L181) ── */
+  /* date param is YYYY-MM-DD or YYYY-MM-01 — caller passes billing month date, not payment date */
   async function autoWriteUtilityCharge(budgetLabel, date, amount) {
     const lbl = (budgetLabel || '').toLowerCase();
     let field = null;
@@ -282,7 +342,7 @@
     if (!field || amount <= 0) return;
 
     const month = date.slice(0, 7) + '-01'; // YYYY-MM-01
-    const year  = date.slice(0, 4);
+    const year  = month.slice(0, 4);
 
     try {
       const res = await fetch('/api/utilities?year=' + year, { credentials: 'same-origin' });
