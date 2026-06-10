@@ -219,12 +219,13 @@
 
       /* Grid */
       .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; }
-      .life-grid-table { border-collapse:collapse; font-size:0.75rem; min-width:900px; width:100%; }
+      /* border-collapse:separate is required — collapse breaks position:sticky on th */
+      .life-grid-table { border-collapse:separate; border-spacing:0; font-size:0.75rem; min-width:900px; width:100%; }
 
       /* Two sticky header rows */
       .life-grid-table thead tr:first-child th {
         font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim);
-        font-weight:600; padding:0.28rem 0.5rem;
+        font-weight:600; padding:0.28rem 0.5rem; height:30px;
         border-bottom:none; text-align:left; white-space:nowrap;
         position:sticky; top:0; background:var(--bg); z-index:4;
       }
@@ -232,7 +233,7 @@
         font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim);
         font-weight:400; padding:0.12rem 0.5rem; letter-spacing:0.04em; text-transform:uppercase;
         border-bottom:1px solid var(--border); white-space:nowrap;
-        position:sticky; top:28px; background:var(--bg); z-index:3;
+        position:sticky; top:30px; background:var(--bg); z-index:3;
       }
       .life-grid-table td { padding:0.2rem 0.3rem; border-bottom:1px solid rgba(255,255,255,0.04); }
       .life-grid-year-cell {
@@ -895,16 +896,16 @@
       ]
     },
     {
-      id: 'emotional', label: 'Emotional',
+      id: 'emotional', label: 'Strength',
       fields: [
         { key: 'happiness_factor', label: 'Happiness',    type: 'num' },
         { key: 'health',           label: 'Health',       type: 'num' },
         { key: 'relationship',     label: 'Relationship', type: 'num' },
-        { key: 'knowledge_earn',   label: 'Knowledge',    type: 'num' }
+        { key: 'knowledge_earn',   label: 'Skill',        type: 'num' }
       ]
     },
     {
-      id: 'hobby', label: 'Hobby',
+      id: 'hobby', label: 'Experience',
       fields: [
         { key: 'hobby',    label: 'Hobby',    type: 'num' },
         { key: 'h_impact', label: 'H.Impact', type: 'num' },
@@ -926,6 +927,41 @@
   ];
 
   const _groupCollapsed = { performance: true, emotional: true, hobby: true, story: true };
+
+  // Collapsed group cell: meaningful summary per group (L196)
+  function collapsedSummary(groupId, row) {
+    if (groupId === 'performance') {
+      const n = row.achievement != null ? Math.round(row.achievement) : 0;
+      return n > 0 ? (n + '▸') : '—';
+    }
+    if (groupId === 'emotional') {
+      const allEmpty = row.happiness_factor == null && row.health == null &&
+                       row.relationship == null && row.knowledge_earn == null;
+      if (allEmpty) return '—';
+      const hap = row.happiness_factor != null ? (row.happiness_factor / 10) * 25 : 0;
+      const hlt = row.health           != null ? (row.health           / 10) * 25 : 0;
+      const rel = row.relationship     != null ? (row.relationship     / 10) * 25 : 0;
+      const skl = row.knowledge_earn   != null ? (row.knowledge_earn   / 10) * 25 : 0;
+      return Math.min(100, Math.round(hap + hlt + rel + skl)) + '%';
+    }
+    if (groupId === 'hobby') {
+      const h = row.hobby    != null ? Math.round(row.hobby)    : 0;
+      const t = row.travel   != null ? Math.round(row.travel)   : 0;
+      const c = row.creation != null ? Math.round(row.creation) : 0;
+      if (h === 0 && t === 0 && c === 0) return '—';
+      const parts = [];
+      if (h > 0) parts.push(h + 'h');
+      if (t > 0) parts.push(t + 't');
+      if (c > 0) parts.push(c + 'c');
+      return parts.join(' ');
+    }
+    if (groupId === 'story') {
+      const n = ['decision','story','people','tags','location']
+        .filter(f => row[f] != null && row[f] !== '').length;
+      return n > 0 ? (n + ' entries') : '—';
+    }
+    return '—';
+  }
 
   function buildEntryViewHtml(rows) {
     const yearSelect = (() => {
@@ -999,8 +1035,8 @@
 
       const cells = GROUPS.flatMap(g => {
         if (_groupCollapsed[g.id]) {
-          const vals = g.fields.filter(f => row[f.key] != null).length;
-          return [`<td style="text-align:center;font-family:var(--font-mono);font-size:0.68rem;color:var(--text-dim)">${vals > 0 ? vals : ''}</td>`];
+          const summary = collapsedSummary(g.id, row);
+          return [`<td style="text-align:center;font-family:var(--font-mono);font-size:0.68rem;color:var(--text-dim);padding:0.2rem 0.4rem">${summary}</td>`];
         }
         return g.fields.map(f => {
           const val        = row[f.key];
@@ -1043,8 +1079,18 @@
         });
       });
 
+      // L197: age = row.year − 1971, always integer, never NaN
+      const ageBase = _entryMode === 'month' ? _entryYear : row.year;
+      const ageNum  = (typeof ageBase === 'number' && !isNaN(ageBase)) ? (ageBase - 1971) : null;
+      const ageHtml = ageNum !== null
+        ? `<div style="font-size:0.63rem;color:var(--text-dim);font-weight:400;margin-top:0.08rem">age ${ageNum}</div>`
+        : '';
+
       return `<tr data-record-id="${row.id}">
-        <td class="life-grid-year-cell${dataFlag}">${yearLabel}</td>
+        <td class="life-grid-year-cell${dataFlag}">
+          <div>${yearLabel}</div>
+          ${ageHtml}
+        </td>
         ${cells.join('')}
       </tr>`;
     }).join('');
