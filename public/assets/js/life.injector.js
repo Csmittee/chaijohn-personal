@@ -195,9 +195,8 @@
       .life-story-field:focus { border-color:var(--yellow); }
 
       /* ── Entry View ── */
-      /* Both overflow:hidden and min-height:0 required: overflow:hidden clips the container,
-         min-height:0 allows it to shrink below content size (flex default is min-height:auto) */
-      .life-entry-body { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+      /* overflow:hidden on a flex ancestor breaks position:sticky on descendants — use min-height:0 instead */
+      .life-entry-body { flex:1; display:flex; flex-direction:column; min-height:0; }
       .life-entry-controls {
         display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
         padding:0 1.5rem 0.75rem; flex-shrink:0;
@@ -222,7 +221,7 @@
       }
 
       /* Grid */
-      .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; min-height:0; }
+      .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; }
       /* border-collapse:separate is required — collapse breaks position:sticky on th */
       .life-grid-table { border-collapse:separate; border-spacing:0; font-size:0.75rem; min-width:900px; width:100%; }
 
