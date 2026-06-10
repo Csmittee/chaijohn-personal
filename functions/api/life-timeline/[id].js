@@ -2,6 +2,29 @@ import { updateRecord, deleteRecord, jsonResponse, errorResponse } from '../../_
 
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'LifeTimeline';
+const META    = 'https://api.airtable.com/v0/meta/bases';
+
+// Idempotent: creates story_refs field if it does not exist (L203)
+let _storyRefsEnsured = false;
+async function ensureStoryRefsField(apiKey) {
+  if (_storyRefsEnsured) return;
+  try {
+    const res  = await fetch(`${META}/${BASE_ID}/tables`, { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (!res.ok) return;
+    const data  = await res.json();
+    const table = (data.tables || []).find(t => t.name === TABLE);
+    if (!table) return;
+    const exists = (table.fields || []).some(f => f.name === 'story_refs');
+    if (!exists) {
+      await fetch(`${META}/${BASE_ID}/tables/${table.id}/fields`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'story_refs', type: 'singleLineText' })
+      });
+    }
+    _storyRefsEnsured = true;
+  } catch (_) { /* non-fatal */ }
+}
 
 function flat(r) {
   return {
@@ -57,8 +80,9 @@ export async function onRequestPatch(context) {
     if (body[f] != null) fields[f] = body[f];
   }
 
-  // story_refs: append-only merge — fetch current record, merge IDs, deduplicate
+  // story_refs: ensure field exists, then append-only merge (L203)
   if (body.story_refs != null) {
+    await ensureStoryRefsField(env.AIRTABLE_API_KEY);
     try {
       const fetchRes = await fetch(
         `https://api.airtable.com/v0/${BASE_ID}/${TABLE}/${id}`,

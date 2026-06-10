@@ -195,8 +195,9 @@
       .life-story-field:focus { border-color:var(--yellow); }
 
       /* ── Entry View ── */
-      /* overflow:hidden on a flex ancestor breaks position:sticky on descendants — use min-height:0 instead */
-      .life-entry-body { flex:1; display:flex; flex-direction:column; min-height:0; }
+      /* Both overflow:hidden and min-height:0 required: overflow:hidden clips the container,
+         min-height:0 allows it to shrink below content size (flex default is min-height:auto) */
+      .life-entry-body { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
       .life-entry-controls {
         display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
         padding:0 1.5rem 0.75rem; flex-shrink:0;
@@ -221,7 +222,7 @@
       }
 
       /* Grid */
-      .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; }
+      .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; min-height:0; }
       /* border-collapse:separate is required — collapse breaks position:sticky on th */
       .life-grid-table { border-collapse:separate; border-spacing:0; font-size:0.75rem; min-width:900px; width:100%; }
 
@@ -954,16 +955,13 @@
       return Math.min(100, Math.round(hap + hlt + rel + skl)) + '%';
     }
     if (groupId === 'hobby') {
-      const h = row.hobby    != null ? Math.round(row.hobby)    : 0;
-      const t = row.travel   != null ? Math.round(row.travel)   : 0;
-      const c = row.creation != null ? Math.round(row.creation) : 0;
+      // L202: hobby/travel/creation are num fields — count as 1 point if non-null/non-zero, never comma-split
+      const h = (row.hobby    != null && +row.hobby    !== 0 && !isNaN(+row.hobby))    ? 1 : 0;
+      const t = (row.travel   != null && +row.travel   !== 0 && !isNaN(+row.travel))   ? 1 : 0;
+      const c = (row.creation != null && +row.creation !== 0 && !isNaN(+row.creation)) ? 1 : 0;
       const total = h + t + c;
       if (total === 0) return '—';
-      const parts = [];
-      if (h > 0) parts.push(h + 'h');
-      if (t > 0) parts.push(t + 't');
-      if (c > 0) parts.push(c + 'c');
-      const breakdown = parts.join(' ');
+      const breakdown = [h ? '1h' : '', t ? '1t' : '', c ? '1c' : ''].filter(Boolean).join(' ');
       return '<span title="' + breakdown + '">' + total + 'p</span>';
     }
     if (groupId === 'story') {
