@@ -28,6 +28,7 @@ function flat(r) {
     tags:             r.fields.tags             || null,
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
+    story_refs:       r.fields.story_refs       || null,
   };
 }
 
@@ -46,6 +47,7 @@ export async function onRequestPatch(context) {
     'relationship','creation','achievement','a_impact','failure','f_impact',
     'travel','t_impact','hobby','h_impact'
   ];
+  // story_refs is handled separately below — excluded from textFields
   const textFields = ['name','location','decision','tags','story','people'];
 
   for (const f of numFields) {
@@ -53,6 +55,30 @@ export async function onRequestPatch(context) {
   }
   for (const f of textFields) {
     if (body[f] != null) fields[f] = body[f];
+  }
+
+  // story_refs: append-only merge — fetch current record, merge IDs, deduplicate
+  if (body.story_refs != null) {
+    try {
+      const fetchRes = await fetch(
+        `https://api.airtable.com/v0/${BASE_ID}/${TABLE}/${id}`,
+        { headers: { Authorization: `Bearer ${env.AIRTABLE_API_KEY}` } }
+      );
+      let existingStr = '';
+      if (fetchRes.ok) {
+        const currentRecord = await fetchRes.json();
+        existingStr = currentRecord.fields.story_refs || '';
+      }
+      const existingIds = existingStr.split(',').map(s => s.trim()).filter(Boolean);
+      const incomingIds = body.story_refs.split(',').map(s => s.trim()).filter(Boolean);
+      for (const inId of incomingIds) {
+        if (!existingIds.includes(inId)) existingIds.push(inId);
+      }
+      fields.story_refs = existingIds.join(',');
+    } catch (err) {
+      // If fetch fails, fall back to setting directly
+      fields.story_refs = body.story_refs;
+    }
   }
 
   // Sync name field if year is updated

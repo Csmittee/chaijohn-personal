@@ -63,6 +63,34 @@ async function seedYears(apiKey, env) {
   return seeded;
 }
 
+async function addStoryRefsField(apiKey, tableId) {
+  try {
+    const res = await fetch(`${META}/${BASE_ID}/tables`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (!res.ok) return { status: 'error', error: `Meta fetch failed: ${res.status}` };
+    const data = await res.json();
+    const table = (data.tables || []).find(t => t.id === tableId);
+    if (!table) return { status: 'error', error: 'LifeTimeline table not found in meta' };
+
+    const exists = (table.fields || []).some(f => f.name === 'story_refs');
+    if (exists) return { status: 'exists' };
+
+    const addRes = await fetch(`${META}/${BASE_ID}/tables/${tableId}/fields`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'story_refs', type: 'singleLineText' })
+    });
+    if (!addRes.ok) {
+      const errBody = await addRes.text();
+      return { status: 'error', error: errBody };
+    }
+    return { status: 'added' };
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
 export async function onRequestGet(context) {
   const { env } = context;
   const key     = env.AIRTABLE_API_KEY;
@@ -70,14 +98,17 @@ export async function onRequestGet(context) {
   const existing = await getTableIds(key);
 
   if (existing['LifeTimeline']) {
+    const tableId = existing['LifeTimeline'];
     // Check if already seeded
-    const count = await countRecords(key, existing['LifeTimeline']);
+    const count = await countRecords(key, tableId);
     if (count > 0) {
-      return jsonResponse({ status: 'ok', created: false, seeded: 0, message: 'already_exists' });
+      const storyRefsResult = await addStoryRefsField(key, tableId);
+      return jsonResponse({ status: 'ok', created: false, seeded: 0, message: 'already_exists', story_refs_field: storyRefsResult.status });
     }
     // Table exists but empty — seed it
     const seeded = await seedYears(key, env);
-    return jsonResponse({ status: 'ok', created: false, seeded });
+    const storyRefsResult = await addStoryRefsField(key, tableId);
+    return jsonResponse({ status: 'ok', created: false, seeded, story_refs_field: storyRefsResult.status });
   }
 
   // Create table
@@ -117,5 +148,12 @@ export async function onRequestGet(context) {
   await delay(500);
   const seeded = await seedYears(key, env);
 
-  return jsonResponse({ status: 'ok', created: true, seeded });
+  // Get the new table ID to add story_refs field
+  const newTableIds = await getTableIds(key);
+  const newTableId  = newTableIds['LifeTimeline'];
+  const storyRefsResult = newTableId
+    ? await addStoryRefsField(key, newTableId)
+    : { status: 'error', error: 'table id not found after create' };
+
+  return jsonResponse({ status: 'ok', created: true, seeded, story_refs_field: storyRefsResult.status });
 }

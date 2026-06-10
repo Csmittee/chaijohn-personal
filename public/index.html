@@ -1098,6 +1098,24 @@
                 <button id="ideas-dist-project" style="font-size:0.75rem;padding:0.25rem 0.6rem;border-radius:4px;background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);cursor:pointer;font-family:inherit">📁 Project (soon)</button>
               </div>
             </div>
+            <!-- Mount to Life (Story only, saved entries only) -->
+            <div id="ideas-mount-section" style="display:none;padding:0.6rem 0.75rem;background:rgba(139,92,246,0.05);border-radius:var(--radius);margin-bottom:0.75rem;border:1px solid rgba(139,92,246,0.2)">
+              <div style="font-size:0.78rem;font-weight:600;color:#8b5cf6;margin-bottom:0.5rem">→ Mount to Life</div>
+              <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <div style="display:flex;flex-direction:column;gap:0.15rem">
+                  <label style="font-size:0.68rem;color:var(--text-muted)" for="ideas-mount-year">Year</label>
+                  <input type="text" inputmode="numeric" id="ideas-mount-year" placeholder="e.g. 1998" style="width:90px;padding:0.3rem 0.5rem;font-size:0.82rem;border-radius:5px;border:1px solid var(--border);background:var(--bg-raised);color:var(--text-primary);font-family:inherit">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.15rem">
+                  <label style="font-size:0.68rem;color:var(--text-muted)" for="ideas-mount-month">Month (opt)</label>
+                  <input type="text" inputmode="numeric" id="ideas-mount-month" placeholder="1–12" style="width:70px;padding:0.3rem 0.5rem;font-size:0.82rem;border-radius:5px;border:1px solid var(--border);background:var(--bg-raised);color:var(--text-primary);font-family:inherit">
+                </div>
+                <div style="align-self:flex-end">
+                  <button id="ideas-mount-btn" class="btn btn-sm" style="background:rgba(139,92,246,0.15);color:#8b5cf6;border:1px solid rgba(139,92,246,0.35);padding:0.3rem 0.7rem;font-size:0.82rem">Mount</button>
+                </div>
+                <div id="ideas-mount-status" style="font-size:0.75rem;color:var(--text-muted);align-self:flex-end"></div>
+              </div>
+            </div>
             <!-- AI undo -->
             <div style="margin-top:0.25rem">
               <button class="btn btn-sm btn-warning hidden" id="ideas-undo-btn">↩ Undo AI</button>

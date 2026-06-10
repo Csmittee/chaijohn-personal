@@ -28,6 +28,7 @@ function flat(r) {
     tags:             r.fields.tags             || null,
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
+    story_refs:       r.fields.story_refs       || null,
   };
 }
 
@@ -36,7 +37,7 @@ const NUM_FIELDS  = [
   'relationship','creation','achievement','a_impact','failure','f_impact',
   'travel','t_impact','hobby','h_impact'
 ];
-const TEXT_FIELDS = ['name','location','decision','tags','story','people'];
+const TEXT_FIELDS = ['name','location','decision','tags','story','people','story_refs'];
 
 function buildFields(raw) {
   const fields = {};

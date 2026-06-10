@@ -136,7 +136,8 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 | fix/dashboard-circuit-v2 | M1.0 Dashboard v2 visual rebuild — 900×680 viewBox, exact block midpoints, YOU hands, 4 meter cards, draggable North/South nodes (KV persist), expense 3-branch flows, liability 3-line summary, focus blink algorithm, sub-asset circles, RULES L172-L178 | ✅ COMPLETE |
 | fix/dashboard-circuit-v3 | M1.0 Dashboard v3 — redrawCircuit() drag architecture (all lines follow nodes), 900×700 viewBox, blocks vertically centered, sub-assets right of East boundary, meter cards match expenses injector CSS, overflow:visible, 8px+ text readability, RULES L172-L180 | ✅ COMPLETE |
 | Fix 9G | M4.2 Mind Map — Obsidian-style node graph | ⬜ SCHEDULED |
-| Fix 9H | M5 Life — personal timeline, relationships, 10–20yr vision | ⬜ SCHEDULED |
+| Fix 9H | M5 Life Phase 1 — SVG timeline, year/month grid, drag-fill, Airtable-backed | ✅ COMPLETE |
+| Life Phase 2 | M5 Life — location swimlane bars + visit dots, story_refs purple nodes, month-view inheritance, Ideas → Mount to Life | ✅ COMPLETE |
 | Fix 9I | M4.1 AI Advisor upgrade — full system context, balance sheet awareness | ⬜ SCHEDULED |
 | M1.1 | Dashboard balance sheet — Net Worth = Assets − Liabilities | ⬜ FUTURE |
 | Pillar 3 | Collection full test + buyer tags + social share | ⬜ FUTURE |

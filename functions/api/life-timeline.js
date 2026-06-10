@@ -28,6 +28,7 @@ function flat(r) {
     tags:             r.fields.tags             || null,
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
+    story_refs:       r.fields.story_refs       || null,
   };
 }
 
@@ -93,6 +94,7 @@ export async function onRequestPost(context) {
   if (body.tags             != null) fields.tags             = body.tags;
   if (body.story            != null) fields.story            = body.story;
   if (body.people           != null) fields.people           = body.people;
+  if (body.story_refs       != null) fields.story_refs       = body.story_refs;
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
