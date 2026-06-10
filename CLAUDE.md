@@ -52,3 +52,49 @@ Short version:
   | Workflow / docs only | RULES-workflow.md |
   | Legacy pre-9C module | RULES-archive.md |
 - `PROJECT_STATE.md` — phases + roadmap (required for build sessions)
+
+## SYSTEM PURPOSE — PERSONAL INTELLIGENCE SUBSTRATE
+
+This OS is not a dashboard. It is a **personal intelligence substrate** —
+a structured memory system designed to be queried by AI agents.
+
+### The two layers
+
+**Mind Map (M4.1) = the aura**
+Everything useful RIGHT NOW. Skills, people, rules, active strategies,
+relationships, tools in use. An agent scans Mind Map to understand who
+the owner is and what they are capable of today.
+
+**Life Timeline (M4.5) = the highway**
+The owner's car driving through time. Every year is a station with its
+own story, financial reality, emotional state, and the people present.
+An agent travels backward through Life to find connections between the
+past and the present that the owner has forgotten.
+
+### The combined agent capability
+
+> Mind Map scan → "You have built 21 repos, used these tools most, continue
+> this pattern for any new project."
+
+> Life Timeline scan → "In 1998 you visited the Peugeot plant in Montbéliard,
+> France. You met a man named X. You are now building a vintage industrial
+> business. Contact X — he may have inventory relevant to your new venture."
+
+No other system produces this. It only exists because both layers are built,
+populated, and wired together.
+
+### The index principle (L192)
+
+Every module in this OS follows one rule:
+> **If content exists in one table, store only its record ID everywhere else.
+> Content lives once. Everything else points.**
+
+This applies to: story_refs in LifeTimeline, edge connections in MindMapEdges,
+and all future cross-module references. Never duplicate text across tables.
+An agent follows the pointers. It does not need copies.
+
+### What CC must understand
+
+Every build decision — field design, API shape, UI behavior — must serve
+the agent query use case. Ask: can an AI traverse this data and surface
+a non-obvious insight for the owner? If the answer is no, the design is wrong.
