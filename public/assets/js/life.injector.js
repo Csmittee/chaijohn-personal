@@ -27,10 +27,13 @@
   let _dirty       = {};       // { recordId: { fieldName: value, ... } }
 
   // Drag fill state
-  let _dragField   = null;
-  let _dragValue   = null;
-  let _dragging    = false;
-  let _dragStartId = null;
+  let _dragField     = null;
+  let _dragValue     = null;
+  let _dragging      = false;
+  let _dragStartId   = null;
+  let _preDragDirty  = null;   // snapshot for Escape cancel
+  let _dragFilledIds = [];     // record IDs written during active drag
+  let _dragStopFn    = null;   // cleanup fn registered on mousedown
 
   function panel() { return document.getElementById(PANEL_ID); }
 
@@ -1184,10 +1187,54 @@
         const id    = handle.dataset.recordId;
         const field = handle.dataset.dragField;
         const input = grid.querySelector(`input[data-record-id="${id}"][data-field="${field}"]`);
-        _dragField   = field;
-        _dragValue   = input ? input.value : '';
-        _dragging    = true;
-        _dragStartId = id;
+        _dragField     = field;
+        _dragValue     = input ? input.value : '';
+        _dragging      = true;
+        _dragStartId   = id;
+        _preDragDirty  = JSON.parse(JSON.stringify(_dirty));
+        _dragFilledIds = [];
+
+        // Clean up any previous drag listeners before registering new ones
+        if (_dragStopFn) _dragStopFn();
+
+        function stopDrag() {
+          _dragging    = false;
+          _dragField   = null;
+          _dragStartId = null;
+          document.removeEventListener('mouseup', stopDrag);
+          document.removeEventListener('keydown', onEscape);
+          p.removeEventListener('mouseleave', stopDrag);
+          _dragStopFn = null;
+        }
+
+        function onEscape(ev) {
+          if (ev.key !== 'Escape') return;
+          // Restore _dirty to pre-drag snapshot and reset filled inputs
+          for (const rid of _dragFilledIds) {
+            const inp = grid.querySelector(`input[data-record-id="${rid}"][data-field="${_dragField}"]`);
+            if (inp) {
+              const prev = (_preDragDirty[rid] || {})[_dragField];
+              inp.value = prev !== undefined ? prev : '';
+              if (prev !== undefined) {
+                if (!_dirty[rid]) _dirty[rid] = {};
+                _dirty[rid][_dragField] = prev;
+              } else {
+                if (_dirty[rid]) {
+                  delete _dirty[rid][_dragField];
+                  if (Object.keys(_dirty[rid]).length === 0) delete _dirty[rid];
+                }
+                inp.classList.remove('dirty');
+              }
+            }
+          }
+          _dirty = _preDragDirty;
+          stopDrag();
+        }
+
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('keydown', onEscape);
+        p.addEventListener('mouseleave', stopDrag);
+        _dragStopFn = stopDrag;
       });
 
       grid.addEventListener('mousemove', e => {
@@ -1202,14 +1249,9 @@
           targetInput.classList.add('dirty');
           if (!_dirty[targetId]) _dirty[targetId] = {};
           _dirty[targetId][_dragField] = _dragValue;
+          if (!_dragFilledIds.includes(targetId)) _dragFilledIds.push(targetId);
         }
       });
-
-      document.addEventListener('mouseup', () => {
-        _dragging    = false;
-        _dragField   = null;
-        _dragStartId = null;
-      }, { once: true });
     }
 
     // FIX 5: Save All — sends dirty records in batches of 10, handles all field types
