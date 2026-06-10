@@ -216,9 +216,11 @@ L202  Life Experience collapsed: hobby/travel/creation are number fields — cou
       each if non-null/non-zero. Never comma-split a number field. Only text fields get
       comma-split counting. NaN in any collapsed cell = this rule was violated.
 
-L201  Life panel scroll chain: #panel-life.active needs height:100%; overflow:hidden injected
-      by the injector if global.css .route-panel does not supply it. .life-entry-body needs
-      both overflow:hidden AND min-height:0. .life-grid-wrap needs min-height:0.
+L201  Life panel scroll chain: #main has min-height:100vh — NOT a definite height — so
+      height:100% on any panel resolves to auto and never bounds it. Panel height must use
+      viewport units: #panel-life.active { height:calc(100vh - 3rem) } (3rem = #main padding).
+      Rules live in index.html shell <style> with !important (global.css is NOT loaded — L042).
+      .life-entry-body needs overflow:hidden AND min-height:0. .life-grid-wrap needs min-height:0.
       Every flex ancestor of .life-grid-wrap must allow shrinking below content height.
 
 L200  Life Entry View collapsed summaries (final):
