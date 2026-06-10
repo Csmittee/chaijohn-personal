@@ -68,7 +68,9 @@
     const s = document.createElement('style');
     s.id = 'life-styles';
     s.textContent = `
-      #panel-life.active { display:flex; flex-direction:column; }
+      /* height:100% + overflow:hidden constrains the panel to its allocated space so
+         flex:1 children with overflow:auto can scroll rather than expanding the page */
+      #panel-life.active { display:flex; flex-direction:column; height:100%; overflow:hidden; }
       #panel-life { padding:0 !important; }
 
       .life-header {
