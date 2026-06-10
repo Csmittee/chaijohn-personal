@@ -193,7 +193,8 @@
       .life-story-field:focus { border-color:var(--yellow); }
 
       /* ── Entry View ── */
-      .life-entry-body { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+      /* overflow:hidden on a flex ancestor breaks position:sticky on descendants — use min-height:0 instead */
+      .life-entry-body { flex:1; display:flex; flex-direction:column; min-height:0; }
       .life-entry-controls {
         display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
         padding:0 1.5rem 0.75rem; flex-shrink:0;
@@ -920,8 +921,7 @@
         { key: 'decision', label: 'Decision', type: 'text' },
         { key: 'story',    label: 'Story',    type: 'text' },
         { key: 'people',   label: 'People',   type: 'text' },
-        { key: 'tags',     label: 'Tags',     type: 'text' },
-        { key: 'location', label: 'Location', type: 'text' }
+        { key: 'tags',     label: 'Tags',     type: 'text' }
       ]
     }
   ];
@@ -931,8 +931,15 @@
   // Collapsed group cell: meaningful summary per group (L196)
   function collapsedSummary(groupId, row) {
     if (groupId === 'performance') {
-      const n = row.achievement != null ? Math.round(row.achievement) : 0;
-      return n > 0 ? (n + '▸') : '—';
+      const finPct = (_finMax > 0 && row.financial_earn != null && row.financial_earn > 0)
+        ? Math.min(100, Math.round((row.financial_earn / _finMax) * 100))
+        : 0;
+      const achBonus = row.achievement != null
+        ? Math.min(100 - finPct, Math.round(row.achievement) * 20)
+        : 0;
+      const total = finPct + achBonus;
+      if (row.financial_earn == null && row.achievement == null) return '—';
+      return total + '%';
     }
     if (groupId === 'emotional') {
       const allEmpty = row.happiness_factor == null && row.health == null &&
@@ -948,17 +955,19 @@
       const h = row.hobby    != null ? Math.round(row.hobby)    : 0;
       const t = row.travel   != null ? Math.round(row.travel)   : 0;
       const c = row.creation != null ? Math.round(row.creation) : 0;
-      if (h === 0 && t === 0 && c === 0) return '—';
+      const total = h + t + c;
+      if (total === 0) return '—';
       const parts = [];
       if (h > 0) parts.push(h + 'h');
       if (t > 0) parts.push(t + 't');
       if (c > 0) parts.push(c + 'c');
-      return parts.join(' ');
+      const breakdown = parts.join(' ');
+      return '<span title="' + breakdown + '">' + total + 'p</span>';
     }
     if (groupId === 'story') {
-      const n = ['decision','story','people','tags','location']
-        .filter(f => row[f] != null && row[f] !== '').length;
-      return n > 0 ? (n + ' entries') : '—';
+      if (!row.story_refs) return '—';
+      const refs = row.story_refs.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      return refs.length > 0 ? (refs.length + ' refs') : '—';
     }
     return '—';
   }
@@ -1019,7 +1028,8 @@
 
     return `<thead>
       <tr>
-        <th rowspan="2" style="min-width:56px;position:sticky;left:0;background:var(--bg);z-index:5;vertical-align:bottom;border-bottom:1px solid var(--border)">${yearLabel}</th>
+        <th rowspan="2" style="width:64px;min-width:64px;position:sticky;left:0;background:var(--bg);z-index:5;vertical-align:bottom;border-bottom:1px solid var(--border)">${yearLabel}</th>
+        <th rowspan="2" style="min-width:100px;position:sticky;left:64px;background:var(--bg);z-index:5;vertical-align:bottom;border-bottom:1px solid var(--border);padding:0.28rem 0.5rem;font-family:var(--font-mono);font-size:0.72rem;color:var(--text-dim);font-weight:600;white-space:nowrap">Location</th>
         ${groupRow}
       </tr>
       <tr>${fieldLabelCells}</tr>
@@ -1079,17 +1089,27 @@
         });
       });
 
-      // L197: age = row.year − 1971, always integer, never NaN
+      // L198: age = row.year − 1972 (born 1972 = age 0), never NaN
       const ageBase = _entryMode === 'month' ? _entryYear : row.year;
-      const ageNum  = (typeof ageBase === 'number' && !isNaN(ageBase)) ? (ageBase - 1971) : null;
+      const ageNum  = (typeof ageBase === 'number' && !isNaN(ageBase)) ? (ageBase - 1972) : null;
       const ageHtml = ageNum !== null
         ? `<div style="font-size:0.63rem;color:var(--text-dim);font-weight:400;margin-top:0.08rem">age ${ageNum}</div>`
         : '';
 
+      const locVal     = (_dirty[row.id] || {}).location !== undefined ? (_dirty[row.id] || {}).location : (row.location || '');
+      const isDirtyLoc = (_dirty[row.id] || {}).location !== undefined;
+
       return `<tr data-record-id="${row.id}">
-        <td class="life-grid-year-cell${dataFlag}">
+        <td class="life-grid-year-cell${dataFlag}" style="width:64px;min-width:64px">
           <div>${yearLabel}</div>
           ${ageHtml}
+        </td>
+        <td style="position:sticky;left:64px;background:var(--bg);z-index:1;padding:0.2rem 0.3rem;min-width:100px">
+          <input type="text"
+            class="life-grid-text-input${isDirtyLoc ? ' dirty' : ''}"
+            data-record-id="${row.id}" data-field="location"
+            value="${escapeAttr(locVal)}"
+            title="location">
         </td>
         ${cells.join('')}
       </tr>`;
