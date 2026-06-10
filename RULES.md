@@ -208,6 +208,17 @@ L193  story_refs field: singleLineText in LifeTimeline. Stores comma-separated A
       Clicking a node fetches /api/diary/{id} on demand. Content cached in _ideasCache
       for session reuse. Display shows [Ideas · Story] badge + title + content.
 
+L200  Life Entry View collapsed summaries (final):
+      Performance = financial_earn % of dataset max + achievement bonus, display as %.
+      Strength = weighted % across happiness/health/relationship/skill (each 25%).
+      Experience = total comma-separated entry count across hobby+travel+creation as Np.
+      Story = count of comma-separated IDs in story_refs only, display as N refs.
+
+L199  Life Entry View location: second sticky column always visible. Never inside a collapsible group.
+      Sticky left offset = 64px (width of year/age cell). Background var(--bg). Editable text input per row.
+
+L198  Life Entry View age formula: row.year − 1972. Year 1972 = age 0. Never row.year − 1971.
+
 L197  Life Entry View year column: shows year + age on two lines in sticky left cell.
       Age = row.year − 1971. Always integer. Never NaN. Age styled dim + small below year.
       For Month View rows, age = _entryYear − 1971 (same for all rows in that view).
