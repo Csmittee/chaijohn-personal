@@ -34,6 +34,16 @@
 
   function panel() { return document.getElementById(PANEL_ID); }
 
+  // ── Escape helper — prevents broken HTML attributes ──
+  function escapeAttr(v) {
+    if (v == null) return '';
+    return String(v)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   // ── CSS injection ──
   function ensureStyles() {
     if (document.getElementById('life-styles')) return;
@@ -77,7 +87,8 @@
       }
 
       /* ── Life View ── */
-      .life-view-body { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+      /* FIX 3: overflow-y:auto allows SVG + story panel to scroll naturally */
+      .life-view-body { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
       .life-graph-controls {
         display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
         padding:0 1.5rem 0.5rem; flex-shrink:0;
@@ -108,11 +119,16 @@
         color:var(--text-dim); font-size:0.85rem; padding:0.1rem 0.4rem; cursor:pointer; }
       .life-scale-nav:hover { border-color:var(--yellow); color:var(--yellow); }
 
+      /* FIX 2: min-width:100% so canvas fills all available width */
       .life-svg-wrap {
         padding:0 1.5rem; flex-shrink:0;
-        overflow:visible;
+        overflow:visible; width:100%; min-width:100%;
+        box-sizing:border-box;
       }
-      .life-svg-wrap svg { overflow:visible; display:block; width:100%; }
+      .life-svg-wrap svg {
+        overflow:visible; display:block;
+        width:100%; min-width:100%;
+      }
 
       .life-tooltip {
         position:fixed; background:var(--bg-raised); border:1px solid var(--border-strong);
@@ -124,7 +140,7 @@
 
       /* ── Story panel ── */
       .life-story-panel {
-        flex:1; overflow-y:auto; padding:1rem 1.5rem;
+        overflow-y:auto; padding:1rem 1.5rem;
         border-top:1px solid var(--border);
         background:var(--bg);
       }
@@ -191,10 +207,20 @@
 
       /* Grid */
       .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; }
-      .life-grid-table { border-collapse:collapse; font-size:0.75rem; min-width:700px; width:100%; }
-      .life-grid-table th { font-family:var(--font-mono); font-size:0.62rem; color:var(--text-dim);
-        font-weight:500; padding:0.28rem 0.5rem; border-bottom:1px solid var(--border);
-        text-align:left; white-space:nowrap; position:sticky; top:0; background:var(--bg); z-index:2;
+      .life-grid-table { border-collapse:collapse; font-size:0.75rem; min-width:900px; width:100%; }
+
+      /* FIX 1: two sticky header rows */
+      .life-grid-table thead tr:first-child th {
+        font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim);
+        font-weight:600; padding:0.28rem 0.5rem;
+        border-bottom:none; text-align:left; white-space:nowrap;
+        position:sticky; top:0; background:var(--bg); z-index:4;
+      }
+      .life-grid-table thead tr:last-child th {
+        font-family:var(--font-mono); font-size:0.68rem; color:var(--text-dim);
+        font-weight:400; padding:0.12rem 0.5rem; letter-spacing:0.04em; text-transform:uppercase;
+        border-bottom:1px solid var(--border); white-space:nowrap;
+        position:sticky; top:28px; background:var(--bg); z-index:3;
       }
       .life-grid-table td { padding:0.2rem 0.3rem; border-bottom:1px solid rgba(255,255,255,0.04); }
       .life-grid-year-cell {
@@ -207,15 +233,14 @@
       .life-grid-year-cell.no-data  { color:var(--text-dim); }
 
       .life-grid-group-header {
-        font-family:var(--font-mono); font-size:0.62rem; font-weight:600;
+        font-family:var(--font-mono); font-size:0.72rem; font-weight:600;
         color:var(--text-dim); text-transform:uppercase; letter-spacing:0.08em;
         padding:0.35rem 0.5rem; background:var(--bg-raised);
-        border-bottom:1px solid var(--border);
         cursor:pointer; user-select:none;
       }
 
       .life-grid-input {
-        width:68px; background:transparent; border:1px solid transparent;
+        width:72px; background:transparent; border:1px solid transparent;
         border-radius:3px; padding:0.18rem 0.3rem; font-family:var(--font-mono);
         font-size:0.73rem; color:var(--text); text-align:right;
         outline:none; cursor:pointer;
@@ -224,7 +249,7 @@
         box-shadow:0 0 0 2px rgba(245,197,24,0.15); cursor:text; }
       .life-grid-input.dirty { background:rgba(245,197,24,0.08); }
       .life-grid-text-input {
-        width:100%; min-width:120px; background:transparent; border:1px solid transparent;
+        width:100%; min-width:110px; background:transparent; border:1px solid transparent;
         border-radius:3px; padding:0.18rem 0.3rem; font-size:0.73rem; color:var(--text);
         outline:none; cursor:pointer;
       }
@@ -288,15 +313,15 @@
   }
 
   function computeLifeScore(row) {
-    const finNorm   = normalizeFinancial(row.financial_earn);
-    const happNorm  = norm110(row.happiness_factor) * 3;
+    const finNorm    = normalizeFinancial(row.financial_earn);
+    const happNorm   = norm110(row.happiness_factor) * 3;
     const healthNorm = norm110(row.health) * 2;
-    const relNorm   = norm110(row.relationship) * 1.5;
-    const aImpact   = (row.a_impact || 5);
-    const fImpact   = (row.f_impact || 5);
-    const achNorm   = norm110(row.achievement) * (aImpact / 5);
-    const failPen   = norm110(row.failure) * (fImpact / 5) * -1.5;
-    const finScore  = (finNorm || 0) * 2;
+    const relNorm    = norm110(row.relationship) * 1.5;
+    const aImpact    = (row.a_impact || 5);
+    const fImpact    = (row.f_impact || 5);
+    const achNorm    = norm110(row.achievement) * (aImpact / 5);
+    const failPen    = norm110(row.failure) * (fImpact / 5) * -1.5;
+    const finScore   = (finNorm || 0) * 2;
     const totalWeight = 3 + 2 + 1.5 + (aImpact / 5) + 2;
     const raw = (happNorm + healthNorm + relNorm + achNorm + failPen + finScore) / totalWeight;
     return Math.max(-10, Math.min(10, raw));
@@ -373,7 +398,6 @@
       if (sc > peakScore) { peakScore = sc; peakYear = r.year ? String(r.year) : '—'; }
     }
 
-    // Connections: edges where from_id or to_id matches a LifeTimeline record id
     const lifeIds = new Set(_allRecords.map(r => r.id));
     const connCount = _edges.filter(e => lifeIds.has(e.from_id) || lifeIds.has(e.to_id)).length;
 
@@ -417,35 +441,33 @@
     const { start, end } = getVisibleYears();
     const yearRange = end - start + 1;
 
-    const SVG_W = 900;
-    const SVG_H = 400;
+    // FIX 2: wider SVG_W so full-life view spreads across screen
+    const SVG_W    = _scale === '10yr' ? 900 : 1400;
+    // FIX 3: taller SVG with more bottom margin to clearly show location dots
+    const SVG_H    = 460;
     const MARGIN_L = 30;
     const MARGIN_R = 20;
-    const MARGIN_T = 60;
-    const MARGIN_B = 80;
-    const GRAPH_W = SVG_W - MARGIN_L - MARGIN_R;
-    const GRAPH_H = SVG_H - MARGIN_T - MARGIN_B;
+    const MARGIN_T = 55;
+    const MARGIN_B = 130;  // generous space below baseline for branches, dots, labels
+    const GRAPH_W  = SVG_W - MARGIN_L - MARGIN_R;
+    const GRAPH_H  = SVG_H - MARGIN_T - MARGIN_B;
     const BASELINE_Y = MARGIN_T + GRAPH_H / 2;
 
-    // Filter records in visible range
     const visible = _allRecords.filter(r => r.year >= start && r.year <= end);
 
     function yearToX(y) {
-      return MARGIN_L + ((y - start) / (end - start)) * GRAPH_W;
+      return MARGIN_L + ((y - start) / Math.max(1, end - start)) * GRAPH_W;
     }
 
     function scoreToY(val, range) {
-      // range: -10 to +10 (full), or -5 to +5 (partial)
       const maxDev = range;
-      return BASELINE_Y - (val / maxDev) * (GRAPH_H / 2 - 10);
+      return BASELINE_Y - (val / maxDev) * (GRAPH_H / 2 - 8);
     }
 
-    // Build line path for a dataset
     function buildPath(points) {
       if (points.length < 2) return '';
       const filtered = points.filter(p => p.val != null && !isNaN(p.val));
       if (filtered.length < 2) return '';
-
       let d = '';
       for (let i = 0; i < filtered.length; i++) {
         const p = filtered[i];
@@ -453,29 +475,25 @@
           d += `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
         } else {
           const prev = filtered[i - 1];
-          const cpx = (prev.x + p.x) / 2;
+          const cpx  = (prev.x + p.x) / 2;
           d += ` C ${cpx.toFixed(1)} ${prev.y.toFixed(1)} ${cpx.toFixed(1)} ${p.y.toFixed(1)} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
         }
       }
       return d;
     }
 
-    // Financial points
     const finPoints = visible.map(r => {
       const val = normalizeFinancial(r.financial_earn);
       return { x: yearToX(r.year), y: scoreToY(val, 10), val, year: r.year };
     });
-    // Happiness points
     const happPoints = visible.map(r => {
       const val = r.happiness_factor != null ? norm110(r.happiness_factor) / 2 : null;
       return { x: yearToX(r.year), y: scoreToY(val != null ? val : 0, 5), val, year: r.year };
     });
-    // Health points
     const healthPoints = visible.map(r => {
       const val = r.health != null ? norm110(r.health) / 2 : null;
       return { x: yearToX(r.year), y: scoreToY(val != null ? val : 0, 5), val, year: r.year };
     });
-    // Life score points
     const lifePoints = visible.map(r => {
       const val = _lifeScores[r.id] != null ? _lifeScores[r.id] : null;
       return { x: yearToX(r.year), y: scoreToY(val != null ? val : 0, 10), val, year: r.year };
@@ -483,12 +501,13 @@
 
     // Year nodes
     const nodeCircles = visible.map(r => {
-      const score = _lifeScores[r.id] || 0;
-      const color = score > 3 ? '#22c55e' : (score < -3 ? '#ef4444' : 'rgba(232,232,240,0.35)');
+      const score   = _lifeScores[r.id] || 0;
+      const color   = score > 3 ? '#22c55e' : (score < -3 ? '#ef4444' : 'rgba(232,232,240,0.35)');
       const hasStory = r.story ? ' life-node-pulse' : '';
-      const cx = yearToX(r.year).toFixed(1);
-      const cy = BASELINE_Y.toFixed(1);
-      const ttData = JSON.stringify({
+      const cx      = yearToX(r.year).toFixed(1);
+      const cy      = BASELINE_Y.toFixed(1);
+      // FIX 4: full location string in tooltip (no slice)
+      const ttData  = JSON.stringify({
         year:  r.year,
         loc:   r.location || '',
         score: score.toFixed(1),
@@ -500,14 +519,14 @@
         style="cursor:pointer"/>`;
     }).join('\n');
 
-    // Branch stems (achievement up, failure down)
+    // Branch stems
     const branches = visible.flatMap(r => {
       const segs = [];
       if (r.achievement && r.achievement > 1) {
-        const imp = r.a_impact || 5;
-        const h = 20 + imp * 8;
-        const cx = yearToX(r.year);
-        const cy = BASELINE_Y;
+        const imp   = r.a_impact || 5;
+        const h     = 20 + imp * 8;
+        const cx    = yearToX(r.year);
+        const cy    = BASELINE_Y;
         const label = (r.tags || 'achievement').slice(0, 20);
         segs.push(`
           <line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}"
@@ -521,10 +540,10 @@
             font-family="'IBM Plex Mono',monospace">${label}</text>`);
       }
       if (r.failure && r.failure > 1) {
-        const imp = r.f_impact || 5;
-        const h = 18 + imp * 7;
-        const cx = yearToX(r.year);
-        const cy = BASELINE_Y;
+        const imp   = r.f_impact || 5;
+        const h     = 18 + imp * 7;
+        const cx    = yearToX(r.year);
+        const cy    = BASELINE_Y;
         const label = (r.tags || 'failure').slice(0, 20);
         segs.push(`
           <line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}"
@@ -540,37 +559,67 @@
       return segs;
     }).join('\n');
 
-    // Location dots
+    // FIX 3: location dots — correct prevX tracking for same-location spans
+    // FIX 4: show up to 30 chars in SVG text label (tooltip already shows full string)
     const locationDots = (() => {
-      const segs = [];
-      let prevLoc = null; let prevX = null; let spanStart = null;
+      const segs   = [];
+      let prevLoc  = null;
+      let prevX    = null;
+      let spanStart = null;
+      const DOT_Y  = BASELINE_Y + 48;
+
       for (let i = 0; i < visible.length; i++) {
-        const r = visible[i];
-        if (!r.location) { prevLoc = null; continue; }
+        const r  = visible[i];
         const cx = yearToX(r.year);
-        const dotY = BASELINE_Y + 40;
-        if (r.location === prevLoc) {
-          // extend span
-        } else {
+
+        if (!r.location) {
+          // gap in location — close any open span
           if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
-            segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${dotY.toFixed(1)}" x2="${prevX.toFixed(1)}" y2="${dotY.toFixed(1)}" stroke="#f97316" stroke-width="2" opacity="0.5"/>`);
+            segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
+              x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
+              stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
           }
-          segs.push(`<circle cx="${cx.toFixed(1)}" cy="${dotY.toFixed(1)}" r="3" fill="#f97316" opacity="0.8"/>
-          <text x="${cx.toFixed(1)}" y="${(dotY + 12).toFixed(1)}" text-anchor="middle"
-            font-size="9" fill="#f97316" opacity="0.8"
-            font-family="'IBM Plex Mono',monospace">${r.location.slice(0, 12)}</text>`);
-          prevLoc = r.location;
-          spanStart = cx;
+          prevLoc   = null;
+          spanStart = null;
+          prevX     = null;
+          continue;
         }
-        prevX = cx;
+
+        if (r.location === prevLoc) {
+          // Same location: extend span, update prevX
+          prevX = cx;
+        } else {
+          // New location: close previous span if multi-year
+          if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
+            segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
+              x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
+              stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
+          }
+          // Draw dot + label for new location (FIX 4: show up to 30 chars, tooltip shows full)
+          const labelText = r.location.slice(0, 30);
+          segs.push(`<circle cx="${cx.toFixed(1)}" cy="${DOT_Y.toFixed(1)}" r="3.5"
+            fill="#f97316" opacity="0.85"/>
+          <text x="${cx.toFixed(1)}" y="${(DOT_Y + 13).toFixed(1)}"
+            text-anchor="middle" font-size="9" fill="#f97316" opacity="0.85"
+            font-family="'IBM Plex Mono',monospace">${escapeAttr(labelText)}</text>`);
+          prevLoc   = r.location;
+          spanStart = cx;
+          prevX     = cx;
+        }
+      }
+      // Close trailing span
+      if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
+        segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
+          x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
+          stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
       }
       return segs.join('\n');
     })();
 
-    // Connection arcs (LifeTimeline ↔ LifeTimeline edges)
-    const lifeIds = new Set(_allRecords.map(r => r.id));
+    // Connection arcs
+    const lifeIds     = new Set(_allRecords.map(r => r.id));
     const lifeIdToYear = Object.fromEntries(_allRecords.map(r => [r.id, r.year]));
-    const arcColors = { led_to: '#22c55e', failed_to: '#ef4444', inspired_by: '#f5c518' };
+    const arcColors   = { led_to: '#22c55e', failed_to: '#ef4444', inspired_by: '#f5c518' };
     const arcs = _edges
       .filter(e => lifeIds.has(e.from_id) && lifeIds.has(e.to_id))
       .filter(e => {
@@ -579,12 +628,12 @@
         return y1 >= start && y1 <= end && y2 >= start && y2 <= end;
       })
       .map(e => {
-        const y1 = lifeIdToYear[e.from_id];
-        const y2 = lifeIdToYear[e.to_id];
-        const x1 = yearToX(y1);
-        const x2 = yearToX(y2);
-        const arcH = Math.abs(x2 - x1) * 0.4;
-        const midX = (x1 + x2) / 2;
+        const y1    = lifeIdToYear[e.from_id];
+        const y2    = lifeIdToYear[e.to_id];
+        const x1    = yearToX(y1);
+        const x2    = yearToX(y2);
+        const arcH  = Math.abs(x2 - x1) * 0.4;
+        const midX  = (x1 + x2) / 2;
         const color = arcColors[e.edge_type] || 'rgba(255,255,255,0.2)';
         const ttData = JSON.stringify({
           from: y1, to: y2, type: e.edge_type, label: e.label || ''
@@ -596,7 +645,7 @@
           data-arc-tt="${ttData}" style="cursor:pointer"/>
           ${e.label ? `<text x="${midX.toFixed(1)}" y="${(BASELINE_Y - 10 - arcH - 4).toFixed(1)}"
             text-anchor="middle" font-size="9" fill="${color}" opacity="0.8"
-            font-family="'IBM Plex Mono',monospace">${e.label.slice(0,20)}</text>` : ''}`;
+            font-family="'IBM Plex Mono',monospace">${escapeAttr(e.label.slice(0, 20))}</text>` : ''}`;
       }).join('\n');
 
     // Year axis labels
@@ -612,7 +661,6 @@
       x2="${(SVG_W - MARGIN_R).toFixed(1)}" y2="${BASELINE_Y.toFixed(1)}"
       stroke="rgba(255,255,255,0.1)" stroke-width="1"/>`;
 
-    // Build SVG paths for active lines
     const lines = [];
     if (_activeLines.financial) {
       const d = buildPath(finPoints);
@@ -652,7 +700,7 @@
           </div>
         </div>
         <div class="life-svg-wrap">
-          <svg viewBox="0 0 ${SVG_W} ${SVG_H}" style="height:400px;overflow:visible" id="life-svg">
+          <svg viewBox="0 0 ${SVG_W} ${SVG_H}" style="height:${SVG_H}px;overflow:visible" id="life-svg">
             ${baseline}
             ${arcs}
             ${branches}
@@ -669,16 +717,15 @@
   function buildStoryHtml(id) {
     const r = _allRecords.find(r => r.id === id);
     if (!r) return '';
-    const score = (_lifeScores[id] || 0).toFixed(1);
+    const score      = (_lifeScores[id] || 0).toFixed(1);
     const scoreColor = parseFloat(score) > 3 ? '#22c55e' : (parseFloat(score) < -3 ? '#ef4444' : 'var(--text-muted)');
 
-    // Edges for this record
     const relEdges = _edges.filter(e => e.from_id === id || e.to_id === id);
     const connHtml = relEdges.length === 0
       ? '<div style="font-size:0.82rem;color:var(--text-dim)">No connections yet.</div>'
       : relEdges.map(e => {
-        const otherId = e.from_id === id ? e.to_id : e.from_id;
-        const otherRec = _allRecords.find(r2 => r2.id === otherId);
+        const otherId   = e.from_id === id ? e.to_id : e.from_id;
+        const otherRec  = _allRecords.find(r2 => r2.id === otherId);
         const otherLabel = otherRec ? `${otherRec.year}` : otherId.slice(0, 8);
         return `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.25rem">
           <span style="color:var(--text-dim);font-size:0.68rem">[${e.edge_type}]</span>
@@ -687,6 +734,7 @@
         </div>`;
       }).join('');
 
+    // FIX 4: location displayed in full, no truncation
     return `
       <div class="life-story-panel" id="life-story-panel">
         <div class="life-story-header">
@@ -741,37 +789,38 @@
   }
 
   // ── Entry View ──
+  // FIX 1: exact labels from spec
   const GROUPS = [
     {
       id: 'performance',
       label: 'Performance',
       fields: [
-        { key: 'financial_earn', label: 'Earn ฿', type: 'num' },
-        { key: 'achievement',   label: 'Achiev', type: 'num' },
-        { key: 'a_impact',      label: 'A.Imp', type: 'num' },
-        { key: 'failure',       label: 'Fail', type: 'num' },
-        { key: 'f_impact',      label: 'F.Imp', type: 'num' }
+        { key: 'financial_earn', label: 'Financial ฿', type: 'num' },
+        { key: 'achievement',    label: 'Achievement', type: 'num' },
+        { key: 'a_impact',       label: 'Impact',      type: 'num' },
+        { key: 'failure',        label: 'Failure',     type: 'num' },
+        { key: 'f_impact',       label: 'F.Impact',    type: 'num' }
       ]
     },
     {
       id: 'emotional',
       label: 'Emotional',
       fields: [
-        { key: 'happiness_factor', label: 'Happy', type: 'num' },
-        { key: 'health',           label: 'Health', type: 'num' },
-        { key: 'relationship',     label: 'Relation', type: 'num' },
-        { key: 'knowledge_earn',   label: 'Knowledge', type: 'num' }
+        { key: 'happiness_factor', label: 'Happiness',    type: 'num' },
+        { key: 'health',           label: 'Health',       type: 'num' },
+        { key: 'relationship',     label: 'Relationship', type: 'num' },
+        { key: 'knowledge_earn',   label: 'Knowledge',    type: 'num' }
       ]
     },
     {
       id: 'hobby',
       label: 'Hobby',
       fields: [
-        { key: 'hobby',    label: 'Hobby', type: 'num' },
-        { key: 'h_impact', label: 'H.Imp', type: 'num' },
-        { key: 'travel',   label: 'Travel', type: 'num' },
-        { key: 't_impact', label: 'T.Imp', type: 'num' },
-        { key: 'creation', label: 'Create', type: 'num' }
+        { key: 'hobby',    label: 'Hobby',    type: 'num' },
+        { key: 'h_impact', label: 'H.Impact', type: 'num' },
+        { key: 'travel',   label: 'Travel',   type: 'num' },
+        { key: 't_impact', label: 'T.Impact', type: 'num' },
+        { key: 'creation', label: 'Creation', type: 'num' }
       ]
     },
     {
@@ -779,9 +828,9 @@
       label: 'Story',
       fields: [
         { key: 'decision', label: 'Decision', type: 'text' },
-        { key: 'story',    label: 'Story', type: 'text' },
-        { key: 'people',   label: 'People', type: 'text' },
-        { key: 'tags',     label: 'Tags', type: 'text' },
+        { key: 'story',    label: 'Story',    type: 'text' },
+        { key: 'people',   label: 'People',   type: 'text' },
+        { key: 'tags',     label: 'Tags',     type: 'text' },
         { key: 'location', label: 'Location', type: 'text' }
       ]
     }
@@ -800,7 +849,7 @@
     })();
 
     const dirtyCount = Object.keys(_dirty).length;
-    const saveLabel = dirtyCount > 0 ? `Save All (${dirtyCount})` : 'Save All';
+    const saveLabel  = dirtyCount > 0 ? `Save All (${dirtyCount})` : 'Save All';
 
     const tableRows = buildGridRows(rows);
 
@@ -824,23 +873,40 @@
       </div>`;
   }
 
+  // FIX 1: two-row thead — row 1 = group toggles, row 2 = sticky field labels
   function buildGridHeader() {
     const yearLabel = _entryMode === 'month' ? 'Mo' : 'Year';
-    const allGroupHeaders = GROUPS.flatMap(g => {
+
+    // Row 1: Year cell (rowspan=2) + group header toggle cells
+    const groupRow = GROUPS.map(g => {
       const collapsed = _groupCollapsed[g.id];
-      return collapsed ? [] : g.fields.map(f => `<th title="${f.key}">${f.label}</th>`);
-    });
-    return `<thead><tr>
-      <th style="min-width:56px;position:sticky;left:0;background:var(--bg);z-index:3">${yearLabel}</th>
-      ${GROUPS.map(g => {
-        const collapsed = _groupCollapsed[g.id];
-        return `<th colspan="${collapsed ? 1 : g.fields.length}"
-          class="life-grid-group-header" data-group-toggle="${g.id}"
-          style="cursor:pointer;user-select:none;text-align:left">
-          ${g.label} ${collapsed ? '▶' : '▼'}
-        </th>`;
-      }).join('')}
-    </tr></thead>`;
+      const span = collapsed ? 1 : g.fields.length;
+      return `<th colspan="${span}"
+        class="life-grid-group-header" data-group-toggle="${g.id}"
+        style="cursor:pointer;user-select:none;text-align:left;border-bottom:1px solid var(--border)">
+        ${g.label} ${collapsed ? '▶' : '▼'}
+      </th>`;
+    }).join('');
+
+    // Row 2: empty year cell + per-field label cells for expanded groups, summary for collapsed
+    const fieldLabelCells = GROUPS.flatMap(g => {
+      if (_groupCollapsed[g.id]) {
+        return [`<th style="text-align:center;min-width:40px"></th>`];
+      }
+      return g.fields.map(f =>
+        `<th style="font-weight:400;white-space:nowrap;min-width:${f.type === 'text' ? '110' : '74'}px">${f.label}</th>`
+      );
+    }).join('');
+
+    return `<thead>
+      <tr>
+        <th rowspan="2" style="min-width:56px;position:sticky;left:0;background:var(--bg);z-index:5;vertical-align:bottom;border-bottom:1px solid var(--border)">${yearLabel}</th>
+        ${groupRow}
+      </tr>
+      <tr>
+        ${fieldLabelCells}
+      </tr>
+    </thead>`;
   }
 
   function buildGridRows(rows) {
@@ -852,31 +918,32 @@
 
       const cells = GROUPS.flatMap(g => {
         if (_groupCollapsed[g.id]) {
-          // Show one summary cell for collapsed group
           const vals = g.fields.filter(f => row[f.key] != null).length;
           return [`<td style="text-align:center;font-family:var(--font-mono);font-size:0.68rem;color:var(--text-dim)">${vals > 0 ? vals : ''}</td>`];
         }
         return g.fields.map(f => {
-          const val = row[f.key];
-          const dirtyVal = (_dirty[row.id] || {})[f.key];
+          const val        = row[f.key];
+          const dirtyVal   = (_dirty[row.id] || {})[f.key];
           const displayVal = dirtyVal !== undefined ? dirtyVal : (val != null ? val : '');
-          const isDirty = dirtyVal !== undefined;
+          const isDirty    = dirtyVal !== undefined;
 
           if (f.type === 'num') {
+            // FIX 5: escapeAttr to handle any special chars safely
             return `<td>
               <input type="text" inputmode="numeric" pattern="[0-9.\\-]*"
                 class="life-grid-input${isDirty ? ' dirty' : ''}"
                 data-record-id="${row.id}" data-field="${f.key}"
-                value="${displayVal}"
+                value="${escapeAttr(displayVal)}"
                 title="${f.key}">
               <span class="life-drag-handle" data-drag-field="${f.key}" data-record-id="${row.id}"></span>
             </td>`;
           } else {
+            // FIX 5: text fields use escapeAttr for safe attribute values
             return `<td>
               <input type="text"
                 class="life-grid-text-input${isDirty ? ' dirty' : ''}"
                 data-record-id="${row.id}" data-field="${f.key}"
-                value="${displayVal}"
+                value="${escapeAttr(displayVal)}"
                 title="${f.key}">
             </td>`;
           }
@@ -895,8 +962,8 @@
     const p = panel();
     if (!p) return;
 
-    const kpiHtml    = buildKpiHtml();
-    const modeHtml   = `
+    const kpiHtml  = buildKpiHtml();
+    const modeHtml = `
       <div class="life-mode-toggle">
         <button class="life-mode-btn${_mode === 'life' ? ' active' : ''}" data-mode="life">Life View</button>
         <button class="life-mode-btn${_mode === 'entry' ? ' active' : ''}" data-mode="entry">Entry View</button>
@@ -932,7 +999,6 @@
     const p = panel();
     if (!p) return;
 
-    // Mode toggle
     p.querySelectorAll('.life-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         _mode = btn.dataset.mode;
@@ -952,7 +1018,6 @@
   }
 
   function bindLifeViewEvents(p) {
-    // Line toggles
     p.querySelectorAll('.life-line-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const line = btn.dataset.line;
@@ -967,7 +1032,6 @@
       });
     });
 
-    // Scale toggle
     p.querySelectorAll('.life-scale-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         _scale = btn.dataset.scale;
@@ -975,13 +1039,11 @@
       });
     });
 
-    // Decade nav
     const prevBtn = p.querySelector('#life-prev-decade');
     const nextBtn = p.querySelector('#life-next-decade');
     if (prevBtn) prevBtn.addEventListener('click', () => { _yearOffset = Math.max(0, _yearOffset - 1); renderPanel(); });
     if (nextBtn) nextBtn.addEventListener('click', () => { _yearOffset = _yearOffset + 1; renderPanel(); });
 
-    // Node tooltips + click
     const tooltip = p.querySelector('#life-tooltip') || document.getElementById('life-tooltip');
     const svg = p.querySelector('#life-svg');
     if (svg) {
@@ -990,6 +1052,7 @@
         if (node) {
           try {
             const tt = JSON.parse(node.dataset.tt.replace(/&quot;/g, '"'));
+            // FIX 4: full location shown in tooltip — tt.loc is already the full string
             tooltip.innerHTML = `<b>${tt.year}</b>${tt.loc ? `<br>📍 ${tt.loc}` : ''}${tt.score ? `<br>Score: ${tt.score}` : ''}${tt.tags ? `<br>${tt.tags}` : ''}`;
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX + 14) + 'px';
@@ -1021,7 +1084,6 @@
       });
     }
 
-    // Story panel
     const closeBtn = p.querySelector('#life-story-close');
     if (closeBtn) closeBtn.addEventListener('click', () => { _activeStory = null; renderPanel(); });
 
@@ -1032,12 +1094,10 @@
         if (!_activeStory) return;
         const r = _allRecords.find(x => x.id === _activeStory);
         if (!r) return;
-
-        // Replace story/decision/people divs with textareas
         ['story', 'decision', 'people'].forEach(field => {
           const container = document.getElementById(`life-story-text-${field}`);
           if (container) {
-            container.innerHTML = `<textarea class="life-story-field" data-field="${field}" rows="4">${r[field] || ''}</textarea>`;
+            container.innerHTML = `<textarea class="life-story-field" data-field="${field}" rows="4">${escapeAttr(r[field] || '')}</textarea>`;
           }
         });
         editBtn.style.display = 'none';
@@ -1070,7 +1130,6 @@
   }
 
   function bindEntryViewEvents(p) {
-    // Sub-mode toggle
     p.querySelectorAll('.life-entry-submode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         _entryMode = btn.dataset.submode;
@@ -1082,7 +1141,6 @@
       });
     });
 
-    // Year select for month view
     const yearSel = p.querySelector('#life-entry-year-select');
     if (yearSel) {
       yearSel.addEventListener('change', () => {
@@ -1091,7 +1149,6 @@
       });
     }
 
-    // Group toggle headers
     p.querySelectorAll('[data-group-toggle]').forEach(el => {
       el.addEventListener('click', () => {
         const g = el.dataset.groupToggle;
@@ -1100,9 +1157,9 @@
       });
     });
 
-    // Input change → mark dirty
     const grid = p.querySelector('#life-grid-table');
     if (grid) {
+      // FIX 5: input change marks dirty — covers ALL field types (num + text)
       grid.addEventListener('input', e => {
         const input = e.target.closest('[data-record-id][data-field]');
         if (!input) return;
@@ -1112,7 +1169,6 @@
         if (!_dirty[id]) _dirty[id] = {};
         _dirty[id][field] = val;
         input.classList.add('dirty');
-        // Update save all button count
         const saveBtn = p.querySelector('#life-save-all-btn');
         if (saveBtn) {
           const count = Object.keys(_dirty).length;
@@ -1125,7 +1181,7 @@
         const handle = e.target.closest('.life-drag-handle');
         if (!handle) return;
         e.preventDefault();
-        const id = handle.dataset.recordId;
+        const id    = handle.dataset.recordId;
         const field = handle.dataset.dragField;
         const input = grid.querySelector(`input[data-record-id="${id}"][data-field="${field}"]`);
         _dragField   = field;
@@ -1150,13 +1206,13 @@
       });
 
       document.addEventListener('mouseup', () => {
-        _dragging = false;
-        _dragField = null;
+        _dragging    = false;
+        _dragField   = null;
         _dragStartId = null;
       }, { once: true });
     }
 
-    // Save All
+    // FIX 5: Save All — sends dirty records in batches of 10, handles all field types
     const saveAllBtn = p.querySelector('#life-save-all-btn');
     if (saveAllBtn) {
       saveAllBtn.addEventListener('click', async () => {
@@ -1167,8 +1223,14 @@
         if (statusEl) statusEl.textContent = `Saving ${updates.length} rows…`;
         saveAllBtn.disabled = true;
 
+        const NUM_FIELDS  = [
+          'year','month','financial_earn','knowledge_earn','happiness_factor','health',
+          'relationship','creation','achievement','a_impact','failure','f_impact',
+          'travel','t_impact','hobby','h_impact'
+        ];
+        const TEXT_FIELDS = ['name','location','decision','tags','story','people'];
+
         const errors = [];
-        // Batch in groups of 10
         for (let i = 0; i < updates.length; i += 10) {
           const batch = updates.slice(i, i + 10);
           try {
@@ -1181,20 +1243,14 @@
               const err = await res.text();
               errors.push(err);
             } else {
-              // Apply saved values to in-memory records
+              // Apply saved values back to in-memory records
               for (const u of batch) {
-                const numFields = [
-                  'year','month','financial_earn','knowledge_earn','happiness_factor','health',
-                  'relationship','creation','achievement','a_impact','failure','f_impact',
-                  'travel','t_impact','hobby','h_impact'
-                ];
-                const textFields = ['name','location','decision','tags','story','people'];
                 const rec = _allRecords.find(r => r.id === u.id)
                   || (_monthRecords[_entryYear] || []).find(r => r.id === u.id);
                 if (rec) {
                   for (const [k, v] of Object.entries(u.fields)) {
-                    if (numFields.includes(k)) rec[k] = v ? Number(v) : null;
-                    if (textFields.includes(k)) rec[k] = v || null;
+                    if (NUM_FIELDS.includes(k))  rec[k] = v !== '' && v != null ? Number(v) : null;
+                    if (TEXT_FIELDS.includes(k)) rec[k] = v || null;
                   }
                 }
               }
@@ -1209,9 +1265,12 @@
         saveAllBtn.disabled = false;
 
         if (errors.length === 0) {
-          if (statusEl) { statusEl.textContent = 'Saved ✓'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
+          if (statusEl) {
+            statusEl.textContent = 'Saved ✓';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+          }
         } else {
-          if (statusEl) statusEl.textContent = `${errors.length} error(s)`;
+          if (statusEl) statusEl.textContent = `${errors.length} error(s): ${errors[0]}`;
         }
 
         renderPanel();
@@ -1222,7 +1281,6 @@
   // ── Init ──
   async function init() {
     if (_initialized) {
-      // Re-run loadAndRender on every activation per L107 pattern
       await loadData();
       renderPanel();
       return;
