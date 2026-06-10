@@ -208,6 +208,19 @@ L193  story_refs field: singleLineText in LifeTimeline. Stores comma-separated A
       Clicking a node fetches /api/diary/{id} on demand. Content cached in _ideasCache
       for session reuse. Display shows [Ideas · Story] badge + title + content.
 
+L203  Life story_refs PATCH: always read-append-write. Never overwrite. Read current value
+      from Airtable first, append new ID, deduplicate, write merged string.
+      story_refs field auto-created via ensureStoryRefsField() on first PATCH that touches it.
+
+L202  Life Experience collapsed: hobby/travel/creation are number fields — count as 1 point
+      each if non-null/non-zero. Never comma-split a number field. Only text fields get
+      comma-split counting. NaN in any collapsed cell = this rule was violated.
+
+L201  Life panel scroll chain: #panel-life.active needs height:100%; overflow:hidden injected
+      by the injector if global.css .route-panel does not supply it. .life-entry-body needs
+      both overflow:hidden AND min-height:0. .life-grid-wrap needs min-height:0.
+      Every flex ancestor of .life-grid-wrap must allow shrinking below content height.
+
 L200  Life Entry View collapsed summaries (final):
       Performance = financial_earn % of dataset max + achievement bonus, display as %.
       Strength = weighted % across happiness/health/relationship/skill (each 25%).
