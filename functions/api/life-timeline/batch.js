@@ -41,7 +41,11 @@ const TEXT_FIELDS = ['name','location','decision','tags','story','people','story
 
 function buildFields(raw) {
   const fields = {};
-  for (const f of NUM_FIELDS)  if (raw[f] != null) fields[f] = Number(raw[f]);
+  for (const f of NUM_FIELDS) {
+    if (raw[f] == null || raw[f] === '') continue;   // skip null/undefined/empty — leave field unchanged
+    const n = Number(raw[f]);
+    if (!isNaN(n)) fields[f] = n;                    // skip NaN — never write invalid numbers to Airtable
+  }
   for (const f of TEXT_FIELDS) if (raw[f] != null) fields[f] = raw[f];
   return fields;
 }

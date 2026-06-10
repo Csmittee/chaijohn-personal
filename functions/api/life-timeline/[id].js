@@ -4,26 +4,24 @@ const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'LifeTimeline';
 const META    = 'https://api.airtable.com/v0/meta/bases';
 
-// Idempotent: creates story_refs field if it does not exist (L203)
-let _storyRefsEnsured = false;
+// Returns true if story_refs field confirmed to exist (or was just created).
+// Returns false if Meta API unavailable — caller degrades gracefully.
 async function ensureStoryRefsField(apiKey) {
-  if (_storyRefsEnsured) return;
   try {
-    const res  = await fetch(`${META}/${BASE_ID}/tables`, { headers: { Authorization: `Bearer ${apiKey}` } });
-    if (!res.ok) return;
+    const res = await fetch(`${META}/${BASE_ID}/tables`, { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (!res.ok) return false;
     const data  = await res.json();
     const table = (data.tables || []).find(t => t.name === TABLE);
-    if (!table) return;
+    if (!table) return false;
     const exists = (table.fields || []).some(f => f.name === 'story_refs');
-    if (!exists) {
-      await fetch(`${META}/${BASE_ID}/tables/${table.id}/fields`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'story_refs', type: 'singleLineText' })
-      });
-    }
-    _storyRefsEnsured = true;
-  } catch (_) { /* non-fatal */ }
+    if (exists) return true;
+    const cr = await fetch(`${META}/${BASE_ID}/tables/${table.id}/fields`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'story_refs', type: 'singleLineText' })
+    });
+    return cr.ok;
+  } catch (_) { return false; }
 }
 
 function flat(r) {
@@ -80,28 +78,34 @@ export async function onRequestPatch(context) {
     if (body[f] != null) fields[f] = body[f];
   }
 
-  // story_refs: ensure field exists, then append-only merge (L203)
+  // story_refs: ensure field exists (returns bool), then append-only merge (L203)
+  // If ensureStoryRefsField returns false (Meta API unavailable), skip story_refs
+  // entirely — never let a missing schema field 500 the whole PATCH.
+  let storyRefsWarning = null;
   if (body.story_refs != null) {
-    await ensureStoryRefsField(env.AIRTABLE_API_KEY);
-    try {
-      const fetchRes = await fetch(
-        `https://api.airtable.com/v0/${BASE_ID}/${TABLE}/${id}`,
-        { headers: { Authorization: `Bearer ${env.AIRTABLE_API_KEY}` } }
-      );
-      let existingStr = '';
-      if (fetchRes.ok) {
-        const currentRecord = await fetchRes.json();
-        existingStr = currentRecord.fields.story_refs || '';
+    const fieldReady = await ensureStoryRefsField(env.AIRTABLE_API_KEY);
+    if (!fieldReady) {
+      storyRefsWarning = 'story_refs field could not be confirmed — skipped';
+    } else {
+      try {
+        const fetchRes = await fetch(
+          `https://api.airtable.com/v0/${BASE_ID}/${TABLE}/${id}`,
+          { headers: { Authorization: `Bearer ${env.AIRTABLE_API_KEY}` } }
+        );
+        let existingStr = '';
+        if (fetchRes.ok) {
+          const currentRecord = await fetchRes.json();
+          existingStr = currentRecord.fields.story_refs || '';
+        }
+        const existingIds = existingStr.split(',').map(s => s.trim()).filter(Boolean);
+        const incomingIds = body.story_refs.split(',').map(s => s.trim()).filter(Boolean);
+        for (const inId of incomingIds) {
+          if (!existingIds.includes(inId)) existingIds.push(inId);
+        }
+        fields.story_refs = existingIds.join(',');
+      } catch (err) {
+        fields.story_refs = body.story_refs;
       }
-      const existingIds = existingStr.split(',').map(s => s.trim()).filter(Boolean);
-      const incomingIds = body.story_refs.split(',').map(s => s.trim()).filter(Boolean);
-      for (const inId of incomingIds) {
-        if (!existingIds.includes(inId)) existingIds.push(inId);
-      }
-      fields.story_refs = existingIds.join(',');
-    } catch (err) {
-      // If fetch fails, fall back to setting directly
-      fields.story_refs = body.story_refs;
     }
   }
 
@@ -110,11 +114,15 @@ export async function onRequestPatch(context) {
     fields.name = String(fields.year);
   }
 
-  if (Object.keys(fields).length === 0) return errorResponse('No fields to update');
+  if (Object.keys(fields).length === 0) {
+    return storyRefsWarning
+      ? errorResponse(storyRefsWarning, 422)
+      : errorResponse('No fields to update');
+  }
 
   try {
     const record = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, id, fields);
-    return jsonResponse({ record: flat(record) });
+    return jsonResponse({ record: flat(record), warning: storyRefsWarning });
   } catch (err) {
     return errorResponse(err.message, 500);
   }
