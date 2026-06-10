@@ -5,6 +5,25 @@
 
 ---
 
+L190 — Life Timeline life_score formula: normalize financial across dataset min/max to −10/+10.
+        Normalize 1–10 fields to −10/+10. Weight: happiness×3, health×2, relationship×1.5,
+        achievement weighted by a_impact, failure weighted by f_impact (negative). Clamp −10/+10.
+        Recompute on every data load — never cache or store in Airtable.
+
+L189 — Life Timeline entry view: spreadsheet-style grid, groups collapsible (Performance,
+        Emotional, Hobby, Story). All numeric inputs use type="text" inputmode="numeric" (L133).
+        Drag-fill down to copy value across rows. One batch Save All — never per-row saves.
+        No spinner arrows. No single-field form modals.
+
+L188 — Life Timeline connections: MindMapEdges.from_id and to_id can hold LifeTimeline
+        record IDs as well as MindMapNode IDs. This is the universal connection system
+        across time and the present moment. Never create a separate LifeConnections table.
+
+L187 — Life Timeline panel: route=life, panel=#panel-life,
+        injector=life.injector.js. Airtable table: LifeTimeline (year 1972–2037 pre-seeded).
+        No life_score field in Airtable — computed client-side on every load.
+        Connections to MindMapNodes use existing MindMapEdges table — no new connection table.
+
 L186 — Utility billing month ≠ payment date: when auto-writing utility charges from a
         Transaction, always use the billing month (which period the bill covers), NOT the
         transaction date (when the owner paid). Bills are paid in arrears — paying June 5th
