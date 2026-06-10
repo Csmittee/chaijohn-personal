@@ -208,6 +208,18 @@ L193  story_refs field: singleLineText in LifeTimeline. Stores comma-separated A
       Clicking a node fetches /api/diary/{id} on demand. Content cached in _ideasCache
       for session reuse. Display shows [Ideas · Story] badge + title + content.
 
+L197  Life Entry View year column: shows year + age on two lines in sticky left cell.
+      Age = row.year − 1971. Always integer. Never NaN. Age styled dim + small below year.
+      For Month View rows, age = _entryYear − 1971 (same for all rows in that view).
+
+L196  Life Entry View collapsed cells: each group shows a meaningful summary, not a raw field count.
+      Performance = achievement item count (N▸). Strength = weighted % score across 4 fields
+      (happiness, health, relationship, skill each 25%). Experience = Xh Yt Zc item counts.
+      Story = N entries count.
+
+L195  Life Entry View groups: Performance, Strength (was Emotional), Experience (was Hobby), Story.
+      knowledge_earn field label = Skill in UI only. Airtable field key unchanged.
+
 L194  Month View inheritance: when a month-level entry field is empty and a year-level record
       exists for that year, the year's value appears as a dimmed placeholder (opacity:0.35, italic)
       via HTML placeholder attribute — never as value. Empty input with placeholder = not sent to API.
