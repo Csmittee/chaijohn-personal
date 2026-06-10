@@ -318,6 +318,7 @@
 
     toggleBlogSection(f.entry_type === 'Blog');
     toggleDistSection(f.entry_type || 'Story');
+    toggleMountToLife();
     updateImageDisplay();
     originalState = captureState();
     setEditorButtons(true);
@@ -351,6 +352,7 @@
 
     toggleBlogSection(false);
     toggleDistSection('Story');
+    toggleMountToLife();
     updateImageDisplay();
     setEditorButtons(false);
     if (isPreviewMode) setEditMode();
@@ -437,6 +439,94 @@
     updateImageDisplay();
 
     if (isPreviewMode) setEditMode();
+  }
+
+  /* ────────────────────────────────────────────
+     MOUNT TO LIFE
+  ──────────────────────────────────────────── */
+
+  function toggleMountToLife() {
+    var sec = el('ideas-mount-section');
+    if (!sec) return;
+    var typeSelect = el('ideas-type');
+    var isStory  = typeSelect && typeSelect.value === 'Story';
+    var isSaved  = !!currentEntryId;
+    sec.style.display = (isStory && isSaved) ? 'block' : 'none';
+  }
+
+  function mountToLife() {
+    var yearVal  = (el('ideas-mount-year')  || {}).value || '';
+    var monthVal = (el('ideas-mount-month') || {}).value || '';
+    var status   = el('ideas-mount-status');
+
+    var year  = parseInt(yearVal, 10);
+    var month = monthVal ? parseInt(monthVal, 10) : null;
+
+    if (!year || year < 1972 || year > 2037) {
+      if (status) status.textContent = 'Year must be 1972–2037';
+      return;
+    }
+    if (month !== null && (isNaN(month) || month < 1 || month > 12)) {
+      if (status) status.textContent = 'Month must be 1–12';
+      return;
+    }
+    if (!currentEntryId) {
+      if (status) status.textContent = 'Save entry first';
+      return;
+    }
+
+    var btn = el('ideas-mount-btn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Mounting…';
+
+    /* Find matching life-timeline record */
+    var filter = month
+      ? '?year=' + year
+      : '?year=' + year;
+
+    api('/api/life-timeline' + filter).then(function (res) {
+      return res.json();
+    }).then(function (data) {
+      var records = data.records || [];
+      var target  = null;
+
+      if (month) {
+        target = records.find(function (r) { return r.month === month; }) || null;
+      } else {
+        target = records.find(function (r) { return !r.month; }) || null;
+      }
+
+      if (!target) {
+        /* Create the record */
+        var body = { year: year };
+        if (month) body.month = month;
+        return api('/api/life-timeline', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          return d.record;
+        });
+      }
+      return target;
+    }).then(function (record) {
+      if (!record || !record.id) throw new Error('No record');
+      /* PATCH story_refs — append currentEntryId */
+      return api('/api/life-timeline/' + record.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ story_refs: currentEntryId })
+      });
+    }).then(function (res) {
+      return res.json();
+    }).then(function () {
+      if (status) status.textContent = 'Mounted ✓';
+      showFlash('Mounted to Life ' + year + (month ? '/' + month : ''));
+      setTimeout(function () { if (status) status.textContent = ''; }, 3000);
+    }).catch(function (e) {
+      if (status) status.textContent = 'Error: ' + e.message;
+      showFlash('Mount failed: ' + e.message, 'error');
+    }).finally(function () {
+      if (btn) btn.disabled = false;
+    });
   }
 
   /* ────────────────────────────────────────────
@@ -574,6 +664,7 @@
           }
           originalState = captureState();
           setEditorButtons(!!currentEntryId);
+          toggleMountToLife();
           clearAiUndo();
           hideAiComparison();
           return loadEntryList();
@@ -852,8 +943,13 @@
       typeSelect.addEventListener('change', function () {
         toggleBlogSection(typeSelect.value === 'Blog');
         toggleDistSection(typeSelect.value);
+        toggleMountToLife();
       });
     }
+
+    /* ── Mount to Life ── */
+    var mountBtn = el('ideas-mount-btn');
+    if (mountBtn) mountBtn.addEventListener('click', mountToLife);
 
     /* ── Publish toggle → refresh dist section link visibility ── */
     var pubToggle = el('ideas-publish-toggle');

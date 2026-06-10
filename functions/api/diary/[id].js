@@ -5,6 +5,22 @@ const BUSINESS_BASE_ID_FALLBACK = 'appMBjlfYyVd8I7ML';
 const TABLE = 'Diary';
 const BLOGS_TABLE = 'Blogs';
 
+export async function onRequestGet(context) {
+  const { env, params } = context;
+  const recordId = params.id;
+  if (!recordId) return errorResponse('Record ID is required');
+  try {
+    const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${TABLE}/${recordId}`, {
+      headers: { Authorization: `Bearer ${env.AIRTABLE_API_KEY}` }
+    });
+    if (!res.ok) return errorResponse(`Airtable error ${res.status}`, res.status);
+    const record = await res.json();
+    return jsonResponse({ record });
+  } catch (err) {
+    return errorResponse(err.message, 500);
+  }
+}
+
 export async function onRequestPatch(context) {
   const { env, request, params } = context;
   const recordId = params.id;

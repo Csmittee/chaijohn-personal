@@ -2,17 +2,18 @@
 (function () {
   'use strict';
 
-  const ROUTE = 'life';
+  const ROUTE    = 'life';
   const PANEL_ID = 'panel-life';
 
   // ── Module state ──
-  let _initialized = false;
-  let _allRecords  = [];       // year-level rows
-  let _monthRecords = {};      // { year: [rows] }
-  let _edges       = [];       // MindMapEdges
-  let _lifeScores  = {};       // { recordId: score }
-  let _finMin      = 0;
-  let _finMax      = 0;
+  let _initialized    = false;
+  let _allRecords     = [];       // year-level rows (month=null)
+  let _allVisitRecords = [];      // month rows with location (visit dots in Life View)
+  let _monthRecords   = {};       // { year: [rows] } for Entry View Month mode
+  let _edges          = [];       // MindMapEdges
+  let _lifeScores     = {};       // { recordId: score }
+  let _finMin         = 0;
+  let _finMax         = 0;
 
   // View state
   let _mode        = 'life';   // 'life' | 'entry'
@@ -21,7 +22,10 @@
   let _activeLines = { financial: true, happiness: false, health: false, lifescore: false };
   let _scale       = 'full';   // 'full' | '10yr'
   let _yearOffset  = 0;
-  let _activeStory = null;     // record id of open story
+  let _activeStory = null;     // record id of open year story
+  let _activeRefId = null;     // Ideas diary record ID shown in story panel
+  let _ideasCache  = {};       // { diaryRecordId: {id, fields:{}} } for on-demand fetch
+  let _yearRecord  = null;     // year-level record for Month View inheritance
 
   // Dirty tracking for Save All
   let _dirty       = {};       // { recordId: { fieldName: value, ... } }
@@ -31,13 +35,24 @@
   let _dragValue     = null;
   let _dragging      = false;
   let _dragStartId   = null;
-  let _preDragDirty  = null;   // snapshot for Escape cancel
-  let _dragFilledIds = [];     // record IDs written during active drag
-  let _dragStopFn    = null;   // cleanup fn registered on mousedown
+  let _preDragDirty  = null;
+  let _dragFilledIds = [];
+  let _dragStopFn    = null;
+
+  // Location palette (6-8 distinct colors, no library)
+  const LOC_COLORS = [
+    '#3b82f6','#22c55e','#f59e0b','#ec4899',
+    '#8b5cf6','#06b6d4','#a3e635','#f97316'
+  ];
+
+  function locColor(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0x7fffffff;
+    return LOC_COLORS[h % LOC_COLORS.length];
+  }
 
   function panel() { return document.getElementById(PANEL_ID); }
 
-  // ── Escape helper — prevents broken HTML attributes ──
   function escapeAttr(v) {
     if (v == null) return '';
     return String(v)
@@ -85,12 +100,10 @@
         transition:all 0.15s;
       }
       .life-mode-btn.active {
-        background:rgba(245,197,24,0.12); border-color:var(--yellow);
-        color:var(--yellow);
+        background:rgba(245,197,24,0.12); border-color:var(--yellow); color:var(--yellow);
       }
 
       /* ── Life View ── */
-      /* FIX 3: overflow-y:auto allows SVG + story panel to scroll naturally */
       .life-view-body { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
       .life-graph-controls {
         display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
@@ -122,16 +135,12 @@
         color:var(--text-dim); font-size:0.85rem; padding:0.1rem 0.4rem; cursor:pointer; }
       .life-scale-nav:hover { border-color:var(--yellow); color:var(--yellow); }
 
-      /* FIX 2: min-width:100% so canvas fills all available width */
       .life-svg-wrap {
         padding:0 1.5rem; flex-shrink:0;
         overflow:visible; width:100%; min-width:100%;
         box-sizing:border-box;
       }
-      .life-svg-wrap svg {
-        overflow:visible; display:block;
-        width:100%; min-width:100%;
-      }
+      .life-svg-wrap svg { overflow:visible; display:block; width:100%; min-width:100%; }
 
       .life-tooltip {
         position:fixed; background:var(--bg-raised); border:1px solid var(--border-strong);
@@ -212,7 +221,7 @@
       .life-grid-wrap { flex:1; overflow:auto; padding:0 1.5rem 1.5rem; }
       .life-grid-table { border-collapse:collapse; font-size:0.75rem; min-width:900px; width:100%; }
 
-      /* FIX 1: two sticky header rows */
+      /* Two sticky header rows */
       .life-grid-table thead tr:first-child th {
         font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim);
         font-weight:600; padding:0.28rem 0.5rem;
@@ -251,6 +260,8 @@
       .life-grid-input:focus { background:var(--bg-raised); border-color:var(--yellow);
         box-shadow:0 0 0 2px rgba(245,197,24,0.15); cursor:text; }
       .life-grid-input.dirty { background:rgba(245,197,24,0.08); }
+      .life-grid-input::placeholder { opacity:0.35; font-style:italic; font-weight:400; }
+
       .life-grid-text-input {
         width:100%; min-width:110px; background:transparent; border:1px solid transparent;
         border-radius:3px; padding:0.18rem 0.3rem; font-size:0.73rem; color:var(--text);
@@ -258,6 +269,7 @@
       }
       .life-grid-text-input:focus { background:var(--bg-raised); border-color:var(--yellow); cursor:text; }
       .life-grid-text-input.dirty { background:rgba(245,197,24,0.08); }
+      .life-grid-text-input::placeholder { opacity:0.35; font-style:italic; }
 
       /* Drag fill handle */
       .life-drag-handle {
@@ -339,9 +351,7 @@
   function buildLifeScores(records) {
     buildFinancialRange(records);
     _lifeScores = {};
-    for (const r of records) {
-      _lifeScores[r.id] = computeLifeScore(r);
-    }
+    for (const r of records) _lifeScores[r.id] = computeLifeScore(r);
   }
 
   // ── Data fetch ──
@@ -353,7 +363,9 @@
 
     if (ltRes.status === 'fulfilled') {
       const records = ltRes.value.records || [];
-      _allRecords = records.filter(r => !r.month);
+      _allRecords      = records.filter(r => !r.month);
+      // Capture month rows that have a location for visit dots in Life View
+      _allVisitRecords = records.filter(r => r.month && r.location);
     }
 
     if (edgeRes.status === 'fulfilled') {
@@ -364,13 +376,15 @@
   }
 
   async function loadMonthData(year) {
+    // Set year record for Month View inheritance display
+    _yearRecord = _allRecords.find(r => r.year === year) || null;
+
     if (_monthRecords[year]) return;
     const res  = await fetch(`/api/life-timeline?year=${year}`);
     const data = await res.json();
     const months = (data.records || []).filter(r => r.month != null);
     _monthRecords[year] = months;
 
-    // Auto-create missing months
     if (months.length === 0) {
       const created = [];
       for (let m = 1; m <= 12; m++) {
@@ -401,7 +415,7 @@
       if (sc > peakScore) { peakScore = sc; peakYear = r.year ? String(r.year) : '—'; }
     }
 
-    const lifeIds = new Set(_allRecords.map(r => r.id));
+    const lifeIds  = new Set(_allRecords.map(r => r.id));
     const connCount = _edges.filter(e => lifeIds.has(e.from_id) || lifeIds.has(e.to_id)).length;
 
     return `
@@ -433,9 +447,7 @@
   function getVisibleYears() {
     const curYear = new Date().getFullYear();
     const dataMax = Math.max(2037, curYear + 1);
-    if (_scale === 'full') {
-      return { start: 1972, end: dataMax };
-    }
+    if (_scale === 'full') return { start: 1972, end: dataMax };
     const center = 1972 + _yearOffset * 5;
     return { start: center, end: center + 9 };
   }
@@ -444,31 +456,31 @@
     const { start, end } = getVisibleYears();
     const yearRange = end - start + 1;
 
-    // FIX 2: wider SVG_W so full-life view spreads across screen
     const SVG_W    = _scale === '10yr' ? 900 : 1400;
-    // FIX 3: taller SVG with more bottom margin to clearly show location dots
-    const SVG_H    = 460;
+    const SVG_H    = 480;
     const MARGIN_L = 30;
     const MARGIN_R = 20;
     const MARGIN_T = 55;
-    const MARGIN_B = 130;  // generous space below baseline for branches, dots, labels
+    const MARGIN_B = 140;
     const GRAPH_W  = SVG_W - MARGIN_L - MARGIN_R;
     const GRAPH_H  = SVG_H - MARGIN_T - MARGIN_B;
     const BASELINE_Y = MARGIN_T + GRAPH_H / 2;
+
+    // Layout constants
+    const SWIMLANE_Y   = BASELINE_Y + 110; // Below failure branches (max ~+88+label)
+    const BAR_H        = 18;
+    const VISIT_DOT_Y  = MARGIN_T - 15;    // Above all curves, near top of SVG
+    const STEP_W       = GRAPH_W / Math.max(1, yearRange - 1);
 
     const visible = _allRecords.filter(r => r.year >= start && r.year <= end);
 
     function yearToX(y) {
       return MARGIN_L + ((y - start) / Math.max(1, end - start)) * GRAPH_W;
     }
-
     function scoreToY(val, range) {
-      const maxDev = range;
-      return BASELINE_Y - (val / maxDev) * (GRAPH_H / 2 - 8);
+      return BASELINE_Y - (val / range) * (GRAPH_H / 2 - 8);
     }
-
     function buildPath(points) {
-      if (points.length < 2) return '';
       const filtered = points.filter(p => p.val != null && !isNaN(p.val));
       if (filtered.length < 2) return '';
       let d = '';
@@ -504,22 +516,17 @@
 
     // Year nodes
     const nodeCircles = visible.map(r => {
-      const score   = _lifeScores[r.id] || 0;
-      const color   = score > 3 ? '#22c55e' : (score < -3 ? '#ef4444' : 'rgba(232,232,240,0.35)');
+      const score    = _lifeScores[r.id] || 0;
+      const color    = score > 3 ? '#22c55e' : (score < -3 ? '#ef4444' : 'rgba(232,232,240,0.35)');
       const hasStory = r.story ? ' life-node-pulse' : '';
-      const cx      = yearToX(r.year).toFixed(1);
-      const cy      = BASELINE_Y.toFixed(1);
-      // FIX 4: full location string in tooltip (no slice)
-      const ttData  = JSON.stringify({
-        year:  r.year,
-        loc:   r.location || '',
-        score: score.toFixed(1),
-        tags:  r.tags || ''
+      const cx       = yearToX(r.year).toFixed(1);
+      const cy       = BASELINE_Y.toFixed(1);
+      const ttData   = JSON.stringify({
+        year: r.year, loc: r.location || '', score: score.toFixed(1), tags: r.tags || ''
       }).replace(/"/g, '&quot;');
       return `<circle class="life-year-node${hasStory}" cx="${cx}" cy="${cy}" r="4"
         fill="${color}" stroke="var(--bg)" stroke-width="1.5"
-        data-id="${r.id}" data-tt="${ttData}"
-        style="cursor:pointer"/>`;
+        data-id="${r.id}" data-tt="${ttData}" style="cursor:pointer"/>`;
     }).join('\n');
 
     // Branch stems
@@ -562,67 +569,101 @@
       return segs;
     }).join('\n');
 
-    // FIX 3: location dots — correct prevX tracking for same-location spans
-    // FIX 4: show up to 30 chars in SVG text label (tooltip already shows full string)
-    const locationDots = (() => {
-      const segs   = [];
-      let prevLoc  = null;
-      let prevX    = null;
-      let spanStart = null;
-      const DOT_Y  = BASELINE_Y + 48;
+    // ── L191: Location display ──
+    // STAYS (year-level rows): swimlane colored bars below the curve
+    const stayBars = (() => {
+      const segs = [];
+      let runLoc = null, runStartYear = null, runEndYear = null;
 
-      for (let i = 0; i < visible.length; i++) {
-        const r  = visible[i];
-        const cx = yearToX(r.year);
+      for (let i = 0; i <= visible.length; i++) {
+        const r   = i < visible.length ? visible[i] : null;
+        const loc = r ? r.location : null;
 
-        if (!r.location) {
-          // gap in location — close any open span
-          if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
-            segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
-              x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
-              stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
-          }
-          prevLoc   = null;
-          spanStart = null;
-          prevX     = null;
-          continue;
-        }
-
-        if (r.location === prevLoc) {
-          // Same location: extend span, update prevX
-          prevX = cx;
+        if (loc && loc === runLoc) {
+          runEndYear = r.year;
         } else {
-          // New location: close previous span if multi-year
-          if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
-            segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
-              x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
-              stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
+          if (runLoc) {
+            const x1    = yearToX(runStartYear);
+            const x2    = yearToX(runEndYear) + STEP_W * 0.7;
+            const w     = Math.max(6, x2 - x1);
+            const color = locColor(runLoc);
+            const years = runEndYear - runStartYear + 1;
+            const label = runLoc.slice(0, 22);
+            const midX  = (x1 + x2) / 2;
+            const ttData = JSON.stringify({ loc: runLoc, from: runStartYear, to: runEndYear, years })
+              .replace(/"/g, '&quot;');
+            const fits = w > 55;
+            segs.push(`
+              <rect x="${x1.toFixed(1)}" y="${SWIMLANE_Y.toFixed(1)}"
+                width="${w.toFixed(1)}" height="${BAR_H}"
+                rx="3" fill="${color}" opacity="0.18"
+                stroke="${color}" stroke-width="1" stroke-opacity="0.6"
+                data-stay-tt="${ttData}" style="cursor:pointer"/>
+              ${fits
+                ? `<text x="${midX.toFixed(1)}" y="${(SWIMLANE_Y + 12).toFixed(1)}"
+                    text-anchor="middle" font-size="8" fill="${color}"
+                    font-family="'IBM Plex Mono',monospace"
+                    pointer-events="none">${escapeAttr(label)}</text>`
+                : `<text x="${(x1 - 3).toFixed(1)}" y="${(SWIMLANE_Y + 12).toFixed(1)}"
+                    text-anchor="end" font-size="8" fill="${color}"
+                    font-family="'IBM Plex Mono',monospace"
+                    pointer-events="none">${escapeAttr(label)}</text>`
+              }`);
           }
-          // Draw dot + label for new location (FIX 4: show up to 30 chars, tooltip shows full)
-          const labelText = r.location.slice(0, 30);
-          segs.push(`<circle cx="${cx.toFixed(1)}" cy="${DOT_Y.toFixed(1)}" r="3.5"
-            fill="#f97316" opacity="0.85"/>
-          <text x="${cx.toFixed(1)}" y="${(DOT_Y + 13).toFixed(1)}"
-            text-anchor="middle" font-size="9" fill="#f97316" opacity="0.85"
-            font-family="'IBM Plex Mono',monospace">${escapeAttr(labelText)}</text>`);
-          prevLoc   = r.location;
-          spanStart = cx;
-          prevX     = cx;
+          runLoc = loc ? loc : null;
+          runStartYear = loc ? r.year : null;
+          runEndYear   = loc ? r.year : null;
         }
       }
-      // Close trailing span
-      if (prevLoc && spanStart != null && prevX != null && prevX > spanStart) {
-        segs.push(`<line x1="${spanStart.toFixed(1)}" y1="${DOT_Y.toFixed(1)}"
-          x2="${prevX.toFixed(1)}" y2="${DOT_Y.toFixed(1)}"
-          stroke="#f97316" stroke-width="2" opacity="0.4"/>`);
+      return segs.join('\n');
+    })();
+
+    // VISITS (month-level rows with location): small orange dots above baseline
+    const visitDots = (() => {
+      const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const inView  = _allVisitRecords.filter(r => r.year >= start && r.year <= end);
+      return inView.map(r => {
+        const cx     = yearToX(r.year);
+        const ttData = JSON.stringify({ loc: r.location, month: MONTHS[r.month] || r.month, year: r.year })
+          .replace(/"/g, '&quot;');
+        return `<circle cx="${cx.toFixed(1)}" cy="${VISIT_DOT_Y.toFixed(1)}" r="4"
+          fill="#f97316" opacity="0.7"
+          data-visit-tt="${ttData}" style="cursor:pointer"/>`;
+      }).join('\n');
+    })();
+
+    // ── story_refs: purple square nodes above year node, on-demand fetch ──
+    const storyRefNodes = (() => {
+      const segs = [];
+      for (const r of visible) {
+        if (!r.story_refs) continue;
+        const refs = r.story_refs.split(',').map(s => s.trim()).filter(Boolean);
+        if (!refs.length) continue;
+        const cx         = yearToX(r.year);
+        const stemBottomY = BASELINE_Y - 12;
+        const totalH      = 30 + refs.length * 14;
+        segs.push(`<line x1="${cx.toFixed(1)}" y1="${stemBottomY.toFixed(1)}"
+          x2="${cx.toFixed(1)}" y2="${(stemBottomY - totalH).toFixed(1)}"
+          stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="2 2"
+          pointer-events="none"/>`);
+        refs.forEach((refId, idx) => {
+          const sqY    = stemBottomY - 30 - idx * 14;
+          const ttText = `Story ref ${idx + 1} of ${refs.length} · click to view`;
+          segs.push(`<rect x="${(cx - 3).toFixed(1)}" y="${sqY.toFixed(1)}"
+            width="6" height="6" rx="1"
+            fill="#8b5cf6" opacity="0.8"
+            data-story-ref-id="${escapeAttr(refId)}"
+            data-story-ref-tt="${escapeAttr(ttText)}"
+            style="cursor:pointer"/>`);
+        });
       }
       return segs.join('\n');
     })();
 
     // Connection arcs
-    const lifeIds     = new Set(_allRecords.map(r => r.id));
+    const lifeIds      = new Set(_allRecords.map(r => r.id));
     const lifeIdToYear = Object.fromEntries(_allRecords.map(r => [r.id, r.year]));
-    const arcColors   = { led_to: '#22c55e', failed_to: '#ef4444', inspired_by: '#f5c518' };
+    const arcColors    = { led_to: '#22c55e', failed_to: '#ef4444', inspired_by: '#f5c518' };
     const arcs = _edges
       .filter(e => lifeIds.has(e.from_id) && lifeIds.has(e.to_id))
       .filter(e => {
@@ -638,9 +679,8 @@
         const arcH  = Math.abs(x2 - x1) * 0.4;
         const midX  = (x1 + x2) / 2;
         const color = arcColors[e.edge_type] || 'rgba(255,255,255,0.2)';
-        const ttData = JSON.stringify({
-          from: y1, to: y2, type: e.edge_type, label: e.label || ''
-        }).replace(/"/g, '&quot;');
+        const ttData = JSON.stringify({ from: y1, to: y2, type: e.edge_type, label: e.label || '' })
+          .replace(/"/g, '&quot;');
         return `<path d="M${x1.toFixed(1)} ${(BASELINE_Y - 10).toFixed(1)}
             Q ${midX.toFixed(1)} ${(BASELINE_Y - 10 - arcH).toFixed(1)}
             ${x2.toFixed(1)} ${(BASELINE_Y - 10).toFixed(1)}"
@@ -684,10 +724,19 @@
 
     const scaleNav = _scale === '10yr' ? `
       <button class="life-scale-nav" id="life-prev-decade">‹</button>
-      <button class="life-scale-nav" id="life-next-decade">›</button>
-    ` : '';
+      <button class="life-scale-nav" id="life-next-decade">›</button>` : '';
 
-    const storySection = _activeStory ? buildStoryHtml(_activeStory) : '';
+    // Story / Ideas ref panel
+    const storySection = _activeRefId
+      ? buildIdeasRefHtml(_activeRefId)
+      : (_activeStory ? buildStoryHtml(_activeStory) : '');
+
+    // Visit dots legend label (small)
+    const visitLegend = _allVisitRecords.length > 0
+      ? `<text x="${MARGIN_L.toFixed(1)}" y="${VISIT_DOT_Y.toFixed(1)}"
+          font-size="8" fill="#f97316" opacity="0.55"
+          font-family="'IBM Plex Mono',monospace">visits</text>`
+      : '';
 
     return `
       <div class="life-view-body">
@@ -708,8 +757,11 @@
             ${arcs}
             ${branches}
             ${lines.join('\n')}
+            ${storyRefNodes}
             ${nodeCircles}
-            ${locationDots}
+            ${stayBars}
+            ${visitDots}
+            ${visitLegend}
             ${axisLabels}
           </svg>
         </div>
@@ -717,6 +769,7 @@
       </div>`;
   }
 
+  // ── Story panel — year record ──
   function buildStoryHtml(id) {
     const r = _allRecords.find(r => r.id === id);
     if (!r) return '';
@@ -727,8 +780,8 @@
     const connHtml = relEdges.length === 0
       ? '<div style="font-size:0.82rem;color:var(--text-dim)">No connections yet.</div>'
       : relEdges.map(e => {
-        const otherId   = e.from_id === id ? e.to_id : e.from_id;
-        const otherRec  = _allRecords.find(r2 => r2.id === otherId);
+        const otherId    = e.from_id === id ? e.to_id : e.from_id;
+        const otherRec   = _allRecords.find(r2 => r2.id === otherId);
         const otherLabel = otherRec ? `${otherRec.year}` : otherId.slice(0, 8);
         return `<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.25rem">
           <span style="color:var(--text-dim);font-size:0.68rem">[${e.edge_type}]</span>
@@ -737,7 +790,6 @@
         </div>`;
       }).join('');
 
-    // FIX 4: location displayed in full, no truncation
     return `
       <div class="life-story-panel" id="life-story-panel">
         <div class="life-story-header">
@@ -791,12 +843,49 @@
       </div>`;
   }
 
+  // ── Ideas ref panel — on-demand fetched content ──
+  function buildIdeasRefHtml(refId) {
+    const entry = _ideasCache[refId];
+    if (!entry) {
+      return `<div class="life-story-panel" id="life-story-panel">
+        <div class="life-story-header">
+          <div class="life-story-year" style="font-size:1rem;color:#8b5cf6">Loading…</div>
+          <button class="life-story-close" id="life-story-close">✕ Close</button>
+        </div>
+      </div>`;
+    }
+    if (entry._error) {
+      return `<div class="life-story-panel" id="life-story-panel">
+        <div class="life-story-header">
+          <div><div class="life-story-year" style="font-size:1rem;color:#ef4444">Referenced story not available</div></div>
+          <button class="life-story-close" id="life-story-close">✕ Close</button>
+        </div>
+      </div>`;
+    }
+    const f = entry.fields || entry;
+    return `
+      <div class="life-story-panel" id="life-story-panel">
+        <div class="life-story-header">
+          <div>
+            <div class="life-story-year" style="font-size:1.1rem;color:#8b5cf6">${escapeAttr(f.title || 'Untitled')}</div>
+            <div class="life-story-meta">
+              <span style="background:rgba(139,92,246,0.15);color:#8b5cf6;padding:0.08rem 0.4rem;border-radius:4px;font-size:0.67rem;font-weight:600">Ideas · Story</span>
+              &nbsp;·&nbsp; ${f.date || ''}
+              ${f.tags ? `&nbsp;·&nbsp; ${escapeAttr(f.tags)}` : ''}
+            </div>
+          </div>
+          <button class="life-story-close" id="life-story-close">✕ Close</button>
+        </div>
+        <div class="life-story-section">
+          <div class="life-story-text">${escapeAttr(f.content || 'No content.')}</div>
+        </div>
+      </div>`;
+  }
+
   // ── Entry View ──
-  // FIX 1: exact labels from spec
   const GROUPS = [
     {
-      id: 'performance',
-      label: 'Performance',
+      id: 'performance', label: 'Performance',
       fields: [
         { key: 'financial_earn', label: 'Financial ฿', type: 'num' },
         { key: 'achievement',    label: 'Achievement', type: 'num' },
@@ -806,8 +895,7 @@
       ]
     },
     {
-      id: 'emotional',
-      label: 'Emotional',
+      id: 'emotional', label: 'Emotional',
       fields: [
         { key: 'happiness_factor', label: 'Happiness',    type: 'num' },
         { key: 'health',           label: 'Health',       type: 'num' },
@@ -816,8 +904,7 @@
       ]
     },
     {
-      id: 'hobby',
-      label: 'Hobby',
+      id: 'hobby', label: 'Hobby',
       fields: [
         { key: 'hobby',    label: 'Hobby',    type: 'num' },
         { key: 'h_impact', label: 'H.Impact', type: 'num' },
@@ -827,8 +914,7 @@
       ]
     },
     {
-      id: 'story',
-      label: 'Story',
+      id: 'story', label: 'Story',
       fields: [
         { key: 'decision', label: 'Decision', type: 'text' },
         { key: 'story',    label: 'Story',    type: 'text' },
@@ -854,8 +940,6 @@
     const dirtyCount = Object.keys(_dirty).length;
     const saveLabel  = dirtyCount > 0 ? `Save All (${dirtyCount})` : 'Save All';
 
-    const tableRows = buildGridRows(rows);
-
     return `
       <div class="life-entry-body">
         <div class="life-entry-controls">
@@ -869,18 +953,15 @@
           <table class="life-grid-table" id="life-grid-table">
             ${buildGridHeader()}
             <tbody id="life-grid-body">
-              ${tableRows}
+              ${buildGridRows(rows)}
             </tbody>
           </table>
         </div>
       </div>`;
   }
 
-  // FIX 1: two-row thead — row 1 = group toggles, row 2 = sticky field labels
   function buildGridHeader() {
     const yearLabel = _entryMode === 'month' ? 'Mo' : 'Year';
-
-    // Row 1: Year cell (rowspan=2) + group header toggle cells
     const groupRow = GROUPS.map(g => {
       const collapsed = _groupCollapsed[g.id];
       const span = collapsed ? 1 : g.fields.length;
@@ -891,7 +972,6 @@
       </th>`;
     }).join('');
 
-    // Row 2: empty year cell + per-field label cells for expanded groups, summary for collapsed
     const fieldLabelCells = GROUPS.flatMap(g => {
       if (_groupCollapsed[g.id]) {
         return [`<th style="text-align:center;min-width:40px"></th>`];
@@ -906,9 +986,7 @@
         <th rowspan="2" style="min-width:56px;position:sticky;left:0;background:var(--bg);z-index:5;vertical-align:bottom;border-bottom:1px solid var(--border)">${yearLabel}</th>
         ${groupRow}
       </tr>
-      <tr>
-        ${fieldLabelCells}
-      </tr>
+      <tr>${fieldLabelCells}</tr>
     </thead>`;
   }
 
@@ -928,25 +1006,37 @@
           const val        = row[f.key];
           const dirtyVal   = (_dirty[row.id] || {})[f.key];
           const displayVal = dirtyVal !== undefined ? dirtyVal : (val != null ? val : '');
-          const isDirty    = dirtyVal !== undefined;
+
+          // L194: inherited year value for empty month-mode cells
+          const inheritedVal = (
+            _entryMode === 'month' && _yearRecord && val == null && dirtyVal === undefined
+          ) ? (_yearRecord[f.key] != null ? _yearRecord[f.key] : null) : null;
+
+          const isDirty = dirtyVal !== undefined;
 
           if (f.type === 'num') {
-            // FIX 5: escapeAttr to handle any special chars safely
+            const placeholderAttr = (inheritedVal != null)
+              ? `placeholder="${escapeAttr(inheritedVal)}" data-has-inherited="1"`
+              : '';
             return `<td>
               <input type="text" inputmode="numeric" pattern="[0-9.\\-]*"
                 class="life-grid-input${isDirty ? ' dirty' : ''}"
                 data-record-id="${row.id}" data-field="${f.key}"
                 value="${escapeAttr(displayVal)}"
+                ${placeholderAttr}
                 title="${f.key}">
               <span class="life-drag-handle" data-drag-field="${f.key}" data-record-id="${row.id}"></span>
             </td>`;
           } else {
-            // FIX 5: text fields use escapeAttr for safe attribute values
+            const placeholderAttr = (inheritedVal != null)
+              ? `placeholder="${escapeAttr(inheritedVal)}" data-has-inherited="1"`
+              : '';
             return `<td>
               <input type="text"
                 class="life-grid-text-input${isDirty ? ' dirty' : ''}"
                 data-record-id="${row.id}" data-field="${f.key}"
                 value="${escapeAttr(displayVal)}"
+                ${placeholderAttr}
                 title="${f.key}">
             </td>`;
           }
@@ -1049,13 +1139,13 @@
 
     const tooltip = p.querySelector('#life-tooltip') || document.getElementById('life-tooltip');
     const svg = p.querySelector('#life-svg');
+
     if (svg) {
       svg.addEventListener('mousemove', e => {
         const node = e.target.closest('.life-year-node');
         if (node) {
           try {
             const tt = JSON.parse(node.dataset.tt.replace(/&quot;/g, '"'));
-            // FIX 4: full location shown in tooltip — tt.loc is already the full string
             tooltip.innerHTML = `<b>${tt.year}</b>${tt.loc ? `<br>📍 ${tt.loc}` : ''}${tt.score ? `<br>Score: ${tt.score}` : ''}${tt.tags ? `<br>${tt.tags}` : ''}`;
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX + 14) + 'px';
@@ -1074,13 +1164,72 @@
           } catch (_) {}
           return;
         }
+        // Swimlane stay bars
+        const stay = e.target.closest('[data-stay-tt]');
+        if (stay) {
+          try {
+            const tt = JSON.parse(stay.dataset.stayTt.replace(/&quot;/g, '"'));
+            const yrs = tt.from === tt.to ? String(tt.from) : `${tt.from}–${tt.to}`;
+            tooltip.innerHTML = `📍 ${tt.loc}<br>${yrs} · ${tt.years} yr${tt.years !== 1 ? 's' : ''}`;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 14) + 'px';
+            tooltip.style.top  = (e.clientY - 8) + 'px';
+          } catch (_) {}
+          return;
+        }
+        // Visit dots
+        const visit = e.target.closest('[data-visit-tt]');
+        if (visit) {
+          try {
+            const tt = JSON.parse(visit.dataset.visitTt.replace(/&quot;/g, '"'));
+            tooltip.innerHTML = `🔹 ${tt.loc}<br>${tt.month} ${tt.year} (visit)`;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 14) + 'px';
+            tooltip.style.top  = (e.clientY - 8) + 'px';
+          } catch (_) {}
+          return;
+        }
+        // Story ref squares
+        const refNode = e.target.closest('[data-story-ref-tt]');
+        if (refNode) {
+          tooltip.innerHTML = refNode.dataset.storyRefTt;
+          tooltip.style.display = 'block';
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top  = (e.clientY - 8) + 'px';
+          return;
+        }
         tooltip.style.display = 'none';
       });
+
       svg.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
 
       svg.addEventListener('click', e => {
+        // Story ref square node click → fetch Ideas entry on demand
+        const refSq = e.target.closest('[data-story-ref-id]');
+        if (refSq) {
+          const refId = refSq.dataset.storyRefId;
+          _activeRefId = refId;
+          _activeStory = null;
+          if (_ideasCache[refId]) {
+            renderPanel();
+          } else {
+            fetch(`/api/diary/${refId}`)
+              .then(r => r.json())
+              .then(data => {
+                _ideasCache[refId] = data.record || data;
+                renderPanel();
+              })
+              .catch(() => {
+                _ideasCache[refId] = { _error: true };
+                renderPanel();
+              });
+          }
+          return;
+        }
+        // Year node click → open/close year story panel
         const node = e.target.closest('.life-year-node');
         if (node) {
+          _activeRefId = null;
           _activeStory = _activeStory === node.dataset.id ? null : node.dataset.id;
           renderPanel();
         }
@@ -1088,7 +1237,11 @@
     }
 
     const closeBtn = p.querySelector('#life-story-close');
-    if (closeBtn) closeBtn.addEventListener('click', () => { _activeStory = null; renderPanel(); });
+    if (closeBtn) closeBtn.addEventListener('click', () => {
+      _activeStory = null;
+      _activeRefId = null;
+      renderPanel();
+    });
 
     const editBtn = p.querySelector('#life-story-edit-btn');
     const saveBtn = p.querySelector('#life-story-save-btn');
@@ -1139,6 +1292,7 @@
         if (_entryMode === 'month') {
           loadMonthData(_entryYear).then(renderPanel);
         } else {
+          _yearRecord = null;
           renderPanel();
         }
       });
@@ -1148,6 +1302,7 @@
     if (yearSel) {
       yearSel.addEventListener('change', () => {
         _entryYear = parseInt(yearSel.value, 10);
+        delete _monthRecords[_entryYear]; // force refresh
         loadMonthData(_entryYear).then(renderPanel);
       });
     }
@@ -1162,16 +1317,27 @@
 
     const grid = p.querySelector('#life-grid-table');
     if (grid) {
-      // FIX 5: input change marks dirty — covers ALL field types (num + text)
+      // Input change — dirty tracking; respect inherited placeholders
       grid.addEventListener('input', e => {
         const input = e.target.closest('[data-record-id][data-field]');
         if (!input) return;
         const id    = input.dataset.recordId;
         const field = input.dataset.field;
         const val   = input.value;
-        if (!_dirty[id]) _dirty[id] = {};
-        _dirty[id][field] = val;
-        input.classList.add('dirty');
+
+        if (val === '' && input.dataset.hasInherited) {
+          // Cleared back to empty — revert to inherited placeholder, not dirty
+          if (_dirty[id]) {
+            delete _dirty[id][field];
+            if (Object.keys(_dirty[id]).length === 0) delete _dirty[id];
+          }
+          input.classList.remove('dirty');
+        } else {
+          if (!_dirty[id]) _dirty[id] = {};
+          _dirty[id][field] = val;
+          input.classList.add('dirty');
+        }
+
         const saveBtn = p.querySelector('#life-save-all-btn');
         if (saveBtn) {
           const count = Object.keys(_dirty).length;
@@ -1179,7 +1345,7 @@
         }
       });
 
-      // Drag fill
+      // Drag fill — register listeners inside mousedown so each drag gets fresh cleanup
       grid.addEventListener('mousedown', e => {
         const handle = e.target.closest('.life-drag-handle');
         if (!handle) return;
@@ -1194,7 +1360,6 @@
         _preDragDirty  = JSON.parse(JSON.stringify(_dirty));
         _dragFilledIds = [];
 
-        // Clean up any previous drag listeners before registering new ones
         if (_dragStopFn) _dragStopFn();
 
         function stopDrag() {
@@ -1209,7 +1374,6 @@
 
         function onEscape(ev) {
           if (ev.key !== 'Escape') return;
-          // Restore _dirty to pre-drag snapshot and reset filled inputs
           for (const rid of _dragFilledIds) {
             const inp = grid.querySelector(`input[data-record-id="${rid}"][data-field="${_dragField}"]`);
             if (inp) {
@@ -1254,7 +1418,7 @@
       });
     }
 
-    // FIX 5: Save All — sends dirty records in batches of 10, handles all field types
+    // Save All — batch PATCH, respects all field types including text
     const saveAllBtn = p.querySelector('#life-save-all-btn');
     if (saveAllBtn) {
       saveAllBtn.addEventListener('click', async () => {
@@ -1282,10 +1446,8 @@
               body: JSON.stringify({ updates: batch })
             });
             if (!res.ok) {
-              const err = await res.text();
-              errors.push(err);
+              errors.push(await res.text());
             } else {
-              // Apply saved values back to in-memory records
               for (const u of batch) {
                 const rec = _allRecords.find(r => r.id === u.id)
                   || (_monthRecords[_entryYear] || []).find(r => r.id === u.id);
@@ -1328,7 +1490,6 @@
       return;
     }
     _initialized = true;
-
     ensureStyles();
 
     const p = panel();
@@ -1346,8 +1507,6 @@
   });
 
   const _p = document.getElementById(PANEL_ID);
-  if (_p && _p.classList.contains('active')) {
-    init();
-  }
+  if (_p && _p.classList.contains('active')) init();
 
 })();

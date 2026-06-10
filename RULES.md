@@ -186,4 +186,31 @@ L065  isSubmitting guard on all save buttons. Set true on first click, disable a
 
 L064  Secondary auto-creates (phases, milestones, tasks, resources) must be individually wrapped in try/catch. Primary record save must ALWAYS return 201. Secondary failures log to console + return in warnings array. Never let a missing table block the primary save.
 
+---
+
+## LIFE TIMELINE (M5.1)
+
+L191  LifeTimeline location display — two distinct layers:
+      Year-level rows (month=null): render as horizontal colored swimlane bars BELOW the baseline.
+      Consecutive years with identical location are merged into one bar. Each location gets a
+      deterministic color from LOC_COLORS palette via locColor(str) hash function.
+      Month-level rows (month=1–12): render as small orange (#f97316) floating dots ABOVE the baseline.
+      No label. Tooltip shows location + month + year.
+
+L192  Index principle: when a thing exists in the system, store only its record ID as a pointer.
+      Never copy or duplicate content across tables. Everything lives once. Everything else points.
+      Applied in story_refs: only record IDs from other tables are stored — never copied text.
+
+L193  story_refs field: singleLineText in LifeTimeline. Stores comma-separated Airtable record IDs
+      from any table (currently: diary/ideas entries). Append-only — PATCH handler reads current
+      value, appends new ID, deduplicates, writes back. Never overwrite the full list.
+      Rendered as purple 6×6px square nodes above the year node with a dashed stem.
+      Clicking a node fetches /api/diary/{id} on demand. Content cached in _ideasCache
+      for session reuse. Display shows [Ideas · Story] badge + title + content.
+
+L194  Month View inheritance: when a month-level entry field is empty and a year-level record
+      exists for that year, the year's value appears as a dimmed placeholder (opacity:0.35, italic)
+      via HTML placeholder attribute — never as value. Empty input with placeholder = not sent to API.
+      Clearing a filled input back to empty reverts to placeholder state (no API call).
+
 L063  403 from Airtable on table create/read = table does not exist, NOT a permissions error. Token is full access. Check table existence first. Call POST /api/setup/schema-projects to provision missing tables.
