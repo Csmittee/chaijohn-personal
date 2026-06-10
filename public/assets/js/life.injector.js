@@ -1051,7 +1051,8 @@
         return g.fields.map(f => {
           const val        = row[f.key];
           const dirtyVal   = (_dirty[row.id] || {})[f.key];
-          const displayVal = dirtyVal !== undefined ? dirtyVal : (val != null ? val : '');
+          // val === val is false for NaN — guards against poisoned local record state
+          const displayVal = dirtyVal !== undefined ? dirtyVal : (val != null && val === val ? val : '');
 
           // L194: inherited year value for empty month-mode cells
           const inheritedVal = (
@@ -1519,7 +1520,7 @@
                   || (_monthRecords[_entryYear] || []).find(r => r.id === u.id);
                 if (rec) {
                   for (const [k, v] of Object.entries(u.fields)) {
-                    if (NUM_FIELDS.includes(k))  rec[k] = v !== '' && v != null ? Number(v) : null;
+                    if (NUM_FIELDS.includes(k))  { const n = Number(v); rec[k] = (v !== '' && v != null && !isNaN(n)) ? n : null; }
                     if (TEXT_FIELDS.includes(k)) rec[k] = v || null;
                   }
                 }
