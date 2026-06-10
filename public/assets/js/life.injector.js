@@ -1519,10 +1519,12 @@
                   || (_monthRecords[_entryYear] || []).find(r => r.id === u.id);
                 if (rec) {
                   for (const [k, v] of Object.entries(u.fields)) {
-                    if (NUM_FIELDS.includes(k))  { const n = Number(v); rec[k] = (v !== '' && v != null && !isNaN(n)) ? n : null; }
+                    if (NUM_FIELDS.includes(k))  { const n = Number(v); rec[k] = (v !== '' && v != null && !isNaN(n)) ? Math.round(n) : null; }
                     if (TEXT_FIELDS.includes(k)) rec[k] = v || null;
                   }
                 }
+                // Saved — safe to clear this record's dirty state
+                delete _dirty[u.id];
               }
             }
           } catch (err) {
@@ -1530,7 +1532,8 @@
           }
         }
 
-        _dirty = {};
+        // Failed batches keep their _dirty entries — typed values survive
+        // the re-render and the user can retry Save All.
         buildLifeScores(_allRecords);
         saveAllBtn.disabled = false;
 
