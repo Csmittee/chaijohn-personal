@@ -5,6 +5,11 @@
 
 ---
 
+L214  LiabilityPayment transactions must never include category_id.
+      source='LiabilityPayment' is the sole routing signal for loan
+      received and loan payment flows. Any category lookup in
+      liabilities.js or liabilities/[id].js is dead code — remove it.
+
 L212  Transaction POST must never include category_id — not for collection sale,
       not for hard asset sale, not for any new transaction. Source field is the
       sole routing mechanism (L100, L103). Any injector that looks up a category
