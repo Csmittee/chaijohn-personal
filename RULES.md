@@ -5,6 +5,12 @@
 
 ---
 
+L209  Life expanded STORY NODE cell (type=readonly) in Year View must aggregate month rows
+      via getYearMonths() — same as collapsedSummary(). Raw row.story_refs is year-level only;
+      refs mounted via M3.1 stories land on month rows and will show — in expanded view without
+      this aggregation. Pattern: union story_refs IDs from year row + all month rows, deduplicate,
+      count. If no month rows exist, fall back to csvCount(row.story_refs).
+
 L208  Life year/month aggregation rule (Entry View Year View collapsed cells):
       Month rows are indexed into _allMonthsByYear at loadData() — no extra API calls.
       Numeric fields (financial_earn): sum of month values if any months have data, else year-level value.
