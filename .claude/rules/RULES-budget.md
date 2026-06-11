@@ -1,9 +1,14 @@
 # RULES-budget.md — Chaijohn OS
 > Domain: M2.5 Budget panel (route: budget, panel: panel-budget)
 > Load this file when: working on budget-panel.injector.js or /api/budgets
-> Last updated: 2026-06-04
+> Last updated: 2026-06-11
 
 ---
+
+L211  Budget saveBatchChanges() must use sequential for...of loop — never Promise.allSettled for writes.
+      Delay 210ms between each request. Update Save button text to "Saving… X / N" after each call.
+      Individual failures are logged and counted — loop continues. Final flash shows total failures if any.
+      isSaving guard prevents double-submit. Pattern applies to any injector batch-write function.
 
 L153  Budget panel default period = FY (financial year Jan–Dec). Never default to rolling.
       FY ensures Jan is always visible. loadAndRender() sets start = currentYear + '-01-01' when graphPeriod === 'fy'.

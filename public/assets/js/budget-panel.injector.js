@@ -120,6 +120,9 @@
   /* Custom period start (YYYY-MM) */
   let customStart = null;
 
+  /* isSaving guard — prevents double-submit on slow connections (L211) */
+  let isSaving = false;
+
   function el(id) { return document.getElementById(id); }
 
   function showFlash(msg, type) {
@@ -771,114 +774,138 @@
     }
   }
 
-  /* ── saveBatchChanges() ── */
+  /* ── saveBatchChanges() — sequential queue, 210ms throttle (L211) ── */
   async function saveBatchChanges() {
+    if (isSaving) return; // guard against double-submit
     const entries = Object.values(pendingChanges);
     if (!entries.length) return;
 
-    const requests = entries.map(async e => {
-      if (e.kind === 'budget') {
-        /* PATCH base budget record (Budget/mo column only) */
-        const bud    = budgets.find(b => b.id === e.id);
-        const period = bud ? (bud.period || 'Monthly') : 'Monthly';
-        let saveAmount = Math.round(e.newVal);
-        if (period === 'Annual')      saveAmount = Math.round(e.newVal * 12);
-        else if (period === '3x-year') saveAmount = Math.round((e.newVal * 12) / 3);
-        else if (period === '6x-year') saveAmount = Math.round((e.newVal * 12) / 6);
+    isSaving = true;
+    const total   = entries.length;
+    const saveBtn = el('bud-save-changes-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving… 0 / ' + total; }
 
-        const r = await fetch('/api/budgets/' + e.id, {
-          method: 'PATCH',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: saveAmount })
-        });
-        if (!r.ok) throw new Error('Budget PATCH failed: ' + r.status + ' for ' + e.label);
-
-      } else if (e.kind === 'budget-month') {
-        /* PATCH existing override if found, else POST new (L150) */
-        const bud = budgets.find(b => b.id === e.id);
-        const existingOverride = budgets.find(b =>
-          isOverrideRecord(b) &&
-          b.label === bud?.label &&
-          lid(b.category_id) === lid(bud?.category_id) &&
-          b.start_date?.slice(0, 7) === e.monthKey
-        );
-        const [y, m] = e.monthKey.split('-').map(Number);
-        const lastDay = new Date(y, m, 0).getDate();
-        let r;
-        if (existingOverride) {
-          r = await fetch('/api/budgets/' + existingOverride.id, {
-            method: 'PATCH',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: Math.round(e.newVal) })
-          });
-        } else {
-          r = await fetch('/api/budgets', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              label:       bud?.label,
-              category_id: lid(bud?.category_id),
-              amount:      Math.round(e.newVal),
-              period:      'Monthly',
-              start_date:  e.monthKey + '-01',
-              end_date:    e.monthKey + '-' + String(lastDay).padStart(2, '0'),
-              active:      true
-            })
-          });
-        }
-        if (!r.ok) throw new Error('Budget override save failed: ' + r.status + ' for ' + e.label);
-
-      } else {
-        /* Actual transaction — PATCH if existing tx found, else POST (L151) */
-        const existingTx = txData.find(t =>
-          lid(t.budget_id) === e.id &&
-          (t.date || '').slice(0, 7) === e.monthKey
-        );
-
-        if (existingTx) {
-          if (e.newVal === 0) return; /* zero clears handled by not saving */
-          const r = await fetch('/api/transactions/' + existingTx.id, {
-            method: 'PATCH',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: e.newVal })
-          });
-          if (!r.ok) throw new Error('Transaction PATCH failed: ' + r.status + ' for ' + e.label);
-        } else {
-          if (!e.newVal) return; /* skip zero/falsy — API rejects amount=0 */
-          const r = await fetch('/api/transactions', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              budget_id:   e.id,
-              amount:      e.newVal,
-              date:        e.monthKey + '-01',
-              type:        e.dataType,
-              description: 'mass update by owner',
-              source:      'Manual'
-            })
-          });
-          if (!r.ok) throw new Error('Transaction POST failed: ' + r.status + ' for ' + e.label);
-        }
-      }
-    });
+    let failures = 0;
 
     try {
-      const results = await Promise.allSettled(requests);
-      const failed  = results.filter(r => r.status === 'rejected');
-      if (failed.length === 0) {
-        showFlash('Saved ' + entries.length + ' change' + (entries.length === 1 ? '' : 's') + ' ✓');
-      } else {
-        showFlash(failed.length + ' save(s) failed — check console', 'error');
-        failed.forEach(r => console.error(r.reason));
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        try {
+          if (e.kind === 'budget') {
+            /* PATCH base budget record (Budget/mo column only) */
+            const bud    = budgets.find(b => b.id === e.id);
+            const period = bud ? (bud.period || 'Monthly') : 'Monthly';
+            let saveAmount = Math.round(e.newVal);
+            if (period === 'Annual')       saveAmount = Math.round(e.newVal * 12);
+            else if (period === '3x-year') saveAmount = Math.round((e.newVal * 12) / 3);
+            else if (period === '6x-year') saveAmount = Math.round((e.newVal * 12) / 6);
+
+            const r = await fetch('/api/budgets/' + e.id, {
+              method: 'PATCH',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ amount: saveAmount })
+            });
+            if (!r.ok) throw new Error('Budget PATCH failed: ' + r.status + ' for ' + e.label);
+
+          } else if (e.kind === 'budget-month') {
+            /* PATCH existing override if found, else POST new (L150) */
+            const bud = budgets.find(b => b.id === e.id);
+            const existingOverride = budgets.find(b =>
+              isOverrideRecord(b) &&
+              b.label === bud?.label &&
+              lid(b.category_id) === lid(bud?.category_id) &&
+              b.start_date?.slice(0, 7) === e.monthKey
+            );
+            const [y, m] = e.monthKey.split('-').map(Number);
+            const lastDay = new Date(y, m, 0).getDate();
+            let r;
+            if (existingOverride) {
+              r = await fetch('/api/budgets/' + existingOverride.id, {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: Math.round(e.newVal) })
+              });
+            } else {
+              r = await fetch('/api/budgets', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  label:       bud?.label,
+                  category_id: lid(bud?.category_id),
+                  amount:      Math.round(e.newVal),
+                  period:      'Monthly',
+                  start_date:  e.monthKey + '-01',
+                  end_date:    e.monthKey + '-' + String(lastDay).padStart(2, '0'),
+                  active:      true
+                })
+              });
+            }
+            if (!r.ok) throw new Error('Budget override save failed: ' + r.status + ' for ' + e.label);
+
+          } else {
+            /* Actual transaction — PATCH if existing tx found, else POST (L151) */
+            const existingTx = txData.find(t =>
+              lid(t.budget_id) === e.id &&
+              (t.date || '').slice(0, 7) === e.monthKey
+            );
+
+            if (existingTx) {
+              if (e.newVal === 0) { /* zero clears handled by not saving */ }
+              else {
+                const r = await fetch('/api/transactions/' + existingTx.id, {
+                  method: 'PATCH',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ amount: e.newVal })
+                });
+                if (!r.ok) throw new Error('Transaction PATCH failed: ' + r.status + ' for ' + e.label);
+              }
+            } else {
+              if (!e.newVal) { /* skip zero/falsy — API rejects amount=0 */ }
+              else {
+                const r = await fetch('/api/transactions', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    budget_id:   e.id,
+                    amount:      e.newVal,
+                    date:        e.monthKey + '-01',
+                    type:        e.dataType,
+                    description: 'mass update by owner',
+                    source:      'Manual'
+                  })
+                });
+                if (!r.ok) throw new Error('Transaction POST failed: ' + r.status + ' for ' + e.label);
+              }
+            }
+          }
+        } catch (err) {
+          // Individual failure — log and continue, do not abort remaining saves (L211)
+          failures++;
+          console.error('[budget save ' + (i + 1) + '/' + total + ']', err);
+        }
+
+        // Update progress label after each request
+        if (saveBtn) saveBtn.textContent = 'Saving… ' + (i + 1) + ' / ' + total;
+
+        // 210ms throttle — keep throughput safely below Airtable 5 req/sec (L211)
+        if (i < entries.length - 1) {
+          await new Promise(r => setTimeout(r, 210));
+        }
       }
-    } catch (err) {
-      showFlash('Save error: ' + err.message, 'error');
-      console.error('Save error:', err);
+
+      if (failures === 0) {
+        showFlash('Saved ' + total + ' change' + (total === 1 ? '' : 's') + ' ✓');
+      } else {
+        showFlash(failures + ' save(s) failed — check console', 'error');
+      }
+    } finally {
+      isSaving = false;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
     }
 
     pendingChanges = {};
