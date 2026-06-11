@@ -166,6 +166,7 @@ Cash Flow (M2.1) ──► daily cockpit, DEF CON 5 guardian
 - M2.1 Cashflow: list view groups by INCOME / EXPENSES / PROJECT FUNDING with collapsible headers ✅
 - M2.4 Finance Projects: budget cards + presale record cards compact inline-flex (multiple per row) ✅
 - M3.2 Collection: Sell creates Transaction with source=collection + category_id for M2.2 routing ✅
+- M2.5 Budget: batch save now throttled — sequential queue, 210ms delay between requests (~4 req/sec), live "Saving… X / N" progress on Save button, per-request failure isolation. Safe for large edit sessions (60+ changes) ✅
 
 **Next: Fix 9G — M4.2 Mind Map (Obsidian-style node graph)**
 
