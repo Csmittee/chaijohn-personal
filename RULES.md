@@ -5,6 +5,11 @@
 
 ---
 
+L214  LiabilityPayment transactions must never include category_id.
+      source='LiabilityPayment' is the sole routing signal for loan
+      received and loan payment flows. Any category lookup in
+      liabilities.js or liabilities/[id].js is dead code — remove it.
+
 L213  CC must never prompt owner for file-write permission on .claude/rules/,
       RULES.md, PROJECT_STATE.md, WORKFLOW_SKILL.md, or docs/prompts/.
       Full write authorization is permanent. Write directly always.
