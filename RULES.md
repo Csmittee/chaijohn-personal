@@ -13,21 +13,23 @@ L205  Airtable token scopes — CONFIRMED FULL ACCESS (never ask owner to change
       CC can create/modify fields and tables via Meta API without any owner action.
       Never tell the owner to manually change Airtable field types — do it via API.
 
-L204  LifeTimeline table — CONFIRMED FIELD SCHEMA (apphBGWfSPL45oSFd):
-      PRIMARY: name (singleLineText)
-      INTEGERS: year, month, financial_earn, knowledge_earn, happiness_factor, health,
-                relationship, creation, achievement, a_impact, failure, f_impact,
-                travel, t_impact, hobby, h_impact, age (all Number precision:0)
-      TEXT:     location, tags, people (singleLineText); decision, story (longText);
-                story_refs (singleLineText, comma-separated record IDs)
-      RULE: ALL numeric writes to LifeTimeline MUST use Math.round() before sending.
-      Airtable rejects the ENTIRE batch PATCH if any value has a decimal — all-or-nothing.
-      Also set typecast:true on all PATCH/POST bodies as a safety net.
-      Do NOT write the `age` field — it is computed client-side only, never stored.
+L204  LifeTimeline definitive field types — apphBGWfSPL45oSFd (updated 2026-06-11):
+      Number integer: year, month, age, financial_earn, happiness_factor, health.
+      Single line text (comma-separated): knowledge_earn, relationship, creation,
+        achievement, failure, travel, hobby, location, tags, people, story_refs,
+        company-school, title.
+      Long text: a_impact, f_impact, t_impact, h_impact, decision, story.
+      Any code sending wrong type causes 500. Always match this list before writing.
+      Always Math.round() integer fields. Always typecast:true in PATCH/POST bodies.
+      Owner will never change field types manually — CC uses schema:write scope.
 
 L203  Life story_refs PATCH: always read-append-write. Never overwrite. Read current value
       from Airtable first, append new ID, deduplicate, write merged string.
-      story_refs field auto-created via ensureStoryRefsField() on first PATCH that touches it.
+      story_refs is Single line text — comma-separated record IDs.
+
+L202  Life Entry View Performance group fields (in order): financial_earn, achievement,
+      a_impact, failure, f_impact, company-school, title.
+      company-school and title are descriptive text fields — do NOT include in collapsed %.
 
 L190 — Life Timeline life_score formula: normalize financial across dataset min/max to −10/+10.
         Normalize 1–10 fields to −10/+10. Weight: happiness×3, health×2, relationship×1.5,

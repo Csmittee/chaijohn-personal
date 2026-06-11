@@ -31,11 +31,12 @@ export async function createRecord(apiKey, baseId, tableName, fields) {
   return data.records[0];
 }
 
-export async function updateRecord(apiKey, baseId, tableName, recordId, fields) {
+export async function updateRecord(apiKey, baseId, tableName, recordId, fields, opts = {}) {
+  const body = opts.typecast ? { fields, typecast: true } : { fields };
   const res = await fetch(`${AIRTABLE_BASE}/${baseId}/${encodeURIComponent(tableName)}/${recordId}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields })
+    body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`Airtable update error ${res.status}: ${await res.text()}`);
   return res.json();

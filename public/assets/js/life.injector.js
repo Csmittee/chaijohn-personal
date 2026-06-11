@@ -887,34 +887,37 @@
   }
 
   // ── Entry View ──
+  // Definitive GROUPS — matches L204 field schema (2026-06-11)
   const GROUPS = [
     {
       id: 'performance', label: 'Performance',
       fields: [
-        { key: 'financial_earn', label: 'Financial ฿', type: 'num' },
-        { key: 'achievement',    label: 'Achievement', type: 'num' },
-        { key: 'a_impact',       label: 'Impact',      type: 'num' },
-        { key: 'failure',        label: 'Failure',     type: 'num' },
-        { key: 'f_impact',       label: 'F.Impact',    type: 'num' }
+        { key: 'financial_earn',  label: 'Financial ฿',    type: 'num'  },
+        { key: 'achievement',     label: 'Achievement',    type: 'text' },
+        { key: 'a_impact',        label: 'Impact',         type: 'text' },
+        { key: 'failure',         label: 'Failure',        type: 'text' },
+        { key: 'f_impact',        label: 'F.Impact',       type: 'text' },
+        { key: 'company-school',  label: 'Company/School', type: 'text' },
+        { key: 'title',           label: 'Title / Role',   type: 'text' }
       ]
     },
     {
       id: 'emotional', label: 'Strength',
       fields: [
-        { key: 'happiness_factor', label: 'Happiness',    type: 'num' },
-        { key: 'health',           label: 'Health',       type: 'num' },
-        { key: 'relationship',     label: 'Relationship', type: 'num' },
-        { key: 'knowledge_earn',   label: 'Skill',        type: 'num' }
+        { key: 'happiness_factor', label: 'Happiness',    type: 'num'  },
+        { key: 'health',           label: 'Health',       type: 'num'  },
+        { key: 'relationship',     label: 'Relationship', type: 'text' },
+        { key: 'knowledge_earn',   label: 'Skill',        type: 'text' }
       ]
     },
     {
       id: 'hobby', label: 'Experience',
       fields: [
-        { key: 'hobby',    label: 'Hobby',    type: 'num' },
-        { key: 'h_impact', label: 'H.Impact', type: 'num' },
-        { key: 'travel',   label: 'Travel',   type: 'num' },
-        { key: 't_impact', label: 'T.Impact', type: 'num' },
-        { key: 'creation', label: 'Creation', type: 'num' }
+        { key: 'hobby',    label: 'Hobby',    type: 'text' },
+        { key: 'h_impact', label: 'H.Impact', type: 'text' },
+        { key: 'travel',   label: 'Travel',   type: 'text' },
+        { key: 't_impact', label: 'T.Impact', type: 'text' },
+        { key: 'creation', label: 'Creation', type: 'text' }
       ]
     },
     {
@@ -931,42 +934,45 @@
   const _groupCollapsed = { performance: true, emotional: true, hobby: true, story: true };
 
   // Collapsed group cell: meaningful summary per group (L196)
+  function csvCount(val) {
+    if (!val) return 0;
+    return String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean).length;
+  }
+
   function collapsedSummary(groupId, row) {
     if (groupId === 'performance') {
       const finPct = (_finMax > 0 && row.financial_earn != null && row.financial_earn > 0)
-        ? Math.min(100, Math.round((row.financial_earn / _finMax) * 100))
-        : 0;
-      const achBonus = row.achievement != null
-        ? Math.min(100 - finPct, Math.round(row.achievement) * 20)
-        : 0;
-      const total = finPct + achBonus;
-      if (row.financial_earn == null && row.achievement == null) return '—';
-      return total + '%';
+        ? Math.min(100, Math.round((row.financial_earn / _finMax) * 100)) : 0;
+      // achievement is now text — comma-separated items, each worth 20%
+      const achItems = csvCount(row.achievement);
+      const achBonus = Math.min(100 - finPct, achItems * 20);
+      if (row.financial_earn == null && !row.achievement) return '—';
+      return (finPct + achBonus) + '%';
     }
     if (groupId === 'emotional') {
       const allEmpty = row.happiness_factor == null && row.health == null &&
-                       row.relationship == null && row.knowledge_earn == null;
+                       !row.relationship && !row.knowledge_earn;
       if (allEmpty) return '—';
       const hap = row.happiness_factor != null ? (row.happiness_factor / 10) * 25 : 0;
       const hlt = row.health           != null ? (row.health           / 10) * 25 : 0;
-      const rel = row.relationship     != null ? (row.relationship     / 10) * 25 : 0;
-      const skl = row.knowledge_earn   != null ? (row.knowledge_earn   / 10) * 25 : 0;
+      // relationship + knowledge_earn are now text — count comma-separated entries
+      const rel = Math.min(25, csvCount(row.relationship)  * 5);
+      const skl = Math.min(25, csvCount(row.knowledge_earn) * 5);
       return Math.min(100, Math.round(hap + hlt + rel + skl)) + '%';
     }
     if (groupId === 'hobby') {
-      // L202: hobby/travel/creation are num fields — count as 1 point if non-null/non-zero, never comma-split
-      const h = (row.hobby    != null && +row.hobby    !== 0 && !isNaN(+row.hobby))    ? 1 : 0;
-      const t = (row.travel   != null && +row.travel   !== 0 && !isNaN(+row.travel))   ? 1 : 0;
-      const c = (row.creation != null && +row.creation !== 0 && !isNaN(+row.creation)) ? 1 : 0;
-      const total = h + t + c;
+      // hobby, travel, creation are now text — comma-separated entries
+      const hCount = csvCount(row.hobby);
+      const tCount = csvCount(row.travel);
+      const cCount = csvCount(row.creation);
+      const total = hCount + tCount + cCount;
       if (total === 0) return '—';
-      const breakdown = [h ? '1h' : '', t ? '1t' : '', c ? '1c' : ''].filter(Boolean).join(' ');
-      return '<span title="' + breakdown + '">' + total + 'p</span>';
+      const parts = [hCount ? hCount+'h' : '', tCount ? tCount+'t' : '', cCount ? cCount+'c' : ''].filter(Boolean).join(' ');
+      return '<span title="' + parts + '">' + total + 'p</span>';
     }
     if (groupId === 'story') {
-      if (!row.story_refs) return '—';
-      const refs = row.story_refs.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-      return refs.length > 0 ? (refs.length + ' refs') : '—';
+      const refs = csvCount(row.story_refs);
+      return refs > 0 ? (refs + ' refs') : '—';
     }
     return '—';
   }
@@ -1495,12 +1501,14 @@
         if (statusEl) statusEl.textContent = `Saving ${updates.length} rows…`;
         saveAllBtn.disabled = true;
 
-        const NUM_FIELDS  = [
-          'year','month','financial_earn','knowledge_earn','happiness_factor','health',
-          'relationship','creation','achievement','a_impact','failure','f_impact',
-          'travel','t_impact','hobby','h_impact'
+        // Must match L204 schema exactly
+        const NUM_FIELDS  = ['year', 'month', 'age', 'financial_earn', 'happiness_factor', 'health'];
+        const TEXT_FIELDS = [
+          'name', 'location', 'knowledge_earn', 'relationship', 'creation',
+          'achievement', 'failure', 'travel', 'hobby', 'tags', 'people',
+          'story_refs', 'company-school', 'title',
+          'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'
         ];
-        const TEXT_FIELDS = ['name','location','decision','tags','story','people'];
 
         const errors = [];
         for (let i = 0; i < updates.length; i += 10) {

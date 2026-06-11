@@ -3,12 +3,14 @@ import { listAllRecords, createRecord, jsonResponse, errorResponse } from '../_a
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'LifeTimeline';
 
+// Definitive field schema — L204 in RULES.md (2026-06-11)
 function flat(r) {
   return {
     id:               r.id,
     name:             r.fields.name             || null,
     year:             r.fields.year             || null,
     month:            r.fields.month            || null,
+    age:              r.fields.age              || null,
     location:         r.fields.location         || null,
     financial_earn:   r.fields.financial_earn   || null,
     knowledge_earn:   r.fields.knowledge_earn   || null,
@@ -29,13 +31,12 @@ function flat(r) {
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
+    'company-school': r.fields['company-school'] || null,
+    title:            r.fields.title            || null,
   };
 }
 
 // GET /api/life-timeline
-// ?year=YYYY            → rows for that year
-// ?from=YYYY&to=YYYY    → rows in year range
-// (no params)           → all rows
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url  = new URL(request.url);
@@ -74,27 +75,26 @@ export async function onRequestPost(context) {
   if (!year) return errorResponse('year is required');
 
   const fields = { name: String(year), year: Number(year) };
-  if (body.month            != null) fields.month            = Number(body.month);
-  if (body.location         != null) fields.location         = body.location;
-  if (body.financial_earn   != null) fields.financial_earn   = Number(body.financial_earn);
-  if (body.knowledge_earn   != null) fields.knowledge_earn   = Number(body.knowledge_earn);
-  if (body.happiness_factor != null) fields.happiness_factor = Number(body.happiness_factor);
-  if (body.health           != null) fields.health           = Number(body.health);
-  if (body.relationship     != null) fields.relationship     = Number(body.relationship);
-  if (body.creation         != null) fields.creation         = Number(body.creation);
-  if (body.achievement      != null) fields.achievement      = Number(body.achievement);
-  if (body.a_impact         != null) fields.a_impact         = Number(body.a_impact);
-  if (body.failure          != null) fields.failure          = Number(body.failure);
-  if (body.f_impact         != null) fields.f_impact         = Number(body.f_impact);
-  if (body.travel           != null) fields.travel           = Number(body.travel);
-  if (body.t_impact         != null) fields.t_impact         = Number(body.t_impact);
-  if (body.hobby            != null) fields.hobby            = Number(body.hobby);
-  if (body.h_impact         != null) fields.h_impact         = Number(body.h_impact);
-  if (body.decision         != null) fields.decision         = body.decision;
-  if (body.tags             != null) fields.tags             = body.tags;
-  if (body.story            != null) fields.story            = body.story;
-  if (body.people           != null) fields.people           = body.people;
-  if (body.story_refs       != null) fields.story_refs       = body.story_refs;
+
+  // Number integer fields
+  const numFields = ['month', 'age', 'financial_earn', 'happiness_factor', 'health'];
+  for (const f of numFields) {
+    if (body[f] != null && body[f] !== '') {
+      const n = Number(body[f]);
+      if (!isNaN(n)) fields[f] = Math.round(n);
+    }
+  }
+
+  // Text and long text fields
+  const strFields = [
+    'location', 'knowledge_earn', 'relationship', 'creation', 'achievement',
+    'failure', 'travel', 'hobby', 'tags', 'people', 'story_refs',
+    'company-school', 'title', 'a_impact', 'f_impact', 't_impact', 'h_impact',
+    'decision', 'story'
+  ];
+  for (const f of strFields) {
+    if (body[f] != null && body[f] !== '') fields[f] = body[f];
+  }
 
   try {
     const record = await createRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, fields);
