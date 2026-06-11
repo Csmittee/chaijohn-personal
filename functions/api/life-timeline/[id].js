@@ -48,7 +48,7 @@ function flat(r) {
     h_impact:         r.fields.h_impact         || null,
     decision:         r.fields.decision         || null,
     tags:             r.fields.tags             || null,
-    story:            r.fields.story            || null,
+    note:             r.fields.note             || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
     'company-school': r.fields['company-school'] || null,
@@ -75,7 +75,7 @@ export async function onRequestPatch(context) {
     'achievement', 'failure', 'travel', 'hobby', 'tags', 'people',
     'company-school', 'title'
   ];
-  const longTextFields = ['a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'];
+  const longTextFields = ['a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'note'];
 
   for (const f of numFields) {
     if (body[f] == null || body[f] === '') continue;

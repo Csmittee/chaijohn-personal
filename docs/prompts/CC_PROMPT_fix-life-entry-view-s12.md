@@ -1,9 +1,6 @@
 # CC_PROMPT_fix-life-entry-view-s12.md
-> ✅ COMPLETE — 2026-06-10
-> Summary: Sticky header fix (border-collapse:separate), age column (row.year−1971),
-> collapsed group summaries (Performance N▸, Strength %, Experience Xh Yt Zc, Story N entries),
-> group renames (Emotional→Strength, Hobby→Experience, Knowledge→Skill).
-> RULES L195–L197 added.
+> Life Entry View — 5 fixes + group redesign
+> Session 12 — 2026-06-10
 
 ---
 
@@ -131,18 +128,18 @@ L197  Life Entry View year column: shows year + age on two lines in sticky left 
 
 ## QA CHECKLIST (CC self-verify before merge)
 
-- [x] Header row (group names + field labels) stays fixed when table body scrolls
-- [x] Sticky year column shows year + age (year − 1971), no NaN ever
-- [x] Collapsed Performance cell: shows achievement item count as `N▸` or `—`
-- [x] Collapsed Strength cell: shows weighted % or `—`
-- [x] Collapsed Experience cell: shows `Xh Yt Zc` counts or `—`
-- [x] Collapsed Story cell: shows `N entries` or `—`
-- [x] Expanded groups still show individual input cells exactly as before
-- [x] Group label "Emotional" → "Strength" in header row
-- [x] Group label "Hobby" → "Experience" in header row
-- [x] Field label "Knowledge" → "Skill" in expanded Strength group
-- [x] No other injector files modified
-- [x] RULES.md updated with L195, L196, L197
+- [ ] Header row (group names + field labels) stays fixed when table body scrolls
+- [ ] Sticky year column shows year + age (year − 1971), no NaN ever
+- [ ] Collapsed Performance cell: shows achievement item count as `N▸` or `—`
+- [ ] Collapsed Strength cell: shows weighted % or `—`
+- [ ] Collapsed Experience cell: shows `Xh Yt Zc` counts or `—`
+- [ ] Collapsed Story cell: shows `N entries` or `—`
+- [ ] Expanded groups still show individual input cells exactly as before
+- [ ] Group label "Emotional" → "Strength" in header row
+- [ ] Group label "Hobby" → "Experience" in header row
+- [ ] Field label "Knowledge" → "Skill" in expanded Strength group
+- [ ] No other injector files modified
+- [ ] RULES.md updated with L195, L196, L197
 
 ---
 
