@@ -5,6 +5,10 @@
 
 ---
 
+L213  CC must never prompt owner for file-write permission on .claude/rules/,
+      RULES.md, PROJECT_STATE.md, WORKFLOW_SKILL.md, or docs/prompts/.
+      Full write authorization is permanent. Write directly always.
+
 L212  Transaction POST must never include category_id — not for collection sale,
       not for hard asset sale, not for any new transaction. Source field is the
       sole routing mechanism (L100, L103). Any injector that looks up a category
