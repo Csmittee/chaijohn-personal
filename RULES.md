@@ -5,6 +5,11 @@
 
 ---
 
+L212  Transaction POST must never include category_id — not for collection sale,
+      not for hard asset sale, not for any new transaction. Source field is the
+      sole routing mechanism (L100, L103). Any injector that looks up a category
+      to attach category_id to a transaction POST contains dead code — remove it.
+
 L211  Budget saveBatchChanges() must use sequential for...of loop — never Promise.allSettled for writes.
       Delay 210ms between each request. Update Save button text to "Saving… X / N" after each call.
       Individual failures are logged and counted — loop continues. Final flash shows total failures if any.

@@ -11,7 +11,6 @@
 
   let allAssets = [];
   let activeFilter = '';
-  let hardAssetSaleCategoryId = null;
   let initialized = false;
 
   function panelEl() { return document.getElementById('panel-hard-assets'); }
@@ -44,28 +43,6 @@
       (type === 'error' ? '#ef4444' : '#22c55e') + ';color:white;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.25)';
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
-  }
-
-  async function loadHardAssetSaleCategory() {
-    if (hardAssetSaleCategoryId !== null) return;
-    try {
-      const data = await api('/api/categories');
-      const cats = data.records || [];
-      let cat = cats.find(c => (c.fields ? c.fields.name : c.name) === 'Hard asset sale');
-      if (cat) {
-        hardAssetSaleCategoryId = cat.id;
-        return;
-      }
-      // Create if missing
-      const res = await api('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Hard asset sale', group: 'Per-earn', type: 'Earn', active: true })
-      });
-      hardAssetSaleCategoryId = (res.record || {}).id || null;
-    } catch (e) {
-      console.warn('Could not load hard asset sale category:', e.message);
-    }
   }
 
   async function loadAssets() {
@@ -426,7 +403,6 @@
         amount: price, date, entity: soldTo,
         description: 'Hard asset sale — ' + sellingName
       };
-      if (hardAssetSaleCategoryId) txBody.category_id = [hardAssetSaleCategoryId];
       await api('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(txBody) }).catch(e => console.warn('TX not saved:', e.message));
 
       closeSellModal();
@@ -447,7 +423,6 @@
     const panel = panelEl();
     if (!panel) return;
     panel.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem">Loading…</div>';
-    await loadHardAssetSaleCategory();
     await loadAssets();
   }
 

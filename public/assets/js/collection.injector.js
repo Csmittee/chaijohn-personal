@@ -52,7 +52,6 @@ let assetsLoaded = false;   // true once first API fetch completes
 let activeStatusFilter = '';
 let activeCategoryFilter = '';
 let editingAssetId = null;
-let collectionSaleCategoryId = null; // cached category id for 'Collection sale'
 
 /* ─── Badge helpers ─── */
 function statusBadgeStyle(status) {
@@ -118,20 +117,6 @@ function renderFilteredGrid() {
 }
 
 /* ─── Load ALL assets from API (paginated via server), cache in allAssets ─── */
-async function loadCollectionSaleCategory() {
-  if (collectionSaleCategoryId !== null) return;
-  try {
-    const res = await fetch('/api/categories', { credentials: 'same-origin' });
-    if (!res.ok) return;
-    const data = await res.json();
-    const cats = data.records || [];
-    const cat = cats.find(function (c) { return (c.fields && c.fields.name === 'Collection sale') || c.name === 'Collection sale'; });
-    if (cat) collectionSaleCategoryId = cat.id;
-  } catch (e) {
-    console.warn('Could not load categories for collection sale:', e.message);
-  }
-}
-
 async function loadAssets(force) {
   if (assetsLoaded && !force) {
     renderFilteredGrid();
@@ -593,7 +578,6 @@ async function confirmSell() {
         description: 'Collection sale - ' + assetName,
         entity: soldVia || undefined
       };
-      if (collectionSaleCategoryId) txBody.category_id = [collectionSaleCategoryId];
       try {
         await api('/api/transactions', { method: 'POST', body: JSON.stringify(txBody) });
       } catch (txErr) {
@@ -710,7 +694,6 @@ function closeModal(modalId) {
 /* ─── Init ─── */
 document.addEventListener('DOMContentLoaded', function () {
   injectFabCss();
-  loadCollectionSaleCategory();
   loadAssets();
 
   // Status filter — client-side only after initial load

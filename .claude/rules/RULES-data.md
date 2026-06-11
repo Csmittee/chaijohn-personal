@@ -5,6 +5,11 @@
 
 ---
 
+L212  Transaction POST must never include category_id — not for collection sale,
+      not for hard asset sale, not for any new transaction. Source field is the
+      sole routing mechanism (L100, L103). Any injector that looks up a category
+      to attach category_id to a transaction POST contains dead code — remove it.
+
 ⚠️  AIRTABLE TOKEN — FULL SCOPE CONFIRMED (see RULES.md L205):
     schema.bases:read + schema.bases:write are granted.
     CC must handle ALL field/table changes via Meta API.
@@ -68,10 +73,9 @@ L096  Transactions source field is singleSelect in Airtable. New values (presale
       source='LiabilityPayment' or source='project_funding'. Source='project_funding' is excluded
       from M2.3 Expense view via NOT({source}='project_funding') filter at GET time.
 
-L092  Hard asset sale transaction pattern: source='hard_asset_sale' + category_id from
-      'Hard asset sale' category (Per-earn group, type=Earn). The category is fetched/created
-      at M3.3 panel init and cached. Transaction also carries entity=soldTo and
-      description='Hard asset sale — <name>'.
+L092  [SUPERSEDED by L212 — category_id removed 2026-06-11] Hard asset sale transaction
+      pattern: source='hard_asset_sale' only. Transaction carries entity=soldTo and
+      description='Hard asset sale — <name>'. No category lookup, no category_id.
 
 L088  Airtable linked record filter formula: ARRAYJOIN({linkedField}) returns PRIMARY FIELD VALUES
       (e.g. project names), NOT record IDs. FIND('recXXX', ARRAYJOIN({project_id})) always returns 0.
@@ -79,9 +83,9 @@ L088  Airtable linked record filter formula: ARRAYJOIN({linkedField}) returns PR
       ARRAYJOIN({project_id})='${projectName}'. The REST API (list/filter by record) still returns
       linked fields as ["recXXX"] arrays — linkedId() handles that correctly.
 
-L087  Collection Sell must always set source='collection' + category_id on the Transaction POST.
-      Never post a sale transaction with source='Manual' — it becomes unroutable in M2.2 and M2.1.
-      The 'Collection sale' category_id must be fetched at init and cached in module scope.
+L087  [SUPERSEDED by L212 — category_id removed 2026-06-11] Collection Sell must always set
+      source='collection' on the Transaction POST. Never post a sale transaction with
+      source='Manual' — it becomes unroutable in M2.2 and M2.1. No category lookup, no category_id.
 
 L086  Transactions GET must explicitly include source and project_id in the fields array, OR omit
       fields[] entirely so Airtable returns all fields. If fields[] is passed, ensure source and
