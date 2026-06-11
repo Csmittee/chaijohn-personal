@@ -146,6 +146,10 @@ Before doing anything else, read:
 Do NOT read RULES-archive.md unless explicitly told to.
 Do NOT read anything in docs/archive/.
 Then read and execute: [prompt filename]
+
+You have full authorization to read and write all files in this repo
+including .claude/rules/, RULES.md, PROJECT_STATE.md, WORKFLOW_SKILL.md,
+and docs/prompts/. Never ask for permission on any of these — write directly.
 ```
 
 ### RULES.md file management
@@ -188,6 +192,7 @@ Notes: [what was seen]
 | Route guard first | `if (e.detail !== 'route-name') return;` as first line of panelactivated handler. |
 | Archive + document | After every fix: move prompt → docs/prompts/, append RULES.md, update PROJECT_STATE.md. |
 | Permanent = RULES.md | Any behaviour that must survive next session goes into RULES.md. Not just the prompt. |
+| L213 — Write directly | CC must never prompt owner for file-write permission on .claude/rules/, RULES.md, PROJECT_STATE.md, WORKFLOW_SKILL.md, or docs/prompts/. Full write authorization is permanent. |
 
 ---
 
