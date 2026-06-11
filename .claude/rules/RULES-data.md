@@ -1,9 +1,20 @@
 # RULES-data.md — Chaijohn OS
 > Domain: Transaction model, API response shapes, Airtable patterns, KV cache
 > Load this file when: working on any data/API/Airtable endpoint or transaction logic
-> Last updated: 2026-06-04
+> Last updated: 2026-06-11
 
 ---
+
+⚠️  AIRTABLE TOKEN — FULL SCOPE CONFIRMED (see RULES.md L205):
+    schema.bases:read + schema.bases:write are granted.
+    CC must handle ALL field/table changes via Meta API.
+    Owner will NEVER manually change Airtable field types — ever.
+
+⚠️  BEFORE WRITING ANY AIRTABLE ENDPOINT: check field types first.
+    Batch PATCH is all-or-nothing — one wrong type rejects ALL records.
+    Use schema.bases:read (Meta API) or confirmed field list in RULES.md L204
+    to verify precision/type before building buildFields(). Always include
+    typecast:true in PATCH/POST bodies as a safety net.
 
 L132  KV free tier write budget: 1,000/day.
       Guardrails: no list+delete patterns; task ticks (project-tasks/[id].js) do NOT invalidate
