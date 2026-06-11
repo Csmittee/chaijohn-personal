@@ -5,6 +5,12 @@
 
 ---
 
+L210  MindMap visual: nodes use radial gradient + shadowBlur glow, no flat fill, no hard border.
+      Breathing pulse per node via rAF loop, phase-offset by node index. Period 3–5s by type.
+      Edges are quadratic bezier curves. Offset = distance * 0.15, alternates odd/even.
+      Idle drift: post-simulation, nodes float at 0.08–0.15px/frame, slow direction rotation.
+      rAF loop cancelled on panel deactivate, restarted on activate. Never runs off-screen.
+
 L209  Life expanded STORY NODE cell (type=readonly) in Year View must aggregate month rows
       via getYearMonths() — same as collapsedSummary(). Raw row.story_refs is year-level only;
       refs mounted via M3.1 stories land on month rows and will show — in expanded view without
