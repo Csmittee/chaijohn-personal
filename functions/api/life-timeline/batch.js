@@ -3,12 +3,26 @@ import { jsonResponse, errorResponse } from '../../_airtable.js';
 const BASE_ID = 'apphBGWfSPL45oSFd';
 const TABLE   = 'LifeTimeline';
 
+// Definitive field schema — L204 in RULES.md (updated 2026-06-11)
+const NUM_FIELDS = [
+  'year', 'month', 'age', 'financial_earn', 'happiness_factor', 'health'
+];
+const TEXT_FIELDS = [
+  'name', 'location', 'knowledge_earn', 'relationship', 'creation',
+  'achievement', 'failure', 'travel', 'hobby', 'tags', 'people',
+  'story_refs', 'company-school', 'title'
+];
+const LONG_TEXT_FIELDS = [
+  'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'
+];
+
 function flat(r) {
   return {
     id:               r.id,
     name:             r.fields.name             || null,
     year:             r.fields.year             || null,
     month:            r.fields.month            || null,
+    age:              r.fields.age              || null,
     location:         r.fields.location         || null,
     financial_earn:   r.fields.financial_earn   || null,
     knowledge_earn:   r.fields.knowledge_earn   || null,
@@ -29,26 +43,21 @@ function flat(r) {
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
+    'company-school': r.fields['company-school'] || null,
+    title:            r.fields.title            || null,
   };
 }
-
-const NUM_FIELDS  = [
-  'year','month','financial_earn','knowledge_earn','happiness_factor','health',
-  'relationship','creation','achievement','a_impact','failure','f_impact',
-  'travel','t_impact','hobby','h_impact'
-];
-const TEXT_FIELDS = ['name','location','decision','tags','story','people','story_refs'];
 
 function buildFields(raw) {
   const fields = {};
   for (const f of NUM_FIELDS) {
-    if (raw[f] == null || raw[f] === '') continue;   // skip null/undefined/empty — leave field unchanged
+    if (raw[f] == null || raw[f] === '') continue;
     const n = Number(raw[f]);
-    // All LifeTimeline number fields are integer precision in Airtable —
-    // a decimal anywhere rejects the ENTIRE batch (all-or-nothing). Round here.
     if (!isNaN(n)) fields[f] = Math.round(n);
   }
-  for (const f of TEXT_FIELDS) if (raw[f] != null) fields[f] = raw[f];
+  for (const f of [...TEXT_FIELDS, ...LONG_TEXT_FIELDS]) {
+    if (raw[f] != null && raw[f] !== '') fields[f] = raw[f];
+  }
   return fields;
 }
 

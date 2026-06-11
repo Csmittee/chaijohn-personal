@@ -30,6 +30,7 @@ function flat(r) {
     name:             r.fields.name             || null,
     year:             r.fields.year             || null,
     month:            r.fields.month            || null,
+    age:              r.fields.age              || null,
     location:         r.fields.location         || null,
     financial_earn:   r.fields.financial_earn   || null,
     knowledge_earn:   r.fields.knowledge_earn   || null,
@@ -50,6 +51,8 @@ function flat(r) {
     story:            r.fields.story            || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
+    'company-school': r.fields['company-school'] || null,
+    title:            r.fields.title            || null,
   };
 }
 
@@ -63,24 +66,27 @@ export async function onRequestPatch(context) {
   try { body = await request.json(); } catch { return errorResponse('Invalid JSON'); }
 
   const fields = {};
-  const numFields = [
-    'year','month','financial_earn','knowledge_earn','happiness_factor','health',
-    'relationship','creation','achievement','a_impact','failure','f_impact',
-    'travel','t_impact','hobby','h_impact'
+
+  // Definitive field schema — L204 in RULES.md
+  const numFields = ['year', 'month', 'age', 'financial_earn', 'happiness_factor', 'health'];
+  // story_refs excluded — handled separately below
+  const textFields = [
+    'name', 'location', 'knowledge_earn', 'relationship', 'creation',
+    'achievement', 'failure', 'travel', 'hobby', 'tags', 'people',
+    'company-school', 'title'
   ];
-  // story_refs is handled separately below — excluded from textFields
-  const textFields = ['name','location','decision','tags','story','people'];
+  const longTextFields = ['a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'];
 
   for (const f of numFields) {
-    if (body[f] != null) fields[f] = Number(body[f]);
+    if (body[f] == null || body[f] === '') continue;
+    const n = Number(body[f]);
+    if (!isNaN(n)) fields[f] = Math.round(n);
   }
-  for (const f of textFields) {
-    if (body[f] != null) fields[f] = body[f];
+  for (const f of [...textFields, ...longTextFields]) {
+    if (body[f] != null && body[f] !== '') fields[f] = body[f];
   }
 
   // story_refs: ensure field exists (returns bool), then append-only merge (L203)
-  // If ensureStoryRefsField returns false (Meta API unavailable), skip story_refs
-  // entirely — never let a missing schema field 500 the whole PATCH.
   let storyRefsWarning = null;
   if (body.story_refs != null) {
     const fieldReady = await ensureStoryRefsField(env.AIRTABLE_API_KEY);
@@ -121,7 +127,7 @@ export async function onRequestPatch(context) {
   }
 
   try {
-    const record = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, id, fields);
+    const record = await updateRecord(env.AIRTABLE_API_KEY, BASE_ID, TABLE, id, fields, { typecast: true });
     return jsonResponse({ record: flat(record), warning: storyRefsWarning });
   } catch (err) {
     return errorResponse(err.message, 500);
