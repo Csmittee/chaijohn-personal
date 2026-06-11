@@ -44,7 +44,9 @@ function buildFields(raw) {
   for (const f of NUM_FIELDS) {
     if (raw[f] == null || raw[f] === '') continue;   // skip null/undefined/empty — leave field unchanged
     const n = Number(raw[f]);
-    if (!isNaN(n)) fields[f] = n;                    // skip NaN — never write invalid numbers to Airtable
+    // All LifeTimeline number fields are integer precision in Airtable —
+    // a decimal anywhere rejects the ENTIRE batch (all-or-nothing). Round here.
+    if (!isNaN(n)) fields[f] = Math.round(n);
   }
   for (const f of TEXT_FIELDS) if (raw[f] != null) fields[f] = raw[f];
   return fields;
@@ -72,7 +74,7 @@ export async function onRequestPost(context) {
   const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${TABLE}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ records })
+    body: JSON.stringify({ records, typecast: true })
   });
 
   if (!res.ok) {
