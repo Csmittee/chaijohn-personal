@@ -5,6 +5,11 @@
 
 ---
 
+L211  Budget saveBatchChanges() must use sequential for...of loop — never Promise.allSettled for writes.
+      Delay 210ms between each request. Update Save button text to "Saving… X / N" after each call.
+      Individual failures are logged and counted — loop continues. Final flash shows total failures if any.
+      isSaving guard prevents double-submit. Pattern applies to any injector batch-write function.
+
 L210  MindMap visual: nodes use radial gradient + shadowBlur glow, no flat fill, no hard border.
       Breathing pulse per node via rAF loop, phase-offset by node index. Period 3–5s by type.
       Edges are quadratic bezier curves. Offset = distance * 0.15, alternates odd/even.
