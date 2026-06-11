@@ -26,6 +26,8 @@
   let dragOffset      = { x: 0, y: 0 };
   let dragMoved       = false;   // true only after mouse moves > 3px
   let dragStartClient = { x: 0, y: 0 };
+  let rafId           = null;    // breathing/drift animation loop handle (L210)
+  let driftEnabled    = false;   // true after simulation settles
 
   // ── Node appearance ───────────────────────────────────────────────────────
   const NODE_COLORS = {
@@ -40,8 +42,20 @@
   const NODE_RADIUS = { Business: 22, Project: 18, People: 15, Tool: 14, Skill: 13, Resource: 13, Idea: 13 };
   const NODE_TYPES  = ['Business', 'Project', 'Tool', 'People', 'Skill', 'Resource', 'Idea'];
 
+  // Breathing period (ms) per node type — Business slowest, People mid, rest fastest
+  const BREATH_PERIOD = { Business: 4000, People: 3500 };
+  const BREATH_DEFAULT = 3000;
+
   function panel()  { return document.getElementById('panel-mindmap'); }
   function canvas() { return document.getElementById('mm-canvas'); }
+
+  function hexToRgba(hex, alpha) {
+    const h = (hex || '#6b7280').replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
 
   // ── Styles ────────────────────────────────────────────────────────────────
   function ensureStyles() {
@@ -317,6 +331,61 @@
         n.y   = Math.max(pad, Math.min(H - pad, n.y));
       }
     }
+
+    // Simulation settled → arm idle drift (L210). Drift is cosmetic only —
+    // it never re-runs simulation forces.
+    for (const n of visibleNodes) {
+      if (n._driftAngle === undefined) {
+        n._driftAngle = Math.random() * Math.PI * 2;
+        n._driftMag   = 0.08 + Math.random() * 0.07; // 0.08–0.15 px/frame
+      }
+    }
+    driftEnabled = true;
+  }
+
+  // ── Breathing + drift animation loop (L210) ───────────────────────────────
+  function breathScale(n, now) {
+    if (n._phase === undefined) n._phase = nodes.indexOf(n) * 0.7; // per-node phase offset
+    const period = BREATH_PERIOD[n.node_type] || BREATH_DEFAULT;
+    return 1 + 0.08 * Math.sin((now / period) * Math.PI * 2 + n._phase);
+  }
+
+  function driftStep() {
+    if (!driftEnabled) return;
+    const c = canvas();
+    if (!c) return;
+    const W = c.width, H = c.height;
+    const margin = 60;
+    for (const n of getVisibleNodes()) {
+      if (n.x == null || n.pinned) continue;
+      if (dragNode === n && dragMoved) continue; // dragging pauses drift
+      if (n._driftAngle === undefined) continue;
+      n._driftAngle += 0.003; // slow direction rotation
+      n.x += Math.cos(n._driftAngle) * n._driftMag;
+      n.y += Math.sin(n._driftAngle) * n._driftMag;
+      // Gentle push back near canvas edges — bounded float
+      if (n.x < margin)     n.x += (margin - n.x) * 0.03;
+      if (n.x > W - margin) n.x -= (n.x - (W - margin)) * 0.03;
+      if (n.y < margin)     n.y += (margin - n.y) * 0.03;
+      if (n.y > H - margin) n.y -= (n.y - (H - margin)) * 0.03;
+    }
+  }
+
+  function startLoop() {
+    if (rafId !== null) return;
+    const tick = () => {
+      driftStep();
+      renderCanvas();
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stopLoop() {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   }
 
   // ── Connected node IDs (all edges, not just visible) ──────────────────────
@@ -341,12 +410,18 @@
     return edges.filter(e => visibleNodeIds.has(e.from_id) && visibleNodeIds.has(e.to_id));
   }
 
+  // Point on quadratic bezier at t=0.5 — where edge labels sit
+  function bezierMidpoint(ax, ay, cx, cy, bx, by) {
+    return { x: 0.25 * ax + 0.5 * cx + 0.25 * bx, y: 0.25 * ay + 0.5 * cy + 0.25 * by };
+  }
+
   function renderCanvas() {
     const c = canvas();
     if (!c) return;
     const ctx  = c.getContext('2d');
     const W    = c.width;
     const H    = c.height;
+    const now  = performance.now();
 
     ctx.clearRect(0, 0, W, H);
     ctx.save();
@@ -368,73 +443,90 @@
       });
     }
 
-    // Draw edges
-    for (const e of visEdges) {
+    // Draw edges — quadratic bezier, perpendicular offset alternating odd/even
+    for (let ei = 0; ei < visEdges.length; ei++) {
+      const e = visEdges[ei];
       const a = nodeMap[e.from_id], b = nodeMap[e.to_id];
       if (!a || !b || a.x == null || b.x == null) continue;
 
       const isHighlighted = selectedNode && (e.from_id === selectedNode.id || e.to_id === selectedNode.id);
-      const str = e.strength || 2;
+
+      const dx   = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const mx   = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const side = ei % 2 === 0 ? 1 : -1; // parallel edges fan out
+      const off  = dist * 0.15 * side;
+      const cpx  = mx + (-dy / dist) * off;
+      const cpy  = my + (dx / dist) * off;
 
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = isHighlighted ? 'rgba(200,200,220,0.5)' : 'rgba(200,200,220,0.1)';
-      ctx.lineWidth   = isHighlighted ? str * 1.5 : str * 0.8;
+      ctx.quadraticCurveTo(cpx, cpy, b.x, b.y);
+      if (isHighlighted) {
+        ctx.strokeStyle = 'rgba(200,200,220,0.35)';
+        ctx.lineWidth   = 1.5;
+        ctx.shadowColor = 'rgba(200,200,220,0.35)';
+        ctx.shadowBlur  = 6;
+      } else {
+        ctx.strokeStyle = 'rgba(200,200,220,0.07)';
+        ctx.lineWidth   = 0.8;
+      }
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // Edge label on highlighted
+      // Edge label only on highlight, at bezier midpoint
       if (isHighlighted && e.label) {
-        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const mid = bezierMidpoint(a.x, a.y, cpx, cpy, b.x, b.y);
         ctx.font = '9px monospace';
         ctx.fillStyle = 'rgba(200,200,220,0.55)';
         ctx.textAlign = 'center';
-        ctx.fillText(e.label, mx, my - 4);
+        ctx.fillText(e.label, mid.x, mid.y - 4);
       }
     }
 
-    // Draw nodes
+    // Draw nodes — soft glowing circles, independent breathing pulse
     for (const n of visNodes) {
       if (n.x == null) continue;
+      const isSelected    = n.id === selectedNode?.id;
       const baseR         = NODE_RADIUS[n.node_type] || 13;
-      const r             = baseR + (n.id === selectedNode?.id ? 4 : 0);
+      const r             = (baseR + (isSelected ? 4 : 0)) * breathScale(n, now);
       const color         = NODE_COLORS[n.node_type] || '#6b7280';
-      const isDimmed      = selectedNode && n.id !== selectedNode.id && !connectedIds.has(n.id);
+      const isDimmed      = selectedNode && !isSelected && !connectedIds.has(n.id);
       const isDisconnected = !edgeConnectedIds.has(n.id);
 
       ctx.globalAlpha = isDimmed ? 0.2 : (isDisconnected ? 0.7 : 1);
 
-      // Shadow glow for selected
-      if (n.id === selectedNode?.id) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur  = 18;
-      }
+      // Soft outer glow — intensified on selection, no hard ring
+      ctx.shadowColor = hexToRgba(color, isSelected ? 0.7 : 0.4);
+      ctx.shadowBlur  = isSelected ? 32 : 18;
 
+      // Radial gradient fill: bright core fading to translucent rim
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r);
+      grad.addColorStop(0, hexToRgba(color, 0.8));
+      grad.addColorStop(1, hexToRgba(color, 0.15));
       ctx.beginPath();
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = color;
+      ctx.fillStyle = grad;
       ctx.fill();
 
       ctx.shadowBlur = 0;
+
+      // Faint same-color rim instead of a hard border
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.3);
+      ctx.lineWidth   = 0.5;
+      ctx.stroke();
 
       // Dashed ring for disconnected nodes
       if (isDisconnected) {
         ctx.beginPath();
         ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = color;
-        ctx.lineWidth   = 1.5;
+        ctx.strokeStyle = hexToRgba(color, 0.5);
+        ctx.lineWidth   = 1;
         ctx.setLineDash([3, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
-      }
-
-      // White ring for selected
-      if (n.id === selectedNode?.id) {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        ctx.lineWidth   = 2;
-        ctx.stroke();
       }
 
       // Pin indicator — yellow dot at top-right
@@ -447,7 +539,7 @@
       }
 
       // Label: show when baseR >= 13 OR node is selected/connected; truncate to 12 chars
-      const isHighlightedNode = n.id === selectedNode?.id || connectedIds.has(n.id);
+      const isHighlightedNode = isSelected || connectedIds.has(n.id);
       const showLabel = baseR >= 13 || isHighlightedNode;
       if (showLabel) {
         const label    = (n.label || '').slice(0, 12);
@@ -456,7 +548,7 @@
         ctx.font      = `${fontSize}px sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,1)';
         ctx.textAlign = 'center';
-        ctx.fillText(label, n.x, n.y + r + fontSize + 2);
+        ctx.fillText(label, n.x, n.y + baseR + fontSize + 4);
       }
 
       ctx.globalAlpha = 1;
@@ -549,6 +641,7 @@
     renderDetail();
     updatePills();
     setStatus(`${visNodes.length} nodes · ${visEdges.length} edges`);
+    startLoop();
   }
 
   function updatePills() {
@@ -987,7 +1080,7 @@
     ensureStyles();
 
     window.addEventListener('panelactivated', e => {
-      if (e.detail !== 'mindmap') return;
+      if (e.detail !== 'mindmap') { stopLoop(); return; }
       loadAndRender();
     });
 
