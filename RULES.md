@@ -5,6 +5,26 @@
 
 ---
 
+L208  Life year/month aggregation rule (Entry View Year View collapsed cells):
+      Month rows are indexed into _allMonthsByYear at loadData() — no extra API calls.
+      Numeric fields (financial_earn): sum of month values if any months have data, else year-level value.
+      Numeric fields (happiness_factor, health): average of month values if months have data.
+      Text/comma fields (achievement, hobby, travel, creation, knowledge_earn, relationship, failure):
+        concatenate month values and count total entries; fallback to year-level if no months.
+      story_refs: union of all IDs across year-level row + all month rows, deduplicated.
+      note: 1 if year-level note OR any month note is non-empty, else 0.
+
+L207  Life Story group architecture (Entry View expanded columns):
+      - NOTE column: `note` field (Long text), free-text yearly remark, type='longtext' (wider input)
+      - STORY NODE column: `story_refs` field (Single line text), type='readonly' — read-only count badge
+        showing "N refs" in purple. Never rendered as editable input. Append via Mount to Life only.
+      - decision, people, tags remain in Story group (type='text')
+      - Collapsed Story cell = (1 if note non-empty else 0) + story_refs ID count → "N refs" or "—"
+
+L206  LifeTimeline field rename: Airtable field `story` (Long text) renamed to `note`.
+      UI label = "Note". Never comma-split note field — free-form text. Counts as 1 if non-empty.
+      Field key `story_refs` is unchanged. Code key `note` replaces `story` everywhere.
+
 L205  Airtable token scopes — CONFIRMED FULL ACCESS (never ask owner to change):
       data.records:read, data.records:write, data.recordComments:read,
       data.recordComments:write, schema.bases:read, schema.bases:write,
@@ -18,7 +38,7 @@ L204  LifeTimeline definitive field types — apphBGWfSPL45oSFd (updated 2026-06
       Single line text (comma-separated): knowledge_earn, relationship, creation,
         achievement, failure, travel, hobby, location, tags, people, story_refs,
         company-school, title.
-      Long text: a_impact, f_impact, t_impact, h_impact, decision, story.
+      Long text: a_impact, f_impact, t_impact, h_impact, decision, note.
       Any code sending wrong type causes 500. Always match this list before writing.
       Always Math.round() integer fields. Always typecast:true in PATCH/POST bodies.
       Owner will never change field types manually — CC uses schema:write scope.

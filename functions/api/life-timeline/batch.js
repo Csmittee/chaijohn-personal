@@ -13,7 +13,7 @@ const TEXT_FIELDS = [
   'story_refs', 'company-school', 'title'
 ];
 const LONG_TEXT_FIELDS = [
-  'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'
+  'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'note'
 ];
 
 function flat(r) {
@@ -40,7 +40,7 @@ function flat(r) {
     h_impact:         r.fields.h_impact         || null,
     decision:         r.fields.decision         || null,
     tags:             r.fields.tags             || null,
-    story:            r.fields.story            || null,
+    note:             r.fields.note             || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
     'company-school': r.fields['company-school'] || null,

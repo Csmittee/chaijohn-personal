@@ -28,7 +28,7 @@ function flat(r) {
     h_impact:         r.fields.h_impact         || null,
     decision:         r.fields.decision         || null,
     tags:             r.fields.tags             || null,
-    story:            r.fields.story            || null,
+    note:             r.fields.note             || null,
     people:           r.fields.people           || null,
     story_refs:       r.fields.story_refs       || null,
     'company-school': r.fields['company-school'] || null,
@@ -90,7 +90,7 @@ export async function onRequestPost(context) {
     'location', 'knowledge_earn', 'relationship', 'creation', 'achievement',
     'failure', 'travel', 'hobby', 'tags', 'people', 'story_refs',
     'company-school', 'title', 'a_impact', 'f_impact', 't_impact', 'h_impact',
-    'decision', 'story'
+    'decision', 'note'
   ];
   for (const f of strFields) {
     if (body[f] != null && body[f] !== '') fields[f] = body[f];

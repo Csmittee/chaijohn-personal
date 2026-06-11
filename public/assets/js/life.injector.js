@@ -9,6 +9,7 @@
   let _initialized    = false;
   let _allRecords     = [];       // year-level rows (month=null)
   let _allVisitRecords = [];      // month rows with location (visit dots in Life View)
+  let _allMonthsByYear = {};      // { year: [monthRows] } for aggregation in Year View
   let _monthRecords   = {};       // { year: [rows] } for Entry View Month mode
   let _edges          = [];       // MindMapEdges
   let _lifeScores     = {};       // { recordId: score }
@@ -274,6 +275,7 @@
       .life-grid-text-input:focus { background:var(--bg-raised); border-color:var(--yellow); cursor:text; }
       .life-grid-text-input.dirty { background:rgba(245,197,24,0.08); }
       .life-grid-text-input::placeholder { opacity:0.35; font-style:italic; }
+      .life-grid-longtext-input { min-width:180px !important; }
 
       /* Drag fill handle */
       .life-drag-handle {
@@ -318,7 +320,7 @@
       'financial_earn','knowledge_earn','happiness_factor','health','relationship',
       'creation','achievement','failure','travel','hobby'
     ];
-    return numFields.some(f => r[f] != null) || r.story || r.location || r.decision;
+    return numFields.some(f => r[f] != null) || r.note || r.location || r.decision;
   }
 
   function norm110(v) {
@@ -370,6 +372,12 @@
       _allRecords      = records.filter(r => !r.month);
       // Capture month rows that have a location for visit dots in Life View
       _allVisitRecords = records.filter(r => r.month && r.location);
+      // Index all month rows by year for Year View aggregation (L208)
+      _allMonthsByYear = {};
+      for (const r of records.filter(rc => rc.month != null)) {
+        if (!_allMonthsByYear[r.year]) _allMonthsByYear[r.year] = [];
+        _allMonthsByYear[r.year].push(r);
+      }
     }
 
     if (edgeRes.status === 'fulfilled') {
@@ -409,7 +417,7 @@
   // ── KPI strip ──
   function buildKpiHtml() {
     const yearsRecorded = _allRecords.filter(r => hasData(r)).length;
-    const storyEntries  = _allRecords.filter(r => r.story).length;
+    const storyEntries  = _allRecords.filter(r => r.note).length;
     const lifetimeEarn  = _allRecords.reduce((s, r) => s + (r.financial_earn || 0), 0);
 
     let peakYear = '—';
@@ -522,7 +530,7 @@
     const nodeCircles = visible.map(r => {
       const score    = _lifeScores[r.id] || 0;
       const color    = score > 3 ? '#22c55e' : (score < -3 ? '#ef4444' : 'rgba(232,232,240,0.35)');
-      const hasStory = r.story ? ' life-node-pulse' : '';
+      const hasStory = r.note ? ' life-node-pulse' : '';
       const cx       = yearToX(r.year).toFixed(1);
       const cy       = BASELINE_Y.toFixed(1);
       const ttData   = JSON.stringify({
@@ -809,11 +817,11 @@
         </div>
 
         <div class="life-story-section">
-          <div class="life-story-section-title" data-section="story">Story</div>
-          <div id="life-story-text-story">
-            ${r.story
-              ? `<div class="life-story-text">${r.story}</div>`
-              : '<div style="font-size:0.82rem;color:var(--text-dim)">No story yet.</div>'}
+          <div class="life-story-section-title" data-section="note">Note</div>
+          <div id="life-story-text-note">
+            ${r.note
+              ? `<div class="life-story-text">${r.note}</div>`
+              : '<div style="font-size:0.82rem;color:var(--text-dim)">No note yet.</div>'}
           </div>
         </div>
 
@@ -923,10 +931,11 @@
     {
       id: 'story', label: 'Story',
       fields: [
-        { key: 'decision', label: 'Decision', type: 'text' },
-        { key: 'story',    label: 'Story',    type: 'text' },
-        { key: 'people',   label: 'People',   type: 'text' },
-        { key: 'tags',     label: 'Tags',     type: 'text' }
+        { key: 'decision',   label: 'Decision',   type: 'text'     },
+        { key: 'note',       label: 'Note',       type: 'longtext' },
+        { key: 'people',     label: 'People',     type: 'text'     },
+        { key: 'tags',       label: 'Tags',       type: 'text'     },
+        { key: 'story_refs', label: 'Story Node', type: 'readonly' }
       ]
     }
   ];
@@ -939,40 +948,82 @@
     return String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean).length;
   }
 
+  // Returns month rows for a year-level row if in Year View and months were loaded (L208)
+  function getYearMonths(row) {
+    if (_entryMode !== 'year') return null;
+    const months = _allMonthsByYear[row.year];
+    return (months && months.length > 0) ? months : null;
+  }
+
   function collapsedSummary(groupId, row) {
     if (groupId === 'performance') {
-      const finPct = (_finMax > 0 && row.financial_earn != null && row.financial_earn > 0)
-        ? Math.min(100, Math.round((row.financial_earn / _finMax) * 100)) : 0;
-      // achievement is now text — comma-separated items, each worth 20%
-      const achItems = csvCount(row.achievement);
+      const monthRows = getYearMonths(row);
+      let fin = row.financial_earn;
+      let ach = row.achievement;
+      if (monthRows) {
+        const mFins = monthRows.filter(m => m.financial_earn != null);
+        if (mFins.length > 0) fin = mFins.reduce(function(s, m) { return s + m.financial_earn; }, 0);
+        const mAchs = monthRows.filter(m => m.achievement);
+        if (mAchs.length > 0) ach = [row.achievement, ...mAchs.map(m => m.achievement)].filter(Boolean).join(',');
+      }
+      const finPct = (_finMax > 0 && fin != null && fin > 0)
+        ? Math.min(100, Math.round((fin / _finMax) * 100)) : 0;
+      const achItems = csvCount(ach);
       const achBonus = Math.min(100 - finPct, achItems * 20);
-      if (row.financial_earn == null && !row.achievement) return '—';
+      if (fin == null && !ach) return '—';
       return (finPct + achBonus) + '%';
     }
     if (groupId === 'emotional') {
-      const allEmpty = row.happiness_factor == null && row.health == null &&
-                       !row.relationship && !row.knowledge_earn;
+      const monthRows = getYearMonths(row);
+      let hap = row.happiness_factor, hlt = row.health, rel = row.relationship, skl = row.knowledge_earn;
+      if (monthRows) {
+        const mHap = monthRows.filter(m => m.happiness_factor != null);
+        if (mHap.length > 0) hap = mHap.reduce(function(s, m) { return s + m.happiness_factor; }, 0) / mHap.length;
+        const mHlt = monthRows.filter(m => m.health != null);
+        if (mHlt.length > 0) hlt = mHlt.reduce(function(s, m) { return s + m.health; }, 0) / mHlt.length;
+        const mRel = monthRows.filter(m => m.relationship);
+        if (mRel.length > 0) rel = mRel.map(m => m.relationship).join(',');
+        const mSkl = monthRows.filter(m => m.knowledge_earn);
+        if (mSkl.length > 0) skl = mSkl.map(m => m.knowledge_earn).join(',');
+      }
+      const allEmpty = hap == null && hlt == null && !rel && !skl;
       if (allEmpty) return '—';
-      const hap = row.happiness_factor != null ? (row.happiness_factor / 10) * 25 : 0;
-      const hlt = row.health           != null ? (row.health           / 10) * 25 : 0;
-      // relationship + knowledge_earn are now text — count comma-separated entries
-      const rel = Math.min(25, csvCount(row.relationship)  * 5);
-      const skl = Math.min(25, csvCount(row.knowledge_earn) * 5);
-      return Math.min(100, Math.round(hap + hlt + rel + skl)) + '%';
+      const hapVal = hap != null ? (hap / 10) * 25 : 0;
+      const hltVal = hlt != null ? (hlt / 10) * 25 : 0;
+      const relVal = Math.min(25, csvCount(rel) * 5);
+      const sklVal = Math.min(25, csvCount(skl) * 5);
+      return Math.min(100, Math.round(hapVal + hltVal + relVal + sklVal)) + '%';
     }
     if (groupId === 'hobby') {
-      // hobby, travel, creation are now text — comma-separated entries
-      const hCount = csvCount(row.hobby);
-      const tCount = csvCount(row.travel);
-      const cCount = csvCount(row.creation);
+      const monthRows = getYearMonths(row);
+      let hb = row.hobby, tv = row.travel, cr = row.creation;
+      if (monthRows) {
+        const mHb = monthRows.filter(m => m.hobby);
+        if (mHb.length > 0) hb = [row.hobby, ...mHb.map(m => m.hobby)].filter(Boolean).join(',');
+        const mTv = monthRows.filter(m => m.travel);
+        if (mTv.length > 0) tv = [row.travel, ...mTv.map(m => m.travel)].filter(Boolean).join(',');
+        const mCr = monthRows.filter(m => m.creation);
+        if (mCr.length > 0) cr = [row.creation, ...mCr.map(m => m.creation)].filter(Boolean).join(',');
+      }
+      const hCount = csvCount(hb), tCount = csvCount(tv), cCount = csvCount(cr);
       const total = hCount + tCount + cCount;
       if (total === 0) return '—';
       const parts = [hCount ? hCount+'h' : '', tCount ? tCount+'t' : '', cCount ? cCount+'c' : ''].filter(Boolean).join(' ');
       return '<span title="' + parts + '">' + total + 'p</span>';
     }
     if (groupId === 'story') {
-      const refs = csvCount(row.story_refs);
-      return refs > 0 ? (refs + ' refs') : '—';
+      const monthRows = getYearMonths(row);
+      let notePresent = !!row.note;
+      const allIds = new Set();
+      (row.story_refs || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(id) { allIds.add(id); });
+      if (monthRows) {
+        for (const m of monthRows) {
+          if (m.note) notePresent = true;
+          (m.story_refs || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(id) { allIds.add(id); });
+        }
+      }
+      const total = (notePresent ? 1 : 0) + allIds.size;
+      return total > 0 ? (total + ' refs') : '—';
     }
     return '—';
   }
@@ -1027,7 +1078,7 @@
         return [`<th style="text-align:center;min-width:40px"></th>`];
       }
       return g.fields.map(f =>
-        `<th style="font-weight:400;white-space:nowrap;min-width:${f.type === 'text' ? '110' : '74'}px">${f.label}</th>`
+        `<th style="font-weight:400;white-space:nowrap;min-width:${f.type === 'num' ? '74' : f.type === 'readonly' ? '60' : '110'}px">${f.label}</th>`
       );
     }).join('');
 
@@ -1066,6 +1117,14 @@
 
           const isDirty = dirtyVal !== undefined;
 
+          if (f.type === 'readonly') {
+            // story_refs: read-only count display — N refs (L207)
+            const refCount = csvCount(val);
+            const badge = refCount > 0
+              ? `<span style="font-family:var(--font-mono);font-size:0.67rem;color:#8b5cf6;background:rgba(139,92,246,0.12);padding:0.1rem 0.4rem;border-radius:3px;white-space:nowrap">${refCount} refs</span>`
+              : `<span style="font-family:var(--font-mono);font-size:0.67rem;color:var(--text-dim)">—</span>`;
+            return `<td style="text-align:center;padding:0.2rem 0.4rem">${badge}</td>`;
+          }
           if (f.type === 'num') {
             const placeholderAttr = (inheritedVal != null)
               ? `placeholder="${escapeAttr(inheritedVal)}" data-has-inherited="1"`
@@ -1079,13 +1138,16 @@
                 title="${f.key}">
               <span class="life-drag-handle" data-drag-field="${f.key}" data-record-id="${row.id}"></span>
             </td>`;
-          } else {
+          }
+          // text + longtext — same input element, longtext just gets wider min-width via CSS class
+          {
             const placeholderAttr = (inheritedVal != null)
               ? `placeholder="${escapeAttr(inheritedVal)}" data-has-inherited="1"`
               : '';
+            const extraClass = f.type === 'longtext' ? ' life-grid-longtext-input' : '';
             return `<td>
               <input type="text"
-                class="life-grid-text-input${isDirty ? ' dirty' : ''}"
+                class="life-grid-text-input${extraClass}${isDirty ? ' dirty' : ''}"
                 data-record-id="${row.id}" data-field="${f.key}"
                 value="${escapeAttr(displayVal)}"
                 ${placeholderAttr}
@@ -1322,7 +1384,7 @@
         if (!_activeStory) return;
         const r = _allRecords.find(x => x.id === _activeStory);
         if (!r) return;
-        ['story', 'decision', 'people'].forEach(field => {
+        ['note', 'decision', 'people'].forEach(field => {
           const container = document.getElementById(`life-story-text-${field}`);
           if (container) {
             container.innerHTML = `<textarea class="life-story-field" data-field="${field}" rows="4">${escapeAttr(r[field] || '')}</textarea>`;
@@ -1335,7 +1397,7 @@
       saveBtn.addEventListener('click', async () => {
         if (!_activeStory) return;
         const fields = {};
-        ['story','decision','people'].forEach(field => {
+        ['note','decision','people'].forEach(field => {
           const ta = document.querySelector(`.life-story-field[data-field="${field}"]`);
           if (ta) fields[field] = ta.value;
         });
@@ -1507,7 +1569,7 @@
           'name', 'location', 'knowledge_earn', 'relationship', 'creation',
           'achievement', 'failure', 'travel', 'hobby', 'tags', 'people',
           'story_refs', 'company-school', 'title',
-          'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'story'
+          'a_impact', 'f_impact', 't_impact', 'h_impact', 'decision', 'note'
         ];
 
         const errors = [];

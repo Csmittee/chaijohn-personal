@@ -10,6 +10,9 @@
     CC must handle ALL field/table changes via Meta API.
     Owner will NEVER manually change Airtable field types — ever.
 
+⚠️  LifeTimeline: `story` field renamed to `note` (Long text). See RULES.md L204, L206.
+    Use key `note` everywhere. `story_refs` (Single line text) is unchanged.
+
 ⚠️  BEFORE WRITING ANY AIRTABLE ENDPOINT: check field types first.
     Batch PATCH is all-or-nothing — one wrong type rejects ALL records.
     Use schema.bases:read (Meta API) or confirmed field list in RULES.md L204
