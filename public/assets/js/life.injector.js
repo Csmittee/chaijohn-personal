@@ -1118,8 +1118,20 @@
           const isDirty = dirtyVal !== undefined;
 
           if (f.type === 'readonly') {
-            // story_refs: read-only count display — N refs (L207)
-            const refCount = csvCount(val);
+            // story_refs: aggregate month rows in Year View (L209) — raw row.story_refs
+            // only holds year-level refs; refs mounted to month rows would otherwise show —
+            const monthRows = getYearMonths(row);
+            let refCount;
+            if (monthRows) {
+              const allIds = new Set();
+              (val || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(id) { allIds.add(id); });
+              for (const m of monthRows) {
+                (m.story_refs || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(id) { allIds.add(id); });
+              }
+              refCount = allIds.size;
+            } else {
+              refCount = csvCount(val);
+            }
             const badge = refCount > 0
               ? `<span style="font-family:var(--font-mono);font-size:0.67rem;color:#8b5cf6;background:rgba(139,92,246,0.12);padding:0.1rem 0.4rem;border-radius:3px;white-space:nowrap">${refCount} refs</span>`
               : `<span style="font-family:var(--font-mono);font-size:0.67rem;color:var(--text-dim)">—</span>`;
